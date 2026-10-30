@@ -3,7 +3,7 @@
 import { Component, useMemo, type ReactNode } from "react";
 import { useQueries, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { errorText } from "@/components/layout/error-text";
+import { ErrorMessage } from "@/components/layout/error-message";
 import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { ownerMessages } from "@/lib/i18n/messages/owner";
 import { publicMessages } from "@/lib/i18n/messages/public";
@@ -31,7 +31,7 @@ export class OwnerBoundary extends Component<BoundaryProps, { failed: boolean; e
     if (this.props.silent) return null;
     if (this.props.notFound?.(this.state.error))
       return <OwnerNotFound locale={this.props.locale} />;
-    return <p role="alert">{errorText(this.state.error, this.props.locale)}</p>;
+    return <ErrorMessage error={this.state.error} locale={this.props.locale} />;
   }
 }
 

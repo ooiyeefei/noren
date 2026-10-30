@@ -7,7 +7,7 @@ import {
   AccountMenuView,
   type AccountState,
 } from "@/components/layout/account-menu";
-import { errorText } from "@/components/layout/error-text";
+import { errorParts, errorText } from "@/components/layout/error-text";
 import { LanguageSwitcherView } from "@/components/layout/language-switcher";
 import { PageContainer } from "@/components/layout/page-container";
 import { RequireRoleView } from "@/components/layout/require-role";
@@ -436,3 +436,41 @@ it.each(SUPPORTED_LOCALES)(
     }
   },
 );
+
+describe("error parts", () => {
+  it("keeps known code sentences and rule names visible, with server messages separate", () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      for (const code of Object.keys(ERROR_STATUS) as (keyof typeof ERROR_STATUS)[]) {
+        const error = new ConvexError({ code, message: "server detail", rule: "test_rule" });
+        expect(errorParts(error, locale)).toEqual({
+          text: shellMessages[locale][code].replace("{rule}", "test_rule"),
+          detail: "server detail",
+        });
+        expect(errorParts(new ConvexError({ code, message: "  " }), locale).detail).toBeUndefined();
+      }
+    }
+  });
+
+  it.each([
+    [new Error("Minified React error #301"), "Error: Minified React error #301"],
+    [new Error(""), "Error: Error"],
+    ["thrown text", "Error: thrown text"],
+    [{ message: "missing name" }, "Error: missing name"],
+    [undefined, "Error: undefined"],
+    [{}, "Error: [object Object]"],
+    ["", "Error: unknown"],
+    [Object.create(null), "Error: unknown"],
+  ])("keeps unexpected diagnostic %j out of the actionable sentence", (error, detail) => {
+    for (const locale of SUPPORTED_LOCALES) {
+      const parts = errorParts(error, locale);
+      expect(parts).toEqual({ text: shellMessages[locale].unexpectedError, detail });
+      expect(parts.detail?.trim()).not.toBe("");
+    }
+    expect(errorParts(error, "en").text).toBe(
+      "Something went wrong. Reload the page to try again.",
+    );
+    expect(errorParts(error, "ja").text).toBe(
+      "問題が発生しました。ページを再読み込みしてください。",
+    );
+  });
+});
