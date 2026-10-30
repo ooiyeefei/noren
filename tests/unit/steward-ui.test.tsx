@@ -8,6 +8,8 @@ import {
 } from "@/components/steward/place-admin-view";
 import { PeopleView } from "@/components/steward/people-view";
 import { OpenTextView, type OpenTextProps } from "@/components/steward/open-text-view";
+import { candidateMessages } from "@/lib/i18n/messages/candidates";
+import { takedownsMessages } from "@/lib/i18n/messages/takedowns";
 import { stewardMessages } from "@/lib/i18n/messages/steward";
 import { regionSchema } from "@/lib/region/schema";
 import type { Locale } from "@/lib/i18n";
@@ -409,3 +411,76 @@ it("English steward wording avoids developer terms and keeps the publishing rule
   );
   expect(stewardMessages.en.landmark_kind).toMatch(/fictional.*demo/i);
 });
+
+it.each(["ja", "en"] as const)(
+  "%s steward navigation wraps as pills and marks the current page",
+  (locale) => {
+    const pages = [
+      {
+        html: renderToStaticMarkup(<StewardHomeView {...home(locale)} />),
+        current: null,
+        home: true,
+      },
+      { html: renderToStaticMarkup(<OpenTextView {...openText(locale)} />), current: "open-text" },
+      {
+        html: renderToStaticMarkup(<PeopleView locale={locale} people={[]} onRole={noop} />),
+        current: "people",
+      },
+      { html: renderToStaticMarkup(<PlaceAdminView {...admin(locale)} />), current: null },
+    ];
+    const destinations = [
+      ["", stewardMessages[locale].back],
+      ["/open-text", stewardMessages[locale].openText],
+      ["/people", stewardMessages[locale].people],
+      ["/candidates", candidateMessages[locale].title],
+      ["/takedowns", takedownsMessages[locale].title],
+    ];
+    for (const page of pages) {
+      const nav = page.html.match(/<nav\b[^>]*>[\s\S]*?<\/nav>/)![0];
+      expect(nav).toContain("flex-wrap gap-2");
+      for (const [path, label] of destinations) {
+        const href = `href="/${locale}/steward${path}"`;
+        if (page.home && !path) {
+          expect(page.html).not.toContain(href);
+          continue;
+        }
+        const link = (nav.match(/<a\b[^>]*>[\s\S]*?<\/a>/g) ?? []).find((link) =>
+          link.includes(href),
+        );
+        expect(link).toBeDefined();
+        expect(link).toContain(`>${encoded(label!)}</a>`);
+        expect(link).toContain("min-h-11");
+        expect(link).toContain("rounded-full border border-line");
+        expect(link).not.toMatch(/(?:class="| )w-full(?: |")/);
+        if (path === `/${page.current}`) expect(link).toContain('aria-current="page"');
+        else expect(link).not.toContain("aria-current");
+      }
+      expect(nav.match(/aria-current="page"/g) ?? []).toHaveLength(page.current ? 1 : 0);
+    }
+  },
+);
+
+it.each(["ja", "en"] as const)(
+  "%s place cards show one visibility label and comfortably spaced notes",
+  (locale) => {
+    const html = renderToStaticMarkup(<StewardHomeView {...home(locale)} />);
+    const cards = html.match(/<tr[^>]*data-steward-card="place"[^>]*>[\s\S]*?<\/tr>/g)!;
+    for (const card of cards) {
+      const label = encoded(stewardMessages[locale].visibility);
+      expect(card.split(label)).toHaveLength(2);
+      expect(card).toMatch(new RegExp(`<label[^>]*>${label}<select`));
+      expect(card).toMatch(/<option value="draft"[^>]*selected=""/);
+      expect(card).not.toContain(`<p class="inline">${encoded(stewardMessages[locale].draft)}</p>`);
+      const notes = card
+        .match(/<p[^>]*>[^<]*<\/p>/g)!
+        .filter((p) =>
+          (["launch_pack", "real_only", "landmark_kind"] as const).some((key) =>
+            p.includes(encoded(stewardMessages[locale][key])),
+          ),
+        );
+      expect(notes.length).toBeGreaterThan(0);
+      for (const note of notes) expect(note).toContain('class="text-sm leading-relaxed"');
+      expect(card).toMatch(/<td[^>]*class="[^"]*space-y-2[^"]*"/);
+    }
+  },
+);

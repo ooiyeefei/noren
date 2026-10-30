@@ -78,7 +78,7 @@ export function PlaceAdminView(props: PlaceAdminProps) {
   return (
     <PageContainer locale={locale} title={place.name}>
       <div className="min-w-0 space-y-6 text-kon [overflow-wrap:anywhere]">
-        <StewardNav locale={locale} />
+        <StewardNav locale={locale} current="place-admin" />
         {place.isMock && <DemoBadge locale={locale} />}
         <Link
           className="inline-flex min-h-11 w-full min-w-0 items-center text-ai underline sm:w-auto"

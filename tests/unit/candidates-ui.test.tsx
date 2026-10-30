@@ -440,3 +440,36 @@ it.each(["ja", "en"] as const)(
     }
   },
 );
+
+it.each(["ja", "en"] as const)(
+  "%s candidates nav marks its current destination and preserves read-only place status",
+  (locale) => {
+    const html = renderToStaticMarkup(
+      <CandidatesView
+        {...props()}
+        locale={locale}
+        saved={[
+          { placeId: "draft-place", slug: "draft-place", visibility: "draft" },
+          { placeId: "public-place", slug: "public-place", visibility: "public" },
+        ]}
+      />,
+    );
+    const nav = html.match(/<nav\b[^>]*>[\s\S]*?<\/nav>/)![0];
+    expect(nav.match(/<a\b/g)).toHaveLength(5);
+    expect(nav.match(/aria-current="page"/g)).toHaveLength(1);
+    const current = nav.match(/<a\b[^>]*aria-current="page"[^>]*>/)![0];
+    expect(current).toContain(`href="/${locale}/steward/candidates"`);
+    for (const [slug, value] of [
+      ["draft-place", candidateMessages[locale].savedDraft],
+      ["public-place", candidateMessages[locale].published],
+    ]) {
+      const card = html.match(
+        new RegExp(
+          `<article[^>]*>(?:(?!</article>)[\\s\\S])*href="/${locale}/steward/places/${slug}"[\\s\\S]*?</article>`,
+        ),
+      )![0];
+      expect(card).not.toContain("<select");
+      expect(card).toContain(`role="status">${value}</p>`);
+    }
+  },
+);

@@ -39,7 +39,7 @@ export function TakedownsView(p: TakedownsProps) {
   return (
     <PageContainer locale={p.locale} title={m.title}>
       <div className="min-w-0 space-y-6 text-kon [overflow-wrap:anywhere]">
-        <StewardNav locale={p.locale} />
+        <StewardNav locale={p.locale} current="takedowns" />
         {p.locale === "ja" && <UnreviewedBadge locale={p.locale} />}
         <p>{format(m.automatic, { hours: p.windows.acknowledgeHours })}</p>
         <label>
