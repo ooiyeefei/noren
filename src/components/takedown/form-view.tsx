@@ -32,7 +32,9 @@ export function FormView(p: FormProps) {
         <section className="space-y-4" aria-live="polite">
           <h2>{m.code}</h2>
           <p className="break-all font-mono text-4xl font-bold">{p.result.code}</p>
-          <Button onClick={p.onCopy}>{m.copy}</Button>
+          <Button className="min-h-11 rounded-[10px] px-5 whitespace-normal" onClick={p.onCopy}>
+            {m.copy}
+          </Button>
           {p.copied && <p role="status">{m.copied}</p>}
           <p>{p.result.hidden ? m.hiddenYes : m.hiddenNo}</p>
           <p>{format(m.review, { days: p.decideDays })}</p>
@@ -56,6 +58,7 @@ export function FormView(p: FormProps) {
             <label className="block">
               {m.pageUrl}
               <Input
+                className="min-h-11 rounded-[10px] border-line"
                 name="pageUrl"
                 required
                 value={p.draft.pageUrl}
@@ -65,6 +68,7 @@ export function FormView(p: FormProps) {
             <label className="block">
               {m.details}
               <Textarea
+                className="min-h-11 rounded-[10px] border-line"
                 name="details"
                 required
                 aria-describedby="details-count"
@@ -75,7 +79,7 @@ export function FormView(p: FormProps) {
             <p id="details-count" aria-live="polite">
               {characterCount(p.draft.details)} / 2000 · {m.length}
             </p>
-            <label className="flex items-start gap-2">
+            <label className="flex min-h-11 cursor-pointer items-start gap-2">
               <input
                 type="checkbox"
                 name="privacyOrMinor"
@@ -89,6 +93,7 @@ export function FormView(p: FormProps) {
             <label className="block">
               {m.contact}
               <Input
+                className="min-h-11 rounded-[10px] border-line"
                 name="contact"
                 aria-describedby="contact-help"
                 value={p.draft.contact}
@@ -105,7 +110,9 @@ export function FormView(p: FormProps) {
               value={p.draft.website}
               onChange={(e) => p.onChange({ ...p.draft, website: e.target.value })}
             />
-            <Button type="submit">{p.pending ? m.sending : m.send}</Button>
+            <Button className="min-h-11 rounded-[10px] px-5 whitespace-normal" type="submit">
+              {p.pending ? m.sending : m.send}
+            </Button>
           </fieldset>
         </form>
       )}
