@@ -176,3 +176,17 @@ it("decided cases can close and closed cases retain outcomes without a form", ()
     }
   }
 });
+
+it.each(["ja", "en"] as const)(
+  "%s request phone cards label values and keep controls reachable",
+  (locale) => {
+    const html = render(<TakedownsView {...props()} locale={locale} />);
+    expect(html).toContain('data-steward-card="request"');
+    expect(html).toContain("min-w-0 space-y-3 rounded-[10px] border border-line");
+    for (const key of ["filter", "details", "private", "outcome"] as const)
+      expect(html).toContain(takedownsMessages[locale][key]);
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    for (const control of html.match(/<(?:button|select|textarea)\b[^>]*>/g) ?? [])
+      expect(control).toContain("min-h-11");
+  },
+);

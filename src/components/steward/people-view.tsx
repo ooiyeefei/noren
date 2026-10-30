@@ -26,44 +26,56 @@ export function PeopleView(
   const m = messagesFor(stewardMessages, locale);
   return (
     <PageContainer locale={locale} title={m.people}>
-      <StewardNav locale={locale} />
-      <p>{m.invitations}</p>
-      <p>{m.roleRule}</p>
-      <StewardFeedback {...props} />
-      {!people.length && <p>{m.empty}</p>}
-      <ul className="space-y-4">
-        {people.map((person) => {
-          const options = roleOptions(person);
-          return (
-            <li key={person._id} className="flex flex-wrap items-center gap-4 rounded border p-4">
-              <span>{person.displayName}</span>
-              <span>{m[person.role]}</span>
-              {person.isMock && <DemoBadge locale={locale} />}
-              {options && (
-                <label>
-                  {m.role}
-                  <select
-                    className="ml-2 rounded border p-2"
-                    value={person.role}
-                    disabled={!!pending}
-                    onChange={(event) => {
-                      const role = event.target.value;
-                      if (role === "user" || role === "creator" || role === "business_owner")
-                        onRole(person._id, role);
-                    }}
-                  >
-                    {options.map((role) => (
-                      <option key={role} value={role}>
-                        {m[role]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      <div className="min-w-0 space-y-6 text-kon [overflow-wrap:anywhere]">
+        <StewardNav locale={locale} />
+        <p>{m.invitations}</p>
+        <p>{m.roleRule}</p>
+        <StewardFeedback {...props} />
+        {!people.length && <p>{m.empty}</p>}
+        <ul className="space-y-4">
+          {people.map((person) => {
+            const options = roleOptions(person);
+            return (
+              <li
+                key={person._id}
+                data-steward-card="person"
+                className="min-w-0 space-y-3 rounded-[10px] border border-line p-4"
+              >
+                <p>
+                  <span className="mr-2 font-bold">{m.name}</span>
+                  {person.displayName}
+                </p>
+                <p>
+                  <span className="mr-2 font-bold">{m.role}</span>
+                  {m[person.role]}
+                </p>
+                {person.isMock && <DemoBadge locale={locale} />}
+                {options && (
+                  <label>
+                    {m.role}
+                    <select
+                      className="block min-h-11 w-full min-w-0 max-w-full rounded-[10px] border border-input bg-white p-2 text-kon"
+                      value={person.role}
+                      disabled={!!pending}
+                      onChange={(event) => {
+                        const role = event.target.value;
+                        if (role === "user" || role === "creator" || role === "business_owner")
+                          onRole(person._id, role);
+                      }}
+                    >
+                      {options.map((role) => (
+                        <option key={role} value={role}>
+                          {m[role]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </PageContainer>
   );
 }
