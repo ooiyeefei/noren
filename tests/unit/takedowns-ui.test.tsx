@@ -190,3 +190,12 @@ it.each(["ja", "en"] as const)(
       expect(control).toContain("min-h-11");
   },
 );
+
+it.each(["ja", "en"] as const)("%s removal-request nav marks its current destination", (locale) => {
+  const html = render(<TakedownsView {...props()} locale={locale} />);
+  const nav = html.match(/<nav\b[^>]*>[\s\S]*?<\/nav>/)![0];
+  expect(nav.match(/<a\b/g)).toHaveLength(5);
+  expect(nav.match(/aria-current="page"/g)).toHaveLength(1);
+  const current = nav.match(/<a\b[^>]*aria-current="page"[^>]*>/)![0];
+  expect(current).toContain(`href="/${locale}/steward/takedowns"`);
+});

@@ -54,7 +54,7 @@ export function CandidatesView(props: CandidatesProps) {
   return (
     <PageContainer locale={locale} title={m.title}>
       <div className="min-w-0 space-y-6 text-kon [overflow-wrap:anywhere]">
-        <StewardNav locale={locale} />
+        <StewardNav locale={locale} current="candidates" />
         <p>{m.intro}</p>
         {locale === "ja" && <p className="text-sm text-muted-foreground">{m.unreviewed}</p>}
         <StewardFeedback {...props} />

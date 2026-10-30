@@ -33,40 +33,39 @@ export function StewardFeedback({
     </div>
   );
 }
-export function StewardNav({ locale }: { locale: Locale }) {
+export function StewardNav({
+  locale,
+  current,
+}: {
+  locale: Locale;
+  current: "home" | "open-text" | "people" | "candidates" | "takedowns" | "place-admin";
+}) {
   const m = messagesFor(stewardMessages, locale);
+  const links = [
+    { page: "home", path: "", label: m.back },
+    { page: "open-text", path: "/open-text", label: m.openText },
+    { page: "people", path: "/people", label: m.people },
+    {
+      page: "candidates",
+      path: "/candidates",
+      label: messagesFor(candidateMessages, locale).title,
+    },
+    { page: "takedowns", path: "/takedowns", label: messagesFor(takedownsMessages, locale).title },
+  ];
   return (
-    <nav className="flex flex-wrap gap-4">
-      <Link
-        href={`/${locale}/steward`}
-        className="inline-flex min-h-11 w-full min-w-0 items-center text-ai underline sm:w-auto"
-      >
-        {m.back}
-      </Link>
-      <Link
-        href={`/${locale}/steward/open-text`}
-        className="inline-flex min-h-11 w-full min-w-0 items-center text-ai underline sm:w-auto"
-      >
-        {m.openText}
-      </Link>
-      <Link
-        href={`/${locale}/steward/people`}
-        className="inline-flex min-h-11 w-full min-w-0 items-center text-ai underline sm:w-auto"
-      >
-        {m.people}
-      </Link>
-      <Link
-        href={`/${locale}/steward/candidates`}
-        className="inline-flex min-h-11 w-full min-w-0 items-center text-ai underline sm:w-auto"
-      >
-        {messagesFor(candidateMessages, locale).title}
-      </Link>
-      <Link
-        href={`/${locale}/steward/takedowns`}
-        className="inline-flex min-h-11 w-full min-w-0 items-center text-ai underline sm:w-auto"
-      >
-        {messagesFor(takedownsMessages, locale).title}
-      </Link>
+    <nav className="flex min-w-0 flex-wrap gap-2">
+      {links
+        .filter((link) => current !== "home" || link.page !== "home")
+        .map((link) => (
+          <Link
+            key={link.page}
+            href={`/${locale}/steward${link.path}`}
+            aria-current={current === link.page ? "page" : undefined}
+            className="inline-flex min-h-11 min-w-0 max-w-full items-center rounded-full border border-line px-3 py-2 text-ai leading-snug [overflow-wrap:anywhere] hover:bg-kamenozoki aria-[current=page]:bg-ai aria-[current=page]:text-white"
+          >
+            {link.label}
+          </Link>
+        ))}
     </nav>
   );
 }
@@ -85,7 +84,7 @@ export function StewardHomeView(props: StewardHomeProps) {
   return (
     <PageContainer locale={locale} title={m.home}>
       <div className="min-w-0 space-y-6 text-kon [overflow-wrap:anywhere]">
-        <StewardNav locale={locale} />
+        <StewardNav locale={locale} current="home" />
         <Link
           className="inline-flex min-h-11 w-full min-w-0 items-center text-ai underline sm:w-auto"
           href={`/${locale}/creator`}
@@ -160,10 +159,6 @@ export function StewardHomeView(props: StewardHomeProps) {
                         </Button>
                       </td>
                       <td role="cell" className="block min-w-0 space-y-2 xl:table-cell xl:p-3">
-                        <span aria-hidden="true" className="mr-2 text-sm font-bold xl:hidden">
-                          {m.visibility}
-                        </span>
-                        <p className="inline">{m[row.visibility]}</p>
                         <label className="block">
                           {m.visibility}
                           <select
@@ -208,7 +203,7 @@ export function StewardHomeView(props: StewardHomeProps) {
                           </label>
                         )}
                         {reasons.map((reason) => (
-                          <p key={reason} className="text-sm">
+                          <p key={reason} className="text-sm leading-relaxed">
                             {reason === "launch_pack" ||
                             reason === "landmark_kind" ||
                             reason === "real_only"
