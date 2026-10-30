@@ -417,3 +417,26 @@ describe("candidate container wiring", () => {
     expect(wire().candidates).toEqual([]);
   });
 });
+
+it.each(["ja", "en"] as const)(
+  "%s candidate phone cards label their values and wrap controls",
+  (locale) => {
+    const html = renderToStaticMarkup(
+      <CandidatesView
+        {...props()}
+        locale={locale}
+        activeId={candidate._id}
+        drafts={{ [candidate._id]: candidateDraft(candidate) }}
+      />,
+    );
+    expect(html).toContain('data-steward-card="candidate"');
+    expect(html).toContain("min-w-0 space-y-3 rounded-[10px] border border-line");
+    for (const key of ["name", "category", "latitude", "longitude"] as const)
+      expect(html).toContain(candidateMessages[locale][key]);
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    for (const control of html.match(/<(?:button|select|input)\b[^>]*>/g) ?? []) {
+      if (control.includes('type="checkbox"')) continue;
+      expect(control).toContain("min-h-11");
+    }
+  },
+);
