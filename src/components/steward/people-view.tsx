@@ -27,7 +27,7 @@ export function PeopleView(
   return (
     <PageContainer locale={locale} title={m.people}>
       <div className="min-w-0 space-y-6 text-kon [overflow-wrap:anywhere]">
-        <StewardNav locale={locale} />
+        <StewardNav locale={locale} current="people" />
         <p>{m.invitations}</p>
         <p>{m.roleRule}</p>
         <StewardFeedback {...props} />
