@@ -12,6 +12,16 @@ import { selectionToSpan } from "./span";
 export type EditableSegment = { start: number; end: number; speaker?: string; text: string };
 type Span = { spanStart: number; spanEnd: number; quote: string };
 
+/** Segment times are seconds from the start of the recording: m:ss, or h:mm:ss past an hour. */
+export function formatTime(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const s = String(total % 60).padStart(2, "0");
+  const minutes = Math.floor(total / 60);
+  return minutes < 60
+    ? `${minutes}:${s}`
+    : `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${s}`;
+}
+
 export function TranscriptEditor(props: {
   locale: Locale;
   segments: readonly EditableSegment[];
@@ -49,7 +59,7 @@ export function TranscriptEditor(props: {
       {draft.map((segment, index) => (
         <div key={index} data-segment={index} className="space-y-2 rounded-lg border p-3">
           <p>
-            {segment.start}–{segment.end}
+            {formatTime(segment.start)}–{formatTime(segment.end)}
           </p>
           <Label htmlFor={`${id}-speaker-${index}`}>{m.speaker}</Label>
           <select

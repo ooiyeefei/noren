@@ -38,13 +38,18 @@ export function StatusView(p: StatusProps) {
         <label>
           {m.codeLabel}
           <Input
+            className="min-h-11 rounded-[10px] border-line"
             disabled={p.pending}
             value={p.code}
             required
             onChange={(e) => p.onCode(e.target.value)}
           />
         </label>
-        <Button disabled={p.pending} type="submit">
+        <Button
+          className="min-h-11 rounded-[10px] px-5 whitespace-normal"
+          disabled={p.pending}
+          type="submit"
+        >
           {m.check}
         </Button>
       </form>
@@ -87,6 +92,7 @@ export function StatusView(p: StatusProps) {
                   <label>
                     {m.note}
                     <Textarea
+                      className="min-h-11 rounded-[10px] border-line"
                       required
                       aria-describedby="appeal-count"
                       value={p.note}
@@ -96,7 +102,9 @@ export function StatusView(p: StatusProps) {
                   <p id="appeal-count" aria-live="polite">
                     {characterCount(p.note)} / 2000 · {m.length}
                   </p>
-                  <Button type="submit">{p.pending ? m.sending : m.appeal}</Button>
+                  <Button className="min-h-11 rounded-[10px] px-5 whitespace-normal" type="submit">
+                    {p.pending ? m.sending : m.appeal}
+                  </Button>
                 </fieldset>
               </form>
             )}

@@ -578,7 +578,10 @@ describe("owner phone review", () => {
     "%s shows large named review and remove actions, and publication guidance",
     (locale) => {
       const html = view([claim("one")], { locale, interviews: [] });
-      expect(html).toContain(ownerMessages[locale].publicationNote);
+      expect(html.split(ownerMessages[locale].publicationNote)).toHaveLength(2);
+      expect(ownerMessages[locale].toReviewIntro).not.toMatch(
+        /Nothing is published|掲載されません/,
+      );
       const labels = locale === "ja" ? ["確認する", "削除する"] : ["Confirm", "Remove"];
       for (const label of labels) {
         const button = html.match(new RegExp(`<button[^>]*>${label}</button>`))?.[0];
