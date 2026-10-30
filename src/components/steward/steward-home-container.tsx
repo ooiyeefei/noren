@@ -3,7 +3,8 @@
 import { Component, use, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { errorText } from "@/components/layout/error-text";
-import { ErrorMessage } from "@/components/layout/error-message";
+import { ErrorPage } from "@/components/layout/error-page";
+import { PageContainer } from "@/components/layout/page-container";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { stewardMessages } from "@/lib/i18n/messages/steward";
 import type { RegionConfig } from "@/lib/region/schema";
@@ -27,9 +28,14 @@ export class StewardErrorBoundary extends Component<
         this.state.error instanceof Error &&
         /(?:ArgumentValidationError|invalid.*id|not a valid.*id)/i.test(this.state.error.message);
       return malformed ? (
-        <p role="alert">{messagesFor(stewardMessages, this.props.locale).notFound}</p>
+        <PageContainer
+          locale={this.props.locale}
+          title={messagesFor(stewardMessages, this.props.locale).notFoundTitle}
+        >
+          <p role="alert">{messagesFor(stewardMessages, this.props.locale).notFound}</p>
+        </PageContainer>
       ) : (
-        <ErrorMessage error={this.state.error} locale={this.props.locale} />
+        <ErrorPage error={this.state.error} locale={this.props.locale} />
       );
     }
     return this.props.children;
