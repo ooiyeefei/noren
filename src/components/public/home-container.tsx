@@ -4,6 +4,7 @@ import { Component, useMemo, useState, useSyncExternalStore, type ReactNode } fr
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { ErrorMessage } from "@/components/layout/error-message";
+import { ErrorPage } from "@/components/layout/error-page";
 import {
   dismissGuide,
   distanceLabel,
@@ -13,7 +14,8 @@ import {
   type Position,
   type SheetHeight,
 } from "@/components/explore/helpers";
-import type { Locale } from "@/lib/i18n";
+import { messagesFor, type Locale } from "@/lib/i18n";
+import { shellMessages } from "@/lib/i18n/messages/shell";
 import { HomeView, PublicLoading } from "./home-view";
 import { toHomeModel, type PublicRegionProps } from "./mapping";
 
@@ -27,7 +29,7 @@ function subscribeGuide(onChange: () => void) {
 }
 
 export class PublicQueryBoundary extends Component<
-  { locale: Locale; children: ReactNode },
+  { locale: Locale; insideMain?: boolean; children: ReactNode },
   { failed: boolean; error?: unknown }
 > {
   override state: { failed: boolean; error?: unknown } = { failed: false };
@@ -35,17 +37,23 @@ export class PublicQueryBoundary extends Component<
     return { failed: true, error };
   }
   override render() {
-    return this.state.failed ? (
-      <ErrorMessage error={this.state.error} locale={this.props.locale} />
-    ) : (
-      this.props.children
-    );
+    if (!this.state.failed) return this.props.children;
+    if (this.props.insideMain)
+      return (
+        <div className="mx-auto w-full max-w-[1200px] space-y-6 px-4 py-6 sm:px-6">
+          <h1 className="text-[28px] font-bold lg:text-4xl">
+            {messagesFor(shellMessages, this.props.locale).errorTitle}
+          </h1>
+          <ErrorMessage error={this.state.error} locale={this.props.locale} />
+        </div>
+      );
+    return <ErrorPage error={this.state.error} locale={this.props.locale} />;
   }
 }
 
 export function HomeContainer(props: { locale: Locale; region: PublicRegionProps }) {
   return (
-    <PublicQueryBoundary locale={props.locale}>
+    <PublicQueryBoundary locale={props.locale} insideMain>
       <HomeQuery {...props} />
     </PublicQueryBoundary>
   );

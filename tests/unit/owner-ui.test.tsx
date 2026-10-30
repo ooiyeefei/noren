@@ -712,6 +712,8 @@ describe("containers", () => {
   const renderPlace = (results: Record<string, unknown>) => {
     convex.results.clear();
     convex.calls.length = 0;
+    // The container first checks the URL ID's shape; a well-formed ID normalizes to itself.
+    convex.results.set("ids:normalize", "mock-place");
     for (const [name, value] of Object.entries(results)) convex.results.set(name, value);
     return renderToStaticMarkup(
       <OwnerPlaceContainer params={params("mock-place")} locale="ja" region={region} />,

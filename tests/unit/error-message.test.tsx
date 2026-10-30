@@ -2,10 +2,25 @@ import { ConvexError } from "convex/values";
 import { renderToStaticMarkup as render } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ErrorMessage } from "@/components/layout/error-message";
+import { ErrorPage } from "@/components/layout/error-page";
 import { SUPPORTED_LOCALES } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
 
 describe("ErrorMessage", () => {
+  it.each(SUPPORTED_LOCALES)(
+    "%s ErrorPage adds the page layout and a recovery heading",
+    (locale) => {
+      const html = render(<ErrorPage error={new Error("Server Error")} locale={locale} />);
+      expect(html.match(/<main\b/g)).toHaveLength(1);
+      expect(html).toContain('<main id="main" tabindex="-1"');
+      expect(html.match(/<h1\b/g)).toHaveLength(1);
+      expect(html).toContain(shellMessages[locale].errorTitle.replace(/'/g, "&#x27;"));
+      expect(html).toContain("px-4");
+      expect(html).toContain(shellMessages[locale].unexpectedError);
+      expect(html).toContain(shellMessages[locale].technicalDetails);
+    },
+  );
+
   it.each(SUPPORTED_LOCALES)(
     "%s shows plain recovery copy and collapsed, copyable diagnostics",
     (locale) => {

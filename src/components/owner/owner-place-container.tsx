@@ -2,7 +2,8 @@
 
 import { use } from "react";
 import { useMutation, useQuery } from "convex/react";
-import type { Locale } from "@/lib/i18n";
+import { messagesFor, type Locale } from "@/lib/i18n";
+import { shellMessages } from "@/lib/i18n/messages/shell";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { OwnerBoundary } from "./owner-home-container";
@@ -21,11 +22,22 @@ type Props = {
   region: OwnerRegionProps;
 };
 
-function OwnerPlaceQuery({ params, locale, region }: Props) {
-  const { placeId: rawId } = use(params);
-  // The route gives a string; Convex rejects one that is not a place id, which the boundary
-  // below shows as "not found".
-  const placeId = rawId as Id<"place">;
+export function OwnerPlaceGate({
+  placeId,
+  locale,
+  region,
+}: Omit<Props, "params"> & { placeId: string }) {
+  const normalizedId = useQuery(api.ids.normalize, { table: "place", id: placeId });
+  if (normalizedId === undefined) return <OwnerLoading locale={locale} />;
+  if (normalizedId === null) return <OwnerNotFound locale={locale} />;
+  return <OwnerPlaceQuery placeId={normalizedId as Id<"place">} locale={locale} region={region} />;
+}
+
+function OwnerPlaceQuery({
+  placeId,
+  locale,
+  region,
+}: Omit<Props, "params"> & { placeId: Id<"place"> }) {
   const place = useQuery(api.places.get, { placeId });
   const owned = place?.isOwner === true;
   // Only an owner may list claims and interviews; asking as anyone else would throw.
@@ -85,9 +97,15 @@ function OwnerPlaceQuery({ params, locale, region }: Props) {
 }
 
 export function OwnerPlaceContainer(props: Props) {
+  const { placeId } = use(props.params);
   return (
-    <OwnerBoundary key={props.locale} locale={props.locale} notFound={isInvalidIdError}>
-      <OwnerPlaceQuery {...props} />
+    <OwnerBoundary
+      key={`${props.locale}/${placeId}`}
+      locale={props.locale}
+      notFound={isInvalidIdError}
+      errorTitle={messagesFor(shellMessages, props.locale).errorTitle}
+    >
+      <OwnerPlaceGate placeId={placeId} locale={props.locale} region={props.region} />
     </OwnerBoundary>
   );
 }

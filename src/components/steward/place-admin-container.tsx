@@ -2,6 +2,7 @@
 
 import { use, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { PageContainer } from "@/components/layout/page-container";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { stewardMessages } from "@/lib/i18n/messages/steward";
 import type { RegionConfig } from "@/lib/region/schema";
@@ -24,9 +25,34 @@ export function PlaceAdminContainer({
   const { placeId } = use(params);
   return (
     <StewardErrorBoundary key={placeId} locale={locale} malformedAsNotFound>
-      <LoadPlace locale={locale} region={region} placeId={placeId as Id<"place">} />
+      <PlaceAdminGate locale={locale} region={region} placeId={placeId} />
     </StewardErrorBoundary>
   );
+}
+export function PlaceAdminGate({
+  placeId,
+  locale,
+  region,
+}: {
+  placeId: string;
+  locale: Locale;
+  region: RegionConfig;
+}) {
+  const normalizedId = useQuery(api.ids.normalize, { table: "place", id: placeId });
+  const m = messagesFor(stewardMessages, locale);
+  if (normalizedId === undefined)
+    return (
+      <PageContainer locale={locale} title={m.admin}>
+        <p role="status">{m.loading}</p>
+      </PageContainer>
+    );
+  if (normalizedId === null)
+    return (
+      <PageContainer locale={locale} title={m.notFoundTitle}>
+        <p>{m.notFound}</p>
+      </PageContainer>
+    );
+  return <LoadPlace placeId={normalizedId as Id<"place">} locale={locale} region={region} />;
 }
 function LoadPlace({
   placeId,
@@ -37,11 +63,20 @@ function LoadPlace({
   locale: Locale;
   region: RegionConfig;
 }) {
-  // Convex validates URL IDs; the keyed boundary handles malformed ones as not found.
   const place = useQuery(api.places.get, { placeId });
   const m = messagesFor(stewardMessages, locale);
-  if (place === undefined) return <p role="status">{m.loading}</p>;
-  if (place === null || place.regionId !== region.id) return <p>{m.notFound}</p>;
+  if (place === undefined)
+    return (
+      <PageContainer locale={locale} title={m.admin}>
+        <p role="status">{m.loading}</p>
+      </PageContainer>
+    );
+  if (place === null || place.regionId !== region.id)
+    return (
+      <PageContainer locale={locale} title={m.notFoundTitle}>
+        <p>{m.notFound}</p>
+      </PageContainer>
+    );
   return (
     <Admin
       key={place._id}
