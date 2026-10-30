@@ -41,14 +41,30 @@ export function CreatorHomeView({
     </Button>
   );
   return (
-    <PageContainer title={m.home} locale={locale}>
-      <StepsPanel
-        title={m.whatToDo}
-        steps={[m.guideAdd, m.guidePosts, m.guideInterview]}
-        action={add}
-        done={places.length > 0}
-        lang={locale}
-      />
+    <PageContainer
+      title={adding ? m.newPlace : m.home}
+      locale={locale}
+      actions={
+        adding ? (
+          <Link
+            className="inline-flex min-h-11 items-center text-ai underline"
+            href={`/${locale}/creator`}
+            scroll={false}
+          >
+            {m.cancel}
+          </Link>
+        ) : undefined
+      }
+    >
+      {!adding && (
+        <StepsPanel
+          title={m.whatToDo}
+          steps={[m.guideAdd, m.guidePosts, m.guideInterview]}
+          action={add}
+          done={places.length > 0}
+          lang={locale}
+        />
+      )}
       {children && <div hidden={!adding}>{children}</div>}
       {!adding && (
         <section className="space-y-4" aria-label={m.myPlaces}>
