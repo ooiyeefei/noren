@@ -34,4 +34,4 @@ npm run format:check
 
 ## Reporting security problems
 
-Please do not open a public issue for a security problem. A private reporting channel will be listed in SECURITY.md.
+Please do not open a public issue for a security problem. Report it privately as described in [SECURITY.md](SECURITY.md).
