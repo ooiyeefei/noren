@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, type ReactNode } from "react";
+import { Component, useMemo, type ReactNode } from "react";
 import { useQueries, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { errorText } from "@/components/layout/error-text";
@@ -37,17 +37,22 @@ export class OwnerBoundary extends Component<BoundaryProps, { failed: boolean; e
 
 function OwnerHomeQuery({ locale, region }: { locale: Locale; region: OwnerRegionProps }) {
   const places = useQuery(api.places.listOwned, {});
+  // useQueries resubscribes whenever this object's identity changes, so a fresh object on every render
+  // loops forever (React error #301). `places` keeps its identity until the result changes.
+  const claimQueries = useMemo(
+    () =>
+      Object.fromEntries(
+        (places ?? []).map((place) => [
+          place._id,
+          { query: api.claims.listForPlace, args: { placeId: place._id } },
+        ]),
+      ),
+    [places],
+  );
   const claimsByPlace: Record<
     string,
     FunctionReturnType<typeof api.claims.listForPlace> | undefined | Error
-  > = useQueries(
-    Object.fromEntries(
-      (places ?? []).map((place) => [
-        place._id,
-        { query: api.claims.listForPlace, args: { placeId: place._id } },
-      ]),
-    ),
-  );
+  > = useQueries(claimQueries);
   if (places === undefined) return <OwnerLoading locale={locale} />;
   const m = messagesFor(ownerMessages, locale);
   const unnamed = messagesFor(publicMessages, locale).unnamed;
