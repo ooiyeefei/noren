@@ -34,12 +34,12 @@ export function PlaceEditorContainer({
   const { placeId } = use(params);
   return (
     <CreatorErrorBoundary key={placeId} locale={locale} malformedAsNotFound>
-      <LoadPlace placeId={placeId} locale={locale} region={region} />
+      <PlaceEditorGate placeId={placeId} locale={locale} region={region} />
     </CreatorErrorBoundary>
   );
 }
 
-function LoadPlace({
+export function PlaceEditorGate({
   placeId,
   locale,
   region,
@@ -48,8 +48,33 @@ function LoadPlace({
   locale: Locale;
   region: RegionConfig;
 }) {
-  // A cast only satisfies TypeScript; Convex validates the actual URL string. The boundary handles invalid IDs.
-  const place = useQuery(api.places.get, { placeId: placeId as Id<"place"> });
+  const normalizedId = useQuery(api.ids.normalize, { table: "place", id: placeId });
+  const m = messagesFor(creatorMessages, locale);
+  if (normalizedId === undefined)
+    return (
+      <PageContainer locale={locale} title={m.editor}>
+        <p role="status">{m.loading}</p>
+      </PageContainer>
+    );
+  if (normalizedId === null)
+    return (
+      <PageContainer locale={locale} title={m.notFoundTitle}>
+        <p>{m.notFound}</p>
+      </PageContainer>
+    );
+  return <LoadPlace placeId={normalizedId as Id<"place">} locale={locale} region={region} />;
+}
+
+function LoadPlace({
+  placeId,
+  locale,
+  region,
+}: {
+  placeId: Id<"place">;
+  locale: Locale;
+  region: RegionConfig;
+}) {
+  const place = useQuery(api.places.get, { placeId });
   const m = messagesFor(creatorMessages, locale);
   if (place === undefined)
     return (
@@ -59,7 +84,7 @@ function LoadPlace({
     );
   if (place === null || place.regionId !== region.id)
     return (
-      <PageContainer locale={locale} title={m.editor}>
+      <PageContainer locale={locale} title={m.notFoundTitle}>
         <p>{m.notFound}</p>
       </PageContainer>
     );

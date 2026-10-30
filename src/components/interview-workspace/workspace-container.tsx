@@ -4,6 +4,8 @@ import { Component, use, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { uploadWithRetry } from "@/components/interview/upload";
 import { ErrorMessage } from "@/components/layout/error-message";
+import { ErrorPage } from "@/components/layout/error-page";
+import { PageContainer } from "@/components/layout/page-container";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { interviewPageMessages } from "@/lib/i18n/messages/interview-page";
 import { shellMessages } from "@/lib/i18n/messages/shell";
@@ -24,7 +26,7 @@ function codeOf(error: unknown): string | undefined {
     ? data.code
     : undefined;
 }
-class QueryBoundary extends Component<
+export class QueryBoundary extends Component<
   { locale: Locale; claims?: boolean; children: ReactNode },
   { failed: boolean; error?: unknown }
 > {
@@ -45,10 +47,18 @@ class QueryBoundary extends Component<
         : !this.props.claims && (code === "not_found" || code === "forbidden" || invalidId)
           ? messagesFor(shellMessages, locale).not_found
           : undefined;
+    if (this.props.claims)
+      return text !== undefined ? (
+        <p role="alert">{text}</p>
+      ) : (
+        <ErrorMessage error={this.state.error} locale={locale} />
+      );
     return text !== undefined ? (
-      <p role="alert">{text}</p>
+      <PageContainer locale={locale} title={messagesFor(shellMessages, locale).notFoundTitle}>
+        <p role="alert">{text}</p>
+      </PageContainer>
     ) : (
-      <ErrorMessage error={this.state.error} locale={locale} />
+      <ErrorPage error={this.state.error} locale={locale} />
     );
   }
 }
@@ -59,8 +69,8 @@ function ClaimsQuery(props: {
   const claims = useQuery(api.claims.listForPlace, { placeId: props.placeId });
   return props.children(claims);
 }
-function InterviewQuery(props: { id: string; locale: Locale; region: WorkspaceRegion }) {
-  const interviewId = props.id as Id<"interview">;
+function InterviewQuery(props: { id: Id<"interview">; locale: Locale; region: WorkspaceRegion }) {
+  const interviewId = props.id;
   const person = useQuery(api.people.current, {});
   const view = useQuery(api.interviews.get, { interviewId });
   const consent = useMutation(api.interviews.recordConsent);
@@ -159,11 +169,28 @@ export function WorkspaceContainer(props: {
   params: Promise<{ lang: string; id: string }>;
 }) {
   const { id } = use(props.params);
-  if (!/^[a-z0-9]{32}$/.test(id))
-    return <p role="alert">{messagesFor(shellMessages, props.locale).not_found}</p>;
   return (
     <QueryBoundary key={id} locale={props.locale}>
-      <InterviewQuery id={id} locale={props.locale} region={props.region} />
+      <InterviewGate id={id} locale={props.locale} region={props.region} />
     </QueryBoundary>
+  );
+}
+
+export function InterviewGate(props: { id: string; locale: Locale; region: WorkspaceRegion }) {
+  const normalizedId = useQuery(api.ids.normalize, { table: "interview", id: props.id });
+  const m = messagesFor(shellMessages, props.locale);
+  if (normalizedId === undefined) return <p role="status">{m.signingIn}</p>;
+  if (normalizedId === null)
+    return (
+      <PageContainer locale={props.locale} title={m.notFoundTitle}>
+        <p role="alert">{m.not_found}</p>
+      </PageContainer>
+    );
+  return (
+    <InterviewQuery
+      id={normalizedId as Id<"interview">}
+      locale={props.locale}
+      region={props.region}
+    />
   );
 }
