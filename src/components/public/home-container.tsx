@@ -3,7 +3,7 @@
 import { Component, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { errorText } from "@/components/layout/error-text";
+import { ErrorMessage } from "@/components/layout/error-message";
 import {
   dismissGuide,
   distanceLabel,
@@ -36,7 +36,7 @@ export class PublicQueryBoundary extends Component<
   }
   override render() {
     return this.state.failed ? (
-      <p role="alert">{errorText(this.state.error, this.props.locale)}</p>
+      <ErrorMessage error={this.state.error} locale={this.props.locale} />
     ) : (
       this.props.children
     );

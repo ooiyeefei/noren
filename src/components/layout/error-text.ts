@@ -6,6 +6,37 @@ function nonblank(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+export function errorParts(error: unknown, locale: Locale): { text: string; detail?: string } {
+  const m = messagesFor(shellMessages, locale);
+  const record = typeof error === "object" && error !== null ? error : {};
+  const data: unknown = "data" in record ? record.data : undefined;
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "code" in data &&
+    typeof data.code === "string" &&
+    Object.hasOwn(ERROR_STATUS, data.code)
+  ) {
+    const code = data.code as keyof typeof ERROR_STATUS;
+    const rule = "rule" in data ? nonblank(data.rule) : undefined;
+    return {
+      text:
+        code === "rule_violation" ? format(m[code], { rule: rule ?? "rule_violation" }) : m[code],
+      detail: "message" in data ? nonblank(data.message) : undefined,
+    };
+  }
+  const name = ("name" in record ? nonblank(record.name) : undefined) ?? "Error";
+  let fallback: string | undefined;
+  try {
+    fallback = nonblank(String(error));
+  } catch {
+    // Some thrown objects cannot be converted to a string.
+  }
+  const message =
+    ("message" in record ? nonblank(record.message) : undefined) ?? fallback ?? "unknown";
+  return { text: m.unexpectedError, detail: `${name}: ${message}` };
+}
+
 export function errorText(error: unknown, locale: Locale): string {
   const m = messagesFor(shellMessages, locale);
   const record = typeof error === "object" && error !== null ? error : {};
