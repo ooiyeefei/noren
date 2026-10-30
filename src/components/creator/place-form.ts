@@ -176,6 +176,5 @@ export function applyMapsSuggestion(draft: PlaceDraft, suggestion: MapsSuggestio
         ? { ...name, value: suggestion.name, isPrimary: true }
         : name,
     ),
-    pin: { lat: suggestion.lat, lng: suggestion.lng },
   };
 }

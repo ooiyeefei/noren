@@ -84,14 +84,15 @@ describe("creator wizard names", () => {
     });
     expect(fieldsToNames({ japanese: "", english: "Mock shop" }, names)).toEqual([names[1]]);
   });
-  it("prefills Japanese and English maps names in their fields with the exact pin", () => {
+  it("prefills Japanese and English maps names without placing a pin", () => {
     for (const [name, key] of [
       ["カフェ", "japanese"],
       ["Mock shop", "english"],
     ] as const) {
       const result = prefillMapsResult(empty, { name, lat: 32.750123, lng: 129.871234 });
       expect(namesToFields(result.names)[key]).toBe(name);
-      expect(result.pin).toEqual({ lat: 32.750123, lng: 129.871234 });
+      expect(result.pin).toBeNull();
+      expect(stepError(1, result, region)).toBe("no_pin");
     }
     expect(empty).toEqual({ kind: "business", names: [], pin: null });
   });
@@ -101,7 +102,8 @@ describe("creator wizard names", () => {
     );
     const result = prefillMapsResult(valid, { lat: 90, lng: 180 });
     expect(result.names).toEqual(names);
-    expect(stepError(1, result, region)).toBe("outside_region");
+    expect(result.pin).toEqual(valid.pin);
+    expect(stepError(1, { ...result, pin: { lat: 90, lng: 180 } }, region)).toBe("outside_region");
   });
 });
 
@@ -199,7 +201,8 @@ for (const locale of ["en", "ja"] as const)
         else {
           expect(html).toContain(m.create);
           expect(html).toContain(m.businessHint);
-          expect(html).toContain("129.");
+          expect(html).toContain(m.pinPlaced);
+          expect(html).not.toContain("129.");
         }
       });
     for (const step of [1, 2] as const)
