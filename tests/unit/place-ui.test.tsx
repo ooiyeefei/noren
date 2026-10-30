@@ -16,9 +16,38 @@ import { embedPlan, isAllowedOrigin, loadEmbedScript } from "@/components/embeds
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import type { EmbedDescriptor } from "@/lib/ports";
 
-vi.mock("maplibre-gl", () => {
-  throw new Error("MapLibre must not load during SSR");
+const mapState = vi.hoisted(() => ({
+  failed: false,
+  capture: false,
+  effects: [] as Array<() => void | (() => void)>,
+  options: null as Record<string, unknown> | null,
+}));
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  return {
+    ...actual,
+    useEffect: (effect: () => void | (() => void), deps: unknown[]) => {
+      if (mapState.capture) mapState.effects.push(effect);
+      actual.useEffect(effect, deps);
+    },
+    useRef: (initial: unknown) =>
+      actual.useRef(mapState.capture && initial === null ? {} : initial),
+    useState: (initial: unknown) => actual.useState(initial === false ? mapState.failed : initial),
+  };
 });
+
+vi.mock("maplibre-gl", () => ({
+  setWorkerUrl: vi.fn(),
+  Map: class {
+    constructor(options: Record<string, unknown>) {
+      mapState.options = options;
+    }
+    on() {}
+    addControl() {}
+    remove() {}
+  },
+  NavigationControl: class {},
+}));
 
 const source: EmbedSourceView = {
   id: "mock-post",
@@ -146,6 +175,20 @@ describe("place UI", () => {
     expect(picker).toContain(placeUiMessages.en.pickerHint);
     expect(picker).toContain("Mock credit");
     expect(picker).not.toContain('aria-label="Show my location"');
+    expect(picker).not.toContain("data-map-crosshair");
+    expect(picker).not.toContain("Put the pin here");
+    // With a centre label: a crosshair and a button that waits for the map, with the
+    // keyboard hint and the map's own label kept for screen readers.
+    const centre = renderToStaticMarkup(
+      <PlaceMap
+        {...base}
+        picker={{ value: null, onChange: () => {}, centreLabel: "Put the pin here" }}
+      />,
+    );
+    expect(centre).toContain('data-map-crosshair="true"');
+    expect(centre).toMatch(/<button[^>]*disabled=""[^>]*>Put the pin here<\/button>/);
+    expect(centre).toContain(`class="sr-only">${placeUiMessages.en.pickerHint}`);
+    expect(centre).toContain('class="sr-only">Mock map');
     const explore = renderToStaticMarkup(<PlaceMap {...base} explore={{}} />);
     for (const label of ["Show my location", "Zoom in", "Zoom out"])
       expect(explore).toContain(`aria-label="${label}"`);
@@ -184,6 +227,71 @@ describe("place UI", () => {
     expect(html).toContain("© OpenStreetMap contributors");
     expect(html).toContain("OpenFreeMap © OpenMapTiles");
     expect(html).not.toMatch(/<canvas|<script/);
+  });
+  it("non-explore maps have one in-map credit and hide the fallback until failure", () => {
+    for (const locale of ["en", "ja"] as const) {
+      const props = {
+        locale,
+        label: "Mock map",
+        styleUrl: "mock.json",
+        attribution: ["© OpenStreetMap contributors", "OpenFreeMap © OpenMapTiles"],
+        center: { lat: 32, lng: 129, zoom: 16 },
+        markers: [],
+      };
+      try {
+        const html = renderToStaticMarkup(<PlaceMap {...props} />);
+        const credit = html.match(/<div data-map-credit[\s\S]*?<\/div>/)?.[0] ?? "";
+        for (const provider of ["OpenStreetMap contributors", "OpenFreeMap", "OpenMapTiles"])
+          expect(credit.split(provider)).toHaveLength(2);
+        expect(credit).toContain('href="https://www.openstreetmap.org/copyright"');
+        expect(credit).toContain("bg-white");
+        expect(html).toMatch(/<p class="sr-only"><span class="font-medium">/);
+        mapState.failed = true;
+        const failed = renderToStaticMarkup(<PlaceMap {...props} />);
+        expect(failed).toContain('role="status"');
+        expect(failed).not.toContain("data-map-credit");
+        expect(failed).toMatch(
+          /<p class="text-sm text-muted-foreground"><span class="font-medium">/,
+        );
+        expect(failed).toContain("OpenFreeMap © OpenMapTiles");
+        const explore = renderToStaticMarkup(<PlaceMap {...props} explore={{}} />);
+        expect(explore).not.toContain("data-map-credit");
+        expect(explore).toMatch(/<p class="sr-only"><span class="font-medium">/);
+      } finally {
+        mapState.failed = false;
+      }
+    }
+  });
+  it("disables source attribution only for non-explore maps", async () => {
+    for (const explore of [undefined, {}]) {
+      mapState.capture = true;
+      mapState.options = null;
+      mapState.effects = [];
+      let cleanup: void | (() => void) = undefined;
+      try {
+        renderToStaticMarkup(
+          <PlaceMap
+            locale="en"
+            label="Mock map"
+            styleUrl="mock.json"
+            attribution={["Mock credit"]}
+            center={{ lat: 32, lng: 129, zoom: 16 }}
+            markers={[]}
+            explore={explore}
+          />,
+        );
+        cleanup = mapState.effects[1]!();
+        await vi.waitFor(() => expect(mapState.options).not.toBeNull());
+        expect(mapState.options!.center).toEqual([129, 32]);
+        expect(mapState.options!.zoom).toBe(16);
+        expect(mapState.options!.attributionControl).toEqual(
+          explore ? { compact: false, customAttribution: "Mock credit" } : false,
+        );
+      } finally {
+        if (typeof cleanup === "function") cleanup();
+        mapState.capture = false;
+      }
+    }
   });
   it("boundsFor pads the markers' box and falls back to the region bbox", () => {
     expect(boundsFor([], [1, 2, 3, 4])).toEqual([

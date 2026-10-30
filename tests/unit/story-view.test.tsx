@@ -240,3 +240,39 @@ it("uses the reading type scale and quiet source list without cards", () => {
   expect(html).not.toContain('data-slot="card"');
   expect(html).not.toContain("·");
 });
+
+it("sources have one section Demo badge, compact inline back links and preserved quotes in both locales", () => {
+  for (const locale of ["en", "ja"] as const) {
+    for (const mock of [true, false]) {
+      const html = render(
+        model({
+          locale,
+          sentences: ["a", "b", "c"].map((id, ordinal) => sentence(id, { lang: locale, ordinal })),
+          claims: [
+            claim("a", { isMock: false }),
+            claim("b", { isMock: mock }),
+            claim("c", { isMock: mock }),
+          ],
+        }),
+      );
+      const sources = html.slice(
+        html.indexOf(`<section aria-label="${storyMessages[locale].footnotesHeading}"`),
+      );
+      expect(sources.match(/data-badge="demo"/g) ?? []).toHaveLength(mock ? 1 : 0);
+      const list = sources.slice(sources.indexOf("<ol"));
+      expect(list).not.toContain('data-badge="demo"');
+      expect(list).toContain("space-y-2");
+      for (const [index, id] of ["a", "b", "c"].entries()) {
+        expect(list).toContain(`id="fn-${id}" value="${index + 1}"`);
+        expect(list).toContain(`架空の引用 ${id}`);
+        expect(list).toContain(
+          `aria-label="${storyMessages[locale].backToReference}" href="#ref-${locale}-${index}-${id}"`,
+        );
+        expect(html).toContain(`id="ref-${locale}-${index}-${id}"`);
+        expect(html).toContain(`href="#fn-${id}"`);
+      }
+      expect(list).toContain("inline-flex size-11");
+      expect(list).not.toContain('class="block');
+    }
+  }
+});

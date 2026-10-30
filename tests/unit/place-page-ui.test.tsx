@@ -1,3 +1,5 @@
+import { isValidElement, type ReactNode } from "react";
+import { PlaceMap } from "@/components/map/place-map";
 import { renderToStaticMarkup as render } from "react-dom/server";
 import { expect, it } from "vitest";
 import { PlaceView } from "@/components/public/place-view";
@@ -152,7 +154,8 @@ it("the place page credits OpenStreetMap with a link when a place has an osm dat
   );
   expect(detail([{ provider: "osm", ref: "node/123" }])).toContain(publicMessages.en.osmLicence);
   expect(detail([])).not.toContain('id="place-data-heading"');
-  expect(detail([])).not.toContain('href="https://www.openstreetmap.org/copyright"');
+  expect(detail([])).not.toContain(publicMessages.en.osmLicence);
+  expect(detail([])).not.toContain('href="https://www.openstreetmap.org/node/123"');
   expect(
     detail([{ provider: "other", ref: "ref", attribution: "Mock contributor credit" }]),
   ).toContain("Mock contributor credit");
@@ -169,5 +172,38 @@ it("the OSM object link is built from the ref", () => {
       />,
     );
     expect(html).toContain(`href="https://www.openstreetmap.org/${ref}"`);
+  }
+});
+
+it("centres the place map on its pin at street zoom", () => {
+  const maps: Array<React.ComponentProps<typeof PlaceMap>> = [];
+  const visit = (node: ReactNode): void => {
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (!isValidElement<{ children?: ReactNode }>(node)) return;
+    if (node.type === PlaceMap) maps.push(node.props as React.ComponentProps<typeof PlaceMap>);
+    visit(node.props.children);
+  };
+  visit(PlaceView({ locale: "en", region, place, page: null, sources: [] }));
+  expect(maps).toHaveLength(1);
+  expect(maps[0]!.center).toEqual({ ...place.pin, zoom: 16 });
+  expect(maps[0]!.markers).toHaveLength(1);
+  expect(maps[0]!.markers[0]).toMatchObject(place.pin!);
+  expect(maps[0]!.bounds).toBeUndefined();
+});
+
+it("includes the localised site footer after the main landmark, including missing places", () => {
+  for (const locale of ["en", "ja"] as const) {
+    for (const value of [place, null]) {
+      const html = render(
+        <PlaceView locale={locale} region={region} place={value} page={null} sources={[]} />,
+      );
+      expect(html.match(/<footer/g)).toHaveLength(1);
+      expect(html.indexOf("<footer")).toBeGreaterThan(html.indexOf("</main>"));
+      expect(html).toContain(`href="/${locale}/notice"`);
+      expect(html).toContain(shellMessages[locale].japaneseReview);
+    }
   }
 });
