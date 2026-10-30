@@ -199,10 +199,13 @@ it("a suggestion fills a blank name and keeps a typed one", () => {
   expect(blank.names[0]?.value).toBe(" ");
   expect(applyMapsSuggestion(blank, { lat: 32, lng: 129 }).names).toEqual(blank.names);
 });
-it("the pin moves to the suggestion and still requires a region-bbox check", () => {
+it("a maps suggestion preserves the person's pin and manual placement still requires a bbox check", () => {
   const result = applyMapsSuggestion(draft, { lat: 90, lng: 180 });
-  expect(result.pin).toEqual({ lat: 90, lng: 180 });
-  expect(validatePlaceDraft(result, region).pin).toBe("outside_region");
+  expect(result.pin).toEqual(draft.pin);
+  expect(applyMapsSuggestion({ ...draft, pin: null }, { lat: 90, lng: 180 }).pin).toBeNull();
+  expect(validatePlaceDraft({ ...result, pin: { lat: 90, lng: 180 } }, region).pin).toBe(
+    "outside_region",
+  );
 });
 it("a suggestion targets the primary row rather than another language", () => {
   const result = applyMapsSuggestion(

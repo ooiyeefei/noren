@@ -109,13 +109,6 @@ export function GeoSearchView({
           <p>
             {m.suggestion}: {state.selected.name}
           </p>
-          <Button
-            className="min-h-11 rounded-[10px] px-4 whitespace-normal"
-            type="button"
-            onClick={actions.onConfirm}
-          >
-            {m.confirmPin}
-          </Button>
         </div>
       )}
     </section>
@@ -414,24 +407,101 @@ export function PinPicker({
   const style = createOpenFreeMapStyle(region);
   const [initialPin] = useState(draft.pin);
   return (
-    <section className="space-y-3 [&_.h-96]:h-[360px]">
+    <section className="space-y-3">
+      {center && <p role="status">{m.entranceHint}</p>}
       <p className="text-sm">{m.pinHint}</p>
       <PlaceMap
         locale={locale}
         label={m.pin}
         styleUrl={style.styleUrl(region, "liberty", locale)}
         attribution={style.attribution}
-        center={{ ...region.defaultCenter, ...(center ?? initialPin) }}
+        center={
+          center || initialPin ? { ...(center ?? initialPin!), zoom: 17 } : region.defaultCenter
+        }
         markers={[]}
-        picker={{ value: draft.pin, onChange }}
+        picker={{ value: draft.pin, onChange, centreLabel: m.putPinHere }}
       />
-      {draft.pin && (
-        <p>
-          {m.coordinates}: {draft.pin.lat}, {draft.pin.lng}
-        </p>
-      )}
+      {draft.pin && <p role="status">{m.pinPlaced}</p>}
       {errors.pin && <p role="alert">{m[errors.pin]}</p>}
     </section>
+  );
+}
+
+export function PlacePinSearch({
+  locale,
+  region,
+  draft,
+  search,
+  searchActions,
+  errors,
+  onChange,
+  active = true,
+  prefillNames = false,
+}: Pick<
+  NewPlaceViewProps,
+  "locale" | "region" | "draft" | "search" | "searchActions" | "errors" | "onChange"
+> & {
+  active?: boolean;
+  prefillNames?: boolean;
+}) {
+  const m = messagesFor(creatorMessages, locale);
+  const [center, setCenter] = useState<{ lat: number; lng: number }>();
+  const [locating, setLocating] = useState(false);
+  const [locationOff, setLocationOff] = useState(false);
+  const latest = useRef({ draft, onChange });
+  useEffect(() => {
+    latest.current = { draft, onChange };
+  }, [draft, onChange]);
+  async function locate() {
+    setLocating(true);
+    setLocationOff(false);
+    const result = await requestCreatorLocation();
+    setLocating(false);
+    if (result.ok) setCenter(result.pin);
+    else setLocationOff(true);
+  }
+  return (
+    <div className="space-y-6">
+      <MapsLinkField
+        locale={locale}
+        onSuggestion={(suggestion) => {
+          if (prefillNames)
+            latest.current.onChange(prefillMapsResult(latest.current.draft, suggestion));
+          setCenter({ lat: suggestion.lat, lng: suggestion.lng });
+        }}
+      />
+      <GeoSearchView
+        locale={locale}
+        state={search}
+        actions={{
+          ...searchActions,
+          onSelect: (suggestion) => {
+            setCenter({ lat: suggestion.lat, lng: suggestion.lng });
+            searchActions.onSelect(suggestion);
+          },
+        }}
+      />
+      <Button
+        className="min-h-11 rounded-[10px] px-4 whitespace-normal"
+        type="button"
+        variant="outline"
+        disabled={locating}
+        onClick={() => locate()}
+      >
+        {locating ? m.locating : m.locate}
+      </Button>
+      {locationOff && <p role="status">{m.locationOff}</p>}
+      {active && (
+        <PinPicker
+          locale={locale}
+          region={region}
+          draft={draft}
+          center={center ?? search.center}
+          errors={errors}
+          onChange={(pin) => onChange({ ...draft, pin })}
+        />
+      )}
+    </div>
   );
 }
 
@@ -467,30 +537,13 @@ export function NewPlaceView({
   onStep,
 }: NewPlaceViewProps) {
   const m = messagesFor(creatorMessages, locale);
-  const [mapsCenter, setMapsCenter] = useState<{ lat: number; lng: number }>();
-  const [locating, setLocating] = useState(false);
-  const [locationOff, setLocationOff] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const reasonId = useId();
-  const latest = useRef({ draft, onChange });
-  useEffect(() => {
-    latest.current = { draft, onChange };
-  }, [draft, onChange]);
   useEffect(() => {
     if (active) heading.current?.focus();
   }, [step, active]);
   const reason = stepError(step, draft, region);
   const titles = [m.where, m.called, m.kindOfPlace];
-  async function locate() {
-    setLocating(true);
-    setLocationOff(false);
-    const result = await requestCreatorLocation();
-    setLocating(false);
-    if (result.ok) {
-      latest.current.onChange({ ...latest.current.draft, pin: result.pin });
-      setMapsCenter(result.pin);
-    } else setLocationOff(true);
-  }
   return (
     <section className="max-w-3xl space-y-6" lang={locale} aria-label={m.newPlace}>
       <p aria-live="polite" aria-atomic="true" className="text-[15px] text-muted-foreground">
@@ -501,44 +554,17 @@ export function NewPlaceView({
       </h2>
       <fieldset disabled={pending} className="min-w-0 space-y-6">
         <div hidden={step !== 1} className="space-y-6">
-          <MapsLinkField
+          <PlacePinSearch
             locale={locale}
-            onSuggestion={(suggestion) => {
-              latest.current.onChange(prefillMapsResult(latest.current.draft, suggestion));
-              setMapsCenter({ lat: suggestion.lat, lng: suggestion.lng });
-            }}
+            region={region}
+            draft={draft}
+            search={search}
+            searchActions={searchActions}
+            errors={errors}
+            onChange={onChange}
+            active={active && step === 1}
+            prefillNames
           />
-          <GeoSearchView
-            locale={locale}
-            state={search}
-            actions={{
-              ...searchActions,
-              onSelect: (suggestion) => {
-                setMapsCenter(undefined);
-                searchActions.onSelect(suggestion);
-              },
-            }}
-          />
-          <Button
-            className="min-h-11 rounded-[10px] px-4 whitespace-normal"
-            type="button"
-            variant="outline"
-            disabled={locating}
-            onClick={() => void locate()}
-          >
-            {locating ? m.locating : m.locate}
-          </Button>
-          {locationOff && <p role="status">{m.locationOff}</p>}
-          {active && step === 1 && (
-            <PinPicker
-              locale={locale}
-              region={region}
-              draft={draft}
-              center={mapsCenter ?? search.center}
-              errors={errors}
-              onChange={(pin) => onChange({ ...draft, pin })}
-            />
-          )}
         </div>
         {step === 2 && (
           <PlaceNamesEditor
@@ -569,7 +595,7 @@ export function NewPlaceView({
                   ))}
               </ul>
               <p className="text-[13px] text-muted-foreground">
-                {m.coordinates}: {draft.pin ? `${draft.pin.lat}, ${draft.pin.lng}` : m.no_pin}
+                {draft.pin ? m.pinPlaced : m.no_pin}
               </p>
               <p>
                 {m.category}:{" "}
