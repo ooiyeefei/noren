@@ -3,7 +3,7 @@
 import { Component, use, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { uploadWithRetry } from "@/components/interview/upload";
-import { errorText } from "@/components/layout/error-text";
+import { ErrorMessage } from "@/components/layout/error-message";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { interviewPageMessages } from "@/lib/i18n/messages/interview-page";
 import { shellMessages } from "@/lib/i18n/messages/shell";
@@ -44,8 +44,12 @@ class QueryBoundary extends Component<
         ? messagesFor(interviewPageMessages, locale).managersOnly
         : !this.props.claims && (code === "not_found" || code === "forbidden" || invalidId)
           ? messagesFor(shellMessages, locale).not_found
-          : errorText(this.state.error, locale);
-    return <p role="alert">{text}</p>;
+          : undefined;
+    return text !== undefined ? (
+      <p role="alert">{text}</p>
+    ) : (
+      <ErrorMessage error={this.state.error} locale={locale} />
+    );
   }
 }
 function ClaimsQuery(props: {
