@@ -106,7 +106,16 @@ export function WorkspaceView(props: WorkspaceViewProps) {
   return (
     <PageContainer locale={locale} title={m.title}>
       <div lang={locale} className="space-y-6">
-        <p role="status">{view.status === "withdrawn" ? m.withdrawn : m[view.status]}</p>
+        <div className="flex flex-wrap gap-2">
+          <p role="status" className="rounded-full bg-kamenozoki px-3 py-1 text-[13px] text-kon">
+            {m.interviewStatus}: {view.status === "withdrawn" ? m.withdrawn : m[view.status]}
+          </p>
+          {panels.consent === "recorded" && (
+            <p className="rounded-full bg-kamenozoki px-3 py-1 text-[13px] text-kon">
+              {m.consentStatus}: {m.consentRecorded}
+            </p>
+          )}
+        </div>
         {view.isMock && <DemoBadge locale={locale} />}
         {view.processingError !== undefined && (
           <Alert variant="destructive">{errorText(view.processingError, locale)}</Alert>
@@ -138,9 +147,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
               onSubmit={(submission) => act(() => props.onConsent(submission))}
             />
           </section>
-        ) : (
-          <p>{m.consentRecorded}</p>
-        )}
+        ) : null}
         {panels.canRecord && (
           <AudioCapture
             locale={locale}

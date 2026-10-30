@@ -190,3 +190,24 @@ describe("interview workspace view", () => {
     }
   });
 });
+
+it("interview messages use statements in English and matching plain Japanese", () => {
+  expect(Object.values(interviewPageMessages.en).join(" ")).not.toMatch(/\bclaims?\b/i);
+  expect(Object.values(interviewUiMessages.en).join(" ")).not.toMatch(/\bclaims?\b/i);
+  expect(interviewPageMessages.en.claims).toBe("Statements from this corrected version");
+  expect(interviewPageMessages.ja.claims).toBe("この修正版からの文");
+});
+it("finished interview and recorded consent are labelled status chips in both languages", () => {
+  for (const locale of ["en", "ja"] as const) {
+    const html = render({ locale, view: { ...base.view, consent, status: "done" } });
+    const m = interviewPageMessages[locale];
+    for (const text of [
+      `${m.interviewStatus}: ${m.done}`,
+      `${m.consentStatus}: ${m.consentRecorded}`,
+    ]) {
+      const chip = html.match(new RegExp(`<p[^>]*>${text}</p>`))?.[0];
+      expect(chip).toContain("rounded-full");
+      expect(chip).toContain("text-[13px]");
+    }
+  }
+});
