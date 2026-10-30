@@ -1,0 +1,54 @@
+{
+  "regionId": "nagasaki",
+  "issuerNote": "<pass the exact iss claim from a real Clerk token via --issuer; no trailing slash>",
+  "accounts": {
+    "user": "<Clerk user id of the mock user>",
+    "creator": "<Clerk user id of the mock creator>",
+    "business_owner": "<Clerk user id of the mock owner>",
+    "steward": "<Clerk user id of the mock steward>"
+  },
+  "place": {
+    "names": [
+      {
+        "lang": "en",
+        "script": "latin",
+        "value": "<fictional Demo Cafe name, clearly labelled mock>",
+        "isPrimary": true
+      }
+    ],
+    "pin": {
+      "lat": "<owner-chosen numeric latitude inside region>",
+      "lng": "<owner-chosen numeric longitude inside region>"
+    }
+  },
+  "interview": {
+    "language": "ja",
+    "segments": [
+      {
+        "start": 0,
+        "end": 1,
+        "speaker": "<mock speaker label>",
+        "text": "<exact words from a segment>"
+      }
+    ]
+  },
+  "claims": [
+    {
+      "kind": "story",
+      "quote": "<exact words from a segment>",
+      "textOriginal": "<owner-reviewed mock claim>",
+      "translations": { "en": "<owner-supplied human translation>" }
+    }
+  ],
+  "sources": [
+    {
+      "url": "<public post URL supplied by owner>",
+      "title": "<owner-typed title>",
+      "note": "<owner-supplied note>",
+      "noteLang": "en",
+      "authorHandle": "<public author handle>",
+      "authorUrl": "<public author URL>",
+      "authorAgreed": false
+    }
+  ]
+}

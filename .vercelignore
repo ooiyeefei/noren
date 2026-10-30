@@ -1,0 +1,13 @@
+# A .vercelignore replaces .gitignore for `vercel deploy`, so the secrets and build output that
+# .gitignore already hides are repeated here, plus local agent settings the site never needs.
+.env*
+.vercel
+.next
+node_modules
+.scratch
+playwright-report
+test-results
+coverage
+*.tsbuildinfo
+.claude
+.agents

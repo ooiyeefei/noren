@@ -1,0 +1,19 @@
+node_modules
+.next
+.vercel
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml
+convex/_generated
+.agents
+# Anchored: a bare `public` also hid src/components/public from the formatter.
+/public
+specs
+research
+SPEC.md
+README.md
+AGENTS.md
+.specify
+.claude
+.scratch

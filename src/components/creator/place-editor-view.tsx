@@ -1,0 +1,321 @@
+"use client";
+
+import { useId } from "react";
+import Link from "next/link";
+import { labelForCategory } from "@/components/public/category";
+import { DemoBadge } from "@/components/badges";
+import { EmbedView, type EmbedSourceView } from "@/components/embeds/embed-view";
+import { PageContainer } from "@/components/layout/page-container";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { frameHostsFor, scriptHostsFor } from "@/lib/adapters";
+import type { InterviewStatus } from "@/lib/domain/constants";
+import { messagesFor, type Locale } from "@/lib/i18n";
+import { creatorMessages } from "@/lib/i18n/messages/creator";
+import type { RegionConfig } from "@/lib/region";
+import {
+  CategorySelect,
+  GeoSearchView,
+  PlaceNamesEditor,
+  PinPicker,
+  type SearchActions,
+  type SearchState,
+} from "./new-place-view";
+import { previewSource, type PlaceDraft, type PlaceErrors, type SourceDraft } from "./place-form";
+
+export type EditorPlace = { id: string; slug: string; canEdit: boolean; isMock: boolean };
+export type EditorInterview = {
+  id: string;
+  language: string;
+  status: InterviewStatus;
+  isMock: boolean;
+};
+export type PlaceEditorViewProps = {
+  locale: Locale;
+  region: RegionConfig;
+  place: EditorPlace;
+  draft: PlaceDraft;
+  errors?: PlaceErrors;
+  sourceDraft: SourceDraft;
+  sourceError?: keyof SourceDraft;
+  posts: EmbedSourceView[];
+  interviews: EditorInterview[];
+  interviewLanguage: string;
+  pending?: string;
+  error?: string;
+  saved?: boolean;
+  search: SearchState;
+  searchActions: SearchActions;
+  onChange(draft: PlaceDraft): void;
+  onSaveNames(): void;
+  onSaveCategory(): void;
+  onSavePin(): void;
+  onSourceChange(draft: SourceDraft): void;
+  onAddPost(): void;
+  onRemovePost(id: string): void;
+  onInterviewLanguage(language: string): void;
+  onStartInterview(): void;
+};
+export function PlaceEditorView(props: PlaceEditorViewProps) {
+  const {
+    locale,
+    region,
+    place,
+    draft,
+    errors,
+    sourceDraft,
+    sourceError,
+    posts,
+    interviews,
+    interviewLanguage,
+    pending,
+    error,
+    saved,
+    search,
+    searchActions,
+  } = props;
+  const m = messagesFor(creatorMessages, locale);
+  const id = useId();
+  const preview = sourceDraft.url.trim()
+    ? previewSource(sourceDraft.url, region.enabledSourceAdapters)
+    : null;
+  const languageOptions = region.locales.map((l) => (
+    <option key={l} value={l}>
+      {l === "ja" || l === "en" ? m[l] : l}
+    </option>
+  ));
+  const sourceField = (field: Exclude<keyof SourceDraft, "noteLang">, limit?: number) => (
+    <div>
+      <Label htmlFor={`${id}-${field}`}>{m[field]}</Label>
+      <Input
+        className="min-h-11 rounded-[10px]"
+        id={`${id}-${field}`}
+        value={sourceDraft[field]}
+        maxLength={limit}
+        aria-invalid={sourceError === field}
+        aria-describedby={sourceError === field ? `${id}-${field}-error` : undefined}
+        onChange={(event) => {
+          const value = event.target.value;
+          const next = { ...sourceDraft, [field]: value };
+          if (field === "url") {
+            const suggestion = previewSource(value, region.enabledSourceAdapters);
+            next.authorHandle = suggestion.ok ? (suggestion.suggestedAuthor?.handle ?? "") : "";
+            next.authorUrl = suggestion.ok ? (suggestion.suggestedAuthor?.url ?? "") : "";
+          }
+          props.onSourceChange(next);
+        }}
+      />
+      {sourceError === field && (
+        <p id={`${id}-${field}-error`} role="alert">
+          {m.invalidField}
+        </p>
+      )}
+    </div>
+  );
+  return (
+    <PageContainer
+      locale={locale}
+      title={m.editor}
+      actions={
+        <Link
+          className="inline-flex min-h-11 items-center text-ai underline"
+          href={`/${locale}/places/${place.slug}`}
+        >
+          {m.publicPage}
+        </Link>
+      }
+    >
+      {place.isMock && <DemoBadge locale={locale} />}
+      {error && <Alert>{error}</Alert>}
+      {saved && <p role="status">{m.saved}</p>}
+      {!place.canEdit && <p>{m.readOnly}</p>}
+      {place.canEdit ? (
+        <fieldset disabled={!!pending} className="min-w-0 space-y-6 border-b border-line pb-6">
+          <h2 className="text-[22px] font-bold">{m.category}</h2>
+          <CategorySelect
+            locale={locale}
+            region={region}
+            value={draft.category}
+            onChange={(category) => props.onChange({ ...draft, category })}
+          />
+          <Button
+            className="min-h-11 rounded-[10px] px-4 whitespace-normal"
+            type="button"
+            onClick={props.onSaveCategory}
+          >
+            {pending === "category" ? m.pending : m.saveCategory}
+          </Button>
+          <h2 className="text-[22px] font-bold">{m.names}</h2>
+          <PlaceNamesEditor
+            locale={locale}
+            locales={region.locales}
+            names={draft.names}
+            errors={errors}
+            onChange={(names) => props.onChange({ ...draft, names })}
+          />
+          <Button
+            className="min-h-11 rounded-[10px] px-4 whitespace-normal"
+            type="button"
+            onClick={props.onSaveNames}
+          >
+            {pending === "names" ? m.pending : m.saveNames}
+          </Button>
+          <h2 className="text-[22px] font-bold">{m.pin}</h2>
+          <GeoSearchView locale={locale} state={search} actions={searchActions} />
+          <PinPicker
+            locale={locale}
+            region={region}
+            draft={draft}
+            center={search.center ?? search.selected}
+            errors={errors}
+            onChange={(pin) => props.onChange({ ...draft, pin })}
+          />
+          <Button
+            className="min-h-11 rounded-[10px] px-4 whitespace-normal"
+            type="button"
+            onClick={props.onSavePin}
+          >
+            {pending === "pin" ? m.pending : m.savePin}
+          </Button>
+        </fieldset>
+      ) : (
+        <section>
+          {draft.category && <p>{labelForCategory(region, draft.category, locale)}</p>}
+          <h2 className="text-[22px] font-bold">{m.names}</h2>
+          <ul>
+            {draft.names.map((name, i) => (
+              <li key={i} lang={name.lang}>
+                {name.value}
+              </li>
+            ))}
+          </ul>
+          {draft.pin && (
+            <p>
+              {m.coordinates}: {draft.pin.lat}, {draft.pin.lng}
+            </p>
+          )}
+        </section>
+      )}
+      <section id="posts" className="space-y-4 border-b border-line pb-6">
+        <h2 className="text-[22px] font-bold">{m.posts}</h2>
+        {!posts.length && <p>{m.noPosts}</p>}
+        {posts.map((post) => (
+          <div key={post.id} className="space-y-2 border-b border-line py-4">
+            <EmbedView
+              locale={locale}
+              source={post}
+              scriptOrigins={scriptHostsFor(region.enabledSourceAdapters)}
+              frameOrigins={frameHostsFor(region.enabledSourceAdapters)}
+            />
+            {place.canEdit && (
+              <Button
+                className="min-h-11 rounded-[10px] px-4 whitespace-normal"
+                type="button"
+                variant="outline"
+                disabled={!!pending}
+                onClick={() => props.onRemovePost(post.id)}
+              >
+                {pending === `remove:${post.id}` ? m.pending : m.remove}
+              </Button>
+            )}
+          </div>
+        ))}
+      </section>
+      {place.canEdit && (
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!pending) props.onAddPost();
+          }}
+        >
+          <fieldset disabled={!!pending} className="space-y-4">
+            <legend className="text-[22px] font-bold">{m.addPost}</legend>
+            {sourceField("url")}
+            {preview && (
+              <p role="status">
+                {preview.ok
+                  ? `${preview.platform}, ${preview.linkCard ? m.linkCard : m.embed}`
+                  : preview.reason === "too_long" ||
+                      preview.reason === "unsupported_scheme" ||
+                      preview.reason === "no_adapter"
+                    ? m[preview.reason]
+                    : m.invalid_url}
+              </p>
+            )}
+            {sourceField("title", 200)}
+            {sourceField("note", 1000)}
+            <div>
+              <Label htmlFor={`${id}-noteLang`}>{m.noteLang}</Label>
+              <select
+                id={`${id}-noteLang`}
+                className="min-h-11 max-w-full rounded-[10px] border border-input p-2"
+                value={sourceDraft.noteLang}
+                onChange={(event) =>
+                  props.onSourceChange({ ...sourceDraft, noteLang: event.target.value })
+                }
+              >
+                {languageOptions}
+              </select>
+              {sourceError === "noteLang" && <p role="alert">{m.invalidField}</p>}
+            </div>
+            <p className="text-sm">{m.authorHint}</p>
+            {sourceField("authorHandle")}
+            {sourceField("authorUrl")}
+            <Button
+              className="min-h-11 rounded-[10px] px-4 whitespace-normal"
+              type="submit"
+              disabled={!preview?.ok}
+            >
+              {pending === "post" ? m.pending : m.addPost}
+            </Button>
+          </fieldset>
+        </form>
+      )}
+      <section className="space-y-4">
+        <h2 className="text-[22px] font-bold">{m.interviews}</h2>
+        {!interviews.length && <p>{m.noInterviews}</p>}
+        <ul className="space-y-2">
+          {interviews.map((interview) => (
+            <li
+              key={interview.id}
+              className="flex min-h-16 flex-wrap items-center gap-3 border-b border-line py-3"
+            >
+              <Link
+                className="inline-flex min-h-11 items-center text-ai underline"
+                href={`/${locale}/creator/interviews/${interview.id}`}
+              >
+                {m[interview.status]} ({interview.language})
+              </Link>
+              {interview.isMock && <DemoBadge locale={locale} />}
+            </li>
+          ))}
+        </ul>
+        {place.canEdit && (
+          <fieldset disabled={!!pending} className="flex flex-wrap items-end gap-3">
+            <div>
+              <Label htmlFor={`${id}-interview`}>{m.interviewLanguage}</Label>
+              <select
+                id={`${id}-interview`}
+                className="min-h-11 max-w-full rounded-[10px] border border-input p-2"
+                value={interviewLanguage}
+                onChange={(event) => props.onInterviewLanguage(event.target.value)}
+              >
+                {languageOptions}
+              </select>
+            </div>
+            <Button
+              className="min-h-11 rounded-[10px] px-4 whitespace-normal"
+              type="button"
+              onClick={props.onStartInterview}
+            >
+              {pending === "interview" ? m.pending : m.startInterview}
+            </Button>
+          </fieldset>
+        )}
+      </section>
+    </PageContainer>
+  );
+}

@@ -1,0 +1,23 @@
+"use client";
+
+import { useAuth } from "@clerk/nextjs";
+import { ConvexReactClient } from "convex/react";
+import { ConvexProviderWithClerk } from "convex/react-clerk";
+import type { ReactNode } from "react";
+
+const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+if (!convexUrl) {
+  throw new Error(
+    "NEXT_PUBLIC_CONVEX_URL is not set; `npx convex dev` writes it to .env.local (see .env.example)",
+  );
+}
+const convex = new ConvexReactClient(convexUrl);
+
+/** Gives every component a Convex client that sends the visitor's Clerk token. */
+export function ConvexClientProvider({ children }: { children: ReactNode }) {
+  return (
+    <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+      {children}
+    </ConvexProviderWithClerk>
+  );
+}

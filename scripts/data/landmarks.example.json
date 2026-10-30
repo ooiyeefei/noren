@@ -1,0 +1,9 @@
+{
+  "regionId": "nagasaki",
+  "landmarks": [
+    {
+      "key": "<owner-confirmed landmark key>",
+      "wikipedia": { "ja": "<Japanese article title>", "en": "<English article title>" }
+    }
+  ]
+}

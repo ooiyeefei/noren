@@ -1,0 +1,358 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+import { PlaceMap } from "@/components/map/place-map";
+import {
+  attributionText,
+  boundsFor,
+  markerPresentation,
+  normalisePoint,
+  setMarkerSelection,
+} from "@/components/map/map-helpers";
+import { NorenTab } from "@/components/explore/noren-tab";
+import { PlaceList } from "@/components/places/place-list";
+import { EmbedView, type EmbedSourceView } from "@/components/embeds/embed-view";
+import { EmbedNotice } from "@/components/embeds/embed-notice";
+import { embedPlan, isAllowedOrigin, loadEmbedScript } from "@/components/embeds/embed-scripts";
+import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
+import type { EmbedDescriptor } from "@/lib/ports";
+
+vi.mock("maplibre-gl", () => {
+  throw new Error("MapLibre must not load during SSR");
+});
+
+const source: EmbedSourceView = {
+  id: "mock-post",
+  platform: "instagram",
+  canonicalUrl: "https://www.instagram.com/p/mock/",
+  embed: {
+    kind: "blockquote",
+    url: "https://www.instagram.com/p/mock/",
+    scriptUrl: "https://www.instagram.com/embed.js",
+  },
+  authorHandle: "@mock_creator",
+  authorUrl: "https://www.instagram.com/mock_creator/",
+  isMock: true,
+  postedAt: Date.UTC(2026, 9, 29),
+  creatorNote: "A mock note",
+  noteLang: "en",
+};
+const renderEmbed = (embed: EmbedDescriptor = source.embed, title?: string) =>
+  renderToStaticMarkup(
+    <EmbedView
+      locale="en"
+      source={{ ...source, embed, title }}
+      scriptOrigins={["https://www.instagram.com"]}
+      frameOrigins={["https://www.youtube-nocookie.com"]}
+    />,
+  );
+
+describe("place UI", () => {
+  it("selecting a tab preserves MapLibre positioning classes and updates pressed state", () => {
+    const classes = new Set(["maplibregl-marker", "maplibregl-marker-covered", "h-8", "w-7"]);
+    const setAttribute = vi.fn();
+    const element = {
+      classList: {
+        toggle: (name: string, force?: boolean) => {
+          if (force) classes.add(name);
+          else classes.delete(name);
+          return classes.has(name);
+        },
+      } as DOMTokenList,
+      setAttribute,
+    };
+    setMarkerSelection(element, true);
+    expect(classes.has("maplibregl-marker")).toBe(true);
+    expect(classes.has("maplibregl-marker-covered")).toBe(true);
+    expect(classes.has("scale-[1.2]")).toBe(true);
+    expect(classes.has("ring-ai")).toBe(true);
+    expect(setAttribute).toHaveBeenLastCalledWith("aria-pressed", "true");
+    setMarkerSelection(element, false);
+    expect([...classes]).toEqual(["maplibregl-marker", "maplibregl-marker-covered", "h-8", "w-7"]);
+    expect(setAttribute).toHaveBeenLastCalledWith("aria-pressed", "false");
+  });
+
+  it("noren markers use the place name, Demo label, story colour and selected ring", () => {
+    const marker = { id: "mock", lat: 32, lng: 129, label: "A mock place", isMock: false };
+    expect(markerPresentation(marker, "Demo")).toMatchObject({
+      label: "A mock place",
+      fill: "#23305c",
+      stroke: "#ffffff",
+      strokeWidth: "1",
+    });
+    expect(
+      markerPresentation({ ...marker, isMock: true, hasStory: true }, "Demo", true),
+    ).toMatchObject({
+      label: "A mock place (Demo)",
+      fill: "#f2c14e",
+      stroke: "#23305c",
+      strokeWidth: "2",
+      className: expect.stringContaining("scale-[1.2]"),
+    });
+    expect(markerPresentation(marker, "Demo", true).className).toContain("ring-ai");
+    expect(markerPresentation(marker, "Demo").className).not.toContain("ring-ai");
+    expect(renderToStaticMarkup(<NorenTab story />)).toContain('fill="#f2c14e"');
+    expect(renderToStaticMarkup(<NorenTab />)).toContain('fill="#23305c"');
+  });
+  it("flat rows link across all content, highlight selection, and show story and distance", () => {
+    const html = renderToStaticMarkup(
+      <PlaceList
+        locale="en"
+        selectedId="story"
+        items={[
+          {
+            id: "story",
+            href: "/en/places/mock",
+            name: "Mock story",
+            secondaryName: "架空の店",
+            secondaryNameLang: "ja",
+            categoryLabel: "Café",
+            isMock: true,
+            hasStory: true,
+            distance: 320,
+          },
+          {
+            id: "plain",
+            href: "/en/places/plain",
+            name: "Mock plain",
+            isMock: false,
+            distance: 1200,
+          },
+        ]}
+      />,
+    );
+    expect(html).toContain('id="explore-place-story" data-story="true"');
+    expect(html).toContain('aria-current="true"');
+    expect(html).toContain("border-b border-line");
+    expect(html).toContain("min-h-16");
+    expect(html).toContain("320 m");
+    expect(html).toContain("1.2 km");
+    expect(html.indexOf("</a>")).toBeGreaterThan(html.indexOf("320 m"));
+    expect(html.match(/data-badge="demo"/g)).toHaveLength(1);
+  });
+  it("explore adds named controls while the shared picker, font, label and attribution props still render", () => {
+    const base = {
+      locale: "en" as const,
+      label: "Mock map",
+      styleUrl: "mock.json",
+      attribution: ["Mock credit"],
+      center: { lat: 32, lng: 129, zoom: 12 },
+      bounds: [129, 32, 130, 33] as const,
+      markers: [],
+      localIdeographFontFamily: "sans-serif",
+    };
+    const picker = renderToStaticMarkup(
+      <PlaceMap {...base} picker={{ value: null, onChange: () => {} }} />,
+    );
+    expect(picker).toContain(placeUiMessages.en.pickerHint);
+    expect(picker).toContain("Mock credit");
+    expect(picker).not.toContain('aria-label="Show my location"');
+    const explore = renderToStaticMarkup(<PlaceMap {...base} explore={{}} />);
+    for (const label of ["Show my location", "Zoom in", "Zoom out"])
+      expect(explore).toContain(`aria-label="${label}"`);
+    expect(explore).toContain("Noren does not save your location.");
+    expect(explore).toContain("aria-describedby=");
+    expect(explore).not.toMatch(/<canvas|<script/);
+  });
+
+  it("keeps worker configuration out of server-rendered map markup", () => {
+    const html = renderToStaticMarkup(
+      <PlaceMap
+        locale="en"
+        label="Mock places"
+        styleUrl="https://example.com/mock-style.json"
+        attribution={["Mock attribution"]}
+        center={{ lat: 32, lng: 129, zoom: 12 }}
+        markers={[]}
+      />,
+    );
+    expect(html).toContain("Mock places");
+    expect(html).not.toContain("/maplibre/");
+    expect(html).not.toContain("maplibre-gl-worker.mjs");
+  });
+  it("the map renders its label and every attribution line without loading MapLibre", () => {
+    const html = renderToStaticMarkup(
+      <PlaceMap
+        locale="en"
+        label="Places around the harbour"
+        styleUrl="https://tiles.openfreemap.org/styles/liberty"
+        attribution={["© OpenStreetMap contributors", "OpenFreeMap © OpenMapTiles"]}
+        center={{ lat: 32, lng: 129, zoom: 12 }}
+        markers={[]}
+      />,
+    );
+    expect(html).toContain("Places around the harbour");
+    expect(html).toContain("© OpenStreetMap contributors");
+    expect(html).toContain("OpenFreeMap © OpenMapTiles");
+    expect(html).not.toMatch(/<canvas|<script/);
+  });
+  it("boundsFor pads the markers' box and falls back to the region bbox", () => {
+    expect(boundsFor([], [1, 2, 3, 4])).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+    const markers = [
+      { id: "a", lat: 10, lng: 20, label: "A", isMock: true },
+      { id: "b", lat: 20, lng: 30, label: "B", isMock: true },
+    ];
+    expect(boundsFor(markers, [0, 0, 1, 1])).toEqual([
+      [19, 9],
+      [31, 21],
+    ]);
+    const single = boundsFor(markers.slice(0, 1), [0, 0, 1, 1]);
+    expect(single[0][0]).toBeLessThan(20);
+    expect(single[1][1]).toBeGreaterThan(10);
+  });
+  it("attributionText refuses an empty list", () => {
+    expect(() => attributionText([])).toThrow();
+    expect(() => attributionText([" "])).toThrow();
+    expect(attributionText(["a", "b"])).toBe("a | b");
+  });
+  it("normalisePoint clamps and rounds", () => {
+    expect(normalisePoint({ lat: 100, lng: -200 })).toEqual({ lat: 90, lng: -180 });
+    expect(normalisePoint({ lat: -100, lng: 200 })).toEqual({ lat: -90, lng: 180 });
+    expect(normalisePoint({ lat: 32.12345678, lng: 129.98765432 })).toEqual({
+      lat: 32.123457,
+      lng: 129.987654,
+    });
+  });
+  it("the Demo badge shows only for mock places in the list", () => {
+    const html = renderToStaticMarkup(
+      <PlaceList
+        locale="en"
+        items={[
+          { id: "z", name: "Zulu", href: "/z", isMock: true },
+          {
+            id: "a",
+            name: "Alpha",
+            href: "/a",
+            isMock: false,
+            categoryLabel: "Café",
+            categoryUnreviewed: true,
+          },
+        ]}
+      />,
+    );
+    expect(html).toContain("<ul");
+    expect(html.indexOf("Zulu")).toBeLessThan(html.indexOf("Alpha"));
+    expect(html.match(/data-badge="demo"/g)).toHaveLength(1);
+    expect(html).toContain("Café");
+    expect(html).toContain('data-badge="unreviewed"');
+  });
+  it("secondary names carry their lang", () => {
+    expect(
+      renderToStaticMarkup(
+        <PlaceList
+          locale="en"
+          items={[
+            {
+              id: "a",
+              name: "Mock",
+              secondaryName: "デモ",
+              secondaryNameLang: "ja",
+              href: "/a",
+              isMock: true,
+            },
+          ]}
+        />,
+      ),
+    ).toMatch(/<span lang="ja"[^>]*>デモ<\/span>/);
+  });
+  it.each<EmbedDescriptor>([
+    { kind: "iframe", url: "https://www.youtube-nocookie.com/embed/mock" },
+    source.embed,
+  ])("an iframe or blockquote embed renders only a facade before the click: $kind", (embed) => {
+    const html = renderEmbed(embed);
+    expect(html).not.toMatch(/<script|<iframe|<blockquote/);
+    expect(html).toContain("Load this post from instagram");
+  });
+  it("the facade shows the platform, the author credit next to the post, the original link and the notice link", () => {
+    const html = renderEmbed();
+    expect(html).toContain("Posted by @mock_creator (as entered by the creator)");
+    expect(html).toContain(`href="${source.authorUrl}"`);
+    expect(html).toContain(`href="${source.canonicalUrl}"`);
+    expect(html).toContain('href="/en/notice"');
+    expect(html).toContain('rel="noopener noreferrer nofollow"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain("Posted on Oct 29, 2026");
+    expect(html).toContain('<p lang="en"');
+    expect(html).toContain("may set cookies");
+  });
+  it("a link card renders the creator's title and the original link with no button", () => {
+    const html = renderEmbed({ kind: "link", url: "https://example.com/mock" }, "My mock story");
+    expect(html).toContain("My mock story");
+    expect(html).toContain("View the original");
+    expect(html).not.toContain("<button");
+    expect(renderEmbed({ kind: "link", url: "https://example.com/mock" })).toContain("example.com");
+  });
+  it("embedPlan: link stays link; iframe and blockquote are facade until loaded, then their plan", () => {
+    const link = { kind: "link", url: "https://example.com" } as const;
+    expect(embedPlan(link, false)).toEqual(link);
+    expect(embedPlan(link, true)).toEqual(link);
+    const iframe = { kind: "iframe", url: "https://example.com/embed" } as const;
+    expect(embedPlan(iframe, false)).toEqual({ kind: "facade" });
+    expect(embedPlan(iframe, true)).toEqual({ kind: "iframe", src: iframe.url });
+    expect(embedPlan(source.embed, false)).toEqual({ kind: "facade" });
+    expect(embedPlan(source.embed, true)).toEqual(source.embed);
+  });
+  it("isAllowedOrigin rejects http, other origins and lookalike hosts", () => {
+    const allowed = ["https://platform.twitter.com"];
+    for (const url of [
+      "http://platform.twitter.com/a",
+      "https://example.com",
+      "https://platform.twitter.com.evil.example/a",
+      "https://platform.twitter.com:444/a",
+      "https://platform.twitter.com@evil.example/a",
+      "invalid",
+    ])
+      expect(isAllowedOrigin(url, allowed)).toBe(false);
+    expect(isAllowedOrigin("https://platform.twitter.com/widgets.js", allowed)).toBe(true);
+  });
+  it("loadEmbedScript appends one script for an allowed origin and none twice, and rejects a disallowed origin", async () => {
+    const appended: unknown[] = [];
+    const process = vi.fn();
+    const load = vi.fn();
+    let onLoad: (() => void) | undefined;
+    const script = {
+      dataset: {},
+      addEventListener: (event: string, callback: () => void) => {
+        if (event === "load") onLoad = callback;
+      },
+      remove: vi.fn(),
+      async: false,
+      src: "",
+    };
+    const doc = {
+      createElement: vi.fn(() => script),
+      querySelector: vi.fn(() => null),
+      head: { appendChild: (value: unknown) => appended.push(value) },
+      defaultView: { instgrm: { Embeds: { process } }, twttr: { widgets: { load } } },
+    } as unknown as Document;
+    const url = "https://www.instagram.com/embed.js";
+    await expect(
+      loadEmbedScript("https://evil.example/a.js", ["https://www.instagram.com"], doc),
+    ).rejects.toThrow();
+    expect(appended).toHaveLength(0);
+    const first = loadEmbedScript(url, ["https://www.instagram.com"], doc);
+    const second = loadEmbedScript(url, ["https://www.instagram.com"], doc);
+    expect(appended).toHaveLength(1);
+    expect(script.async).toBe(true);
+    expect(script.src).toBe(url);
+    onLoad!();
+    await Promise.all([first, second]);
+    await loadEmbedScript(url, ["https://www.instagram.com"], doc);
+    expect(appended).toHaveLength(1);
+    expect(process).toHaveBeenCalledTimes(3);
+    expect(load).toHaveBeenCalledTimes(3);
+    await expect(loadEmbedScript(url, [], doc)).rejects.toThrow();
+    expect(appended).toHaveLength(1);
+  });
+  it("the embed notice links to /<locale>/notice in ja and en", () => {
+    for (const locale of ["ja", "en"] as const)
+      expect(renderToStaticMarkup(<EmbedNotice locale={locale} />)).toContain(
+        `href="/${locale}/notice"`,
+      );
+  });
+  it("place-ui messages have the same keys in both locales", () => {
+    expect(Object.keys(placeUiMessages.ja).sort()).toEqual(Object.keys(placeUiMessages.en).sort());
+  });
+});

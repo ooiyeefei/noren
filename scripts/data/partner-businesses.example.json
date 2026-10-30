@@ -1,0 +1,22 @@
+{
+  "regionId": "nagasaki",
+  "businesses": [
+    {
+      "names": [
+        {
+          "lang": "ja",
+          "script": "kanji",
+          "value": "<confirmed public business name>",
+          "isPrimary": true
+        }
+      ],
+      "pin": {
+        "lat": "<owner-supplied numeric latitude>",
+        "lng": "<owner-supplied numeric longitude>"
+      },
+      "publicSource": "<URL the public facts came from>",
+      "category": "<public category; accepted but not stored>",
+      "address": "<public address; accepted but not stored>"
+    }
+  ]
+}
