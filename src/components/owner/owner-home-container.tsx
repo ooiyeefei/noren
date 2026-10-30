@@ -19,6 +19,8 @@ type BoundaryProps = {
   notFound?: (error: unknown) => boolean;
   /** Render nothing on failure, for an extra a page can do without. */
   silent?: boolean;
+  /** The owner place route supplies main but leaves its heading to the query tree. */
+  errorTitle?: string;
 };
 
 export class OwnerBoundary extends Component<BoundaryProps, { failed: boolean; error?: unknown }> {
@@ -31,7 +33,14 @@ export class OwnerBoundary extends Component<BoundaryProps, { failed: boolean; e
     if (this.props.silent) return null;
     if (this.props.notFound?.(this.state.error))
       return <OwnerNotFound locale={this.props.locale} />;
-    return <ErrorMessage error={this.state.error} locale={this.props.locale} />;
+    return (
+      <>
+        {this.props.errorTitle && (
+          <h1 className="text-2xl font-semibold">{this.props.errorTitle}</h1>
+        )}
+        <ErrorMessage error={this.state.error} locale={this.props.locale} />
+      </>
+    );
   }
 }
 

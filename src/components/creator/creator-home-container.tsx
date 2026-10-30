@@ -4,7 +4,7 @@ import { Component, use, useEffect, useRef, useState, type ReactNode } from "rea
 import { useMutation, useQuery } from "convex/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { errorText } from "@/components/layout/error-text";
-import { ErrorMessage } from "@/components/layout/error-message";
+import { ErrorPage } from "@/components/layout/error-page";
 import { PageContainer } from "@/components/layout/page-container";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { creatorMessages } from "@/lib/i18n/messages/creator";
@@ -31,21 +31,15 @@ export class CreatorErrorBoundary extends Component<
         this.props.malformedAsNotFound &&
         error instanceof Error &&
         /(?:ArgumentValidationError|invalid.*id|not a valid.*id)/i.test(error.message);
-      return (
+      return malformed ? (
         <PageContainer
           locale={this.props.locale}
-          title={
-            messagesFor(creatorMessages, this.props.locale)[
-              this.props.malformedAsNotFound ? "editor" : "home"
-            ]
-          }
+          title={messagesFor(creatorMessages, this.props.locale).notFoundTitle}
         >
-          {malformed ? (
-            <p role="alert">{messagesFor(creatorMessages, this.props.locale).notFound}</p>
-          ) : (
-            <ErrorMessage error={error} locale={this.props.locale} />
-          )}
+          <p role="alert">{messagesFor(creatorMessages, this.props.locale).notFound}</p>
         </PageContainer>
+      ) : (
+        <ErrorPage error={error} locale={this.props.locale} />
       );
     }
     return this.props.children;
