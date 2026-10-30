@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import type { Map as LibreMap, MapMouseEvent } from "maplibre-gl";
 import { LocateFixed, Minus, Plus } from "lucide-react";
 import { explorePadding, type Position, type SheetHeight } from "@/components/explore/helpers";
+import { Button } from "@/components/ui/button";
 import { DEFAULT_IDEOGRAPH_FONT } from "@/lib/geo";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { badgeMessages } from "@/lib/i18n/messages/badges";
@@ -41,6 +42,12 @@ export type PlaceMapProps = {
   picker?: {
     value: { lat: number; lng: number } | null;
     onChange(point: { lat: number; lng: number }): void;
+    /**
+     * Shows a centre crosshair and a button with this label that places the pin there: the touch
+     * equivalent of Enter on the map. The keyboard hint then moves to screen readers only, and so does
+     * the map's own label, because a picker with this button sits in a form that has its own heading.
+     */
+    centreLabel?: string;
   };
   localIdeographFontFamily?: string;
 };
@@ -93,16 +100,20 @@ export function PlaceMap({
           zoom,
           keyboard: true,
           localIdeographFontFamily,
-          attributionControl: {
-            compact: false,
-            customAttribution: credit
-              .replaceAll("&", "&amp;")
-              .replaceAll("<", "&lt;")
-              .replaceAll(">", "&gt;")
-              .replaceAll('"', "&quot;"),
-          },
+          // Non-explore maps render one linked credit below, instead of merging style credits.
+          attributionControl: isExplore
+            ? {
+                compact: false,
+                customAttribution: credit
+                  .replaceAll("&", "&amp;")
+                  .replaceAll("<", "&lt;")
+                  .replaceAll(">", "&gt;")
+                  .replaceAll('"', "&quot;"),
+              }
+            : false,
         });
         map.on("error", (event) => {
+          // A single tile or sprite request can fail on a working map, so only a worker failure counts.
           if (!disposed && isWorkerFailure(event.error)) setFailed(true);
         });
         if (!isExplore) map.addControl(new lib.NavigationControl());
@@ -147,7 +158,10 @@ export function PlaceMap({
       });
       return new lib.Marker({ element: button }).setLngLat([marker.lng, marker.lat]).addTo(map);
     });
-    if (!isExplore && (markers.length || bounds)) {
+    const singleMarker = markers.length === 1 ? markers[0] : undefined;
+    if (!isExplore && singleMarker && !bounds) {
+      map.jumpTo({ center: [singleMarker.lng, singleMarker.lat], zoom });
+    } else if (!isExplore && (markers.length || bounds)) {
       map.fitBounds(
         boundsFor(markers, bounds ?? [lng - 0.01, lat - 0.01, lng + 0.01, lat + 0.01]),
         { padding: 40, maxZoom: zoom, duration: 0 },
@@ -317,16 +331,59 @@ export function PlaceMap({
       aria-label={label || messages.mapLabel}
       className={isExplore ? "relative h-full w-full" : "space-y-2"}
     >
-      <p className={isExplore ? "sr-only" : "font-medium"}>{label || messages.mapLabel}</p>
+      <p className={isExplore || picker?.centreLabel ? "sr-only" : "font-medium"}>
+        {label || messages.mapLabel}
+      </p>
       {picker && (
-        <p id={pickerHintId} className="text-sm">
+        <p id={pickerHintId} className={picker.centreLabel ? "sr-only" : "text-sm"}>
           {messages.pickerHint}
         </p>
       )}
       <div
-        ref={container}
-        className={isExplore ? "h-full w-full" : "h-96 w-full rounded-lg border"}
-      />
+        data-map-frame
+        className={
+          isExplore ? "h-full w-full" : "relative h-96 w-full overflow-hidden rounded-lg border"
+        }
+      >
+        <div ref={container} className="h-full w-full" />
+        {picker?.centreLabel && (
+          <span
+            aria-hidden="true"
+            data-map-crosshair
+            className="pointer-events-none absolute top-1/2 left-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-4xl leading-none font-bold text-kon [text-shadow:0_0_3px_white,0_0_3px_white]"
+          >
+            +
+          </span>
+        )}
+        {!isExplore && !failed && (
+          <div
+            data-map-credit
+            className="absolute bottom-0 left-0 right-0 z-10 bg-white px-1 text-[13px] leading-5 text-kon"
+          >
+            <a href="https://www.openstreetmap.org/copyright" className="underline">
+              © OpenStreetMap contributors
+            </a>
+            {" | "}
+            <a href="https://openfreemap.org/" className="underline">
+              OpenFreeMap
+            </a>
+            {" | "}
+            <a href="https://openmaptiles.org/" className="underline">
+              © OpenMapTiles
+            </a>
+          </div>
+        )}
+      </div>
+      {picker?.centreLabel && (
+        <Button
+          type="button"
+          disabled={!runtime || failed}
+          onClick={() => runtime && picker.onChange(normalisePoint(runtime.map.getCenter()))}
+          className="min-h-11 w-full rounded-[10px] px-4 whitespace-normal"
+        >
+          {picker.centreLabel}
+        </Button>
+      )}
       {isExplore && (
         <div className="absolute right-3 top-36 z-10 flex flex-col gap-2 lg:top-5">
           <p id={locationNoteId} className="sr-only">
@@ -371,7 +428,7 @@ export function PlaceMap({
           {messages.mapFailed}
         </p>
       )}
-      <p className={isExplore ? "sr-only" : "text-sm text-muted-foreground"}>
+      <p className={isExplore || !failed ? "sr-only" : "text-sm text-muted-foreground"}>
         <span className="font-medium">{messages.attribution}: </span>
         {credit}
       </p>

@@ -23,14 +23,17 @@ export function Footnotes({
       aria-label={messages.footnotesHeading}
       className="space-y-3 text-[15px] leading-relaxed text-muted-foreground"
     >
-      <h3 className="font-sans text-[18px] font-bold">{messages.footnotesHeading}</h3>
-      <ol className="list-decimal space-y-4 pl-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="font-sans text-[18px] font-bold">{messages.footnotesHeading}</h3>
+        {ordered.some((claim) => claim.isMock) && <DemoBadge locale={locale} />}
+      </div>
+      <ol className="list-decimal space-y-2 pl-6">
         {ordered.map((claim) => (
           <li
             key={claim.id}
             id={`fn-${claim.id}`}
             value={numbers.get(claim.id)}
-            className="scroll-mt-4 space-y-2 [overflow-wrap:anywhere]"
+            className="scroll-mt-4 space-y-1 [overflow-wrap:anywhere]"
           >
             {claim.origin === "interview" && (
               <>
@@ -45,7 +48,16 @@ export function Footnotes({
                 </p>
                 {claim.quote && (
                   <blockquote lang={claim.langOriginal} className="border-l-2 pl-3">
-                    {claim.quote}
+                    {claim.quote}{" "}
+                    {firstReferences?.has(claim.id) && (
+                      <a
+                        className="inline-flex size-11 items-center justify-center align-middle text-ai underline"
+                        aria-label={messages.backToReference}
+                        href={`#${firstReferences.get(claim.id)}`}
+                      >
+                        <span aria-hidden="true">↩</span>
+                      </a>
+                    )}
                   </blockquote>
                 )}
               </>
@@ -70,13 +82,13 @@ export function Footnotes({
               </p>
             )}
             {claim.aiAssisted && <AiAssistedBadge locale={locale} />}
-            {claim.isMock && <DemoBadge locale={locale} />}
-            {firstReferences?.has(claim.id) && (
+            {!(claim.origin === "interview" && claim.quote) && firstReferences?.has(claim.id) && (
               <a
-                className="block text-sm text-ai underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="inline-flex size-11 items-center justify-center align-middle text-ai underline"
+                aria-label={messages.backToReference}
                 href={`#${firstReferences.get(claim.id)}`}
               >
-                {messages.backToReference}
+                <span aria-hidden="true">↩</span>
               </a>
             )}
           </li>
