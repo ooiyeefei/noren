@@ -65,7 +65,6 @@ export function prefillMapsResult(draft: PlaceDraft, suggestion: MapsSuggestion)
       suggestion.name && !fields[key].trim()
         ? fieldsToNames({ ...fields, [key]: suggestion.name }, draft.names)
         : draft.names,
-    pin: { lat: suggestion.lat, lng: suggestion.lng },
   };
 }
 

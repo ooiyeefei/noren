@@ -153,7 +153,7 @@ function Editor({
       setPending(undefined);
     }
   }
-  function saveNames() {
+  function saveDetails() {
     const errors = validatePlaceDraft(draft, region);
     delete errors.pin;
     setErrors(errors);
@@ -162,7 +162,31 @@ function Editor({
       { ...draft, pin: draft.pin ?? region.defaultCenter },
       region.id,
     ).names;
-    void run("names", () => updateNames({ placeId: place._id, names }));
+    const savedNames = toCreateArgs(
+      { ...draft, names: place.names, pin: draft.pin ?? region.defaultCenter },
+      region.id,
+    ).names;
+    void run("details", async () => {
+      if (
+        names.length !== savedNames.length ||
+        names.some((name, index) => {
+          const saved = savedNames[index];
+          return (
+            !saved ||
+            name.lang !== saved.lang ||
+            name.script !== saved.script ||
+            name.value !== saved.value ||
+            name.isPrimary !== saved.isPrimary
+          );
+        })
+      )
+        await updateNames({ placeId: place._id, names });
+      if (draft.category !== place.category)
+        await setCategory({
+          placeId: place._id,
+          ...(draft.category ? { category: draft.category } : { clear: true }),
+        });
+    });
   }
   function savePin() {
     const error = validatePlaceDraft(draft, region).pin;
@@ -223,15 +247,7 @@ function Editor({
       saved={saved}
       search={search.state}
       searchActions={search.actions}
-      onSaveCategory={() =>
-        void run("category", () =>
-          setCategory({
-            placeId: place._id,
-            ...(draft.category ? { category: draft.category } : { clear: true }),
-          }),
-        )
-      }
-      onSaveNames={saveNames}
+      onSaveDetails={saveDetails}
       onSavePin={savePin}
       onAddPost={addPost}
       onRemovePost={(sourceId) =>
