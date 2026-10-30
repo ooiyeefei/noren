@@ -208,7 +208,7 @@ describe("steward views", () => {
         expect(html.match(/type="checkbox"/g)).toHaveLength(1);
         expect(html).toContain(encoded(stewardMessages[locale].confirmFictional));
         expect(html).toContain(encoded(stewardMessages[locale].landmark_kind));
-        const rows = html.match(/<tr class="border-t align-top">[\s\S]*?<\/tr>/g)!;
+        const rows = html.match(/<tr[^>]*data-steward-card="place"[^>]*>[\s\S]*?<\/tr>/g)!;
         expect(rows).toHaveLength(2);
         expect(rows[0]).toMatch(/<option value="demo_public"(?![^>]*disabled)[^>]*>/);
         expect(rows[1]).toMatch(/<option value="demo_public"[^>]*disabled/);
@@ -234,7 +234,7 @@ describe("steward views", () => {
     expect(html).toContain("Held sentences</dt><dd>2</dd>");
     expect(html).toContain("Version</dt><dd>3</dd>");
     expect(html).toContain("Sentence count</dt><dd>8</dd>");
-    expect(html).toContain("Newly published claims</dt><dd>4</dd>");
+    expect(html).toContain("Newly published statements</dt><dd>4</dd>");
     expect(html).toContain(encoded(stewardMessages.en.heldReason));
   });
   it("the people view renders no role control for a steward", () => {
@@ -353,4 +353,59 @@ describe("steward views", () => {
     expect(html).toContain(encoded(stewardMessages.en.pending));
     expect(html).not.toMatch(/<button(?![^>]*disabled)[^>]*>/);
   });
+});
+
+it.each(["ja", "en"] as const)(
+  "%s uses labelled phone cards and keeps one page heading",
+  (locale) => {
+    const html = renderToStaticMarkup(<StewardHomeView {...home(locale)} />);
+    const cards = html.match(/<tr[^>]*data-steward-card="place"[^>]*>[\s\S]*?<\/tr>/g)!;
+    expect(cards).toHaveLength(2);
+    for (const card of cards) {
+      expect(card).toContain("block min-w-0 space-y-3");
+      expect(card).toContain("xl:table-row");
+      for (const key of ["name", "kind", "visibility", "owners", "demo", "actions"] as const)
+        expect(card).toContain(encoded(stewardMessages[locale][key]));
+      expect(card).not.toContain("min-w-64");
+    }
+    const people = renderToStaticMarkup(
+      <PeopleView
+        locale={locale}
+        people={[
+          {
+            _id: "mock-person",
+            displayName: "Mock person",
+            role: "creator",
+            isMock: true,
+          },
+        ]}
+        onRole={noop}
+      />,
+    );
+    expect(people).toContain('data-steward-card="person"');
+    expect(people).toContain(encoded(stewardMessages[locale].name));
+    expect(people).toContain(encoded(stewardMessages[locale].role));
+    const adminHtml = renderToStaticMarkup(<PlaceAdminView {...admin(locale)} />);
+    expect(adminHtml).toContain('data-steward-card="source"');
+    expect(adminHtml).toContain('data-steward-card="statement"');
+    const openHtml = renderToStaticMarkup(<OpenTextView {...openText(locale)} />);
+    expect(openHtml.match(/data-steward-card="snippet"/g)).toHaveLength(2);
+    for (const page of [html, people, adminHtml, openHtml]) {
+      expect(page.match(/<h1\b/g)).toHaveLength(1);
+      expect(page).toContain('id="main"');
+      expect(page).toContain("[overflow-wrap:anywhere]");
+      for (const control of page.match(/<(?:button|select|textarea)\b[^>]*>/g) ?? [])
+        expect(control).toMatch(/min-h-(11|40)/);
+    }
+  },
+);
+
+it("English steward wording avoids developer terms and keeps the publishing rules", () => {
+  for (const value of Object.values(stewardMessages.en))
+    expect(value).not.toMatch(/legacy|visibility|UTF-16|offset|Clerk|field/i);
+  expect(stewardMessages.en.kindRule).toContain("It does not make it public");
+  expect(stewardMessages.en.visibilityRule).toMatch(
+    /confirm its name.*pin.*owner.*interview.*author’s agreement/i,
+  );
+  expect(stewardMessages.en.landmark_kind).toMatch(/fictional.*demo/i);
 });
