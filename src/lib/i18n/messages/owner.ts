@@ -23,7 +23,7 @@ export const ownerMessages = defineMessages({
     publicPage: "公開ページを見る",
     toReviewHeading: "確認をお願いします",
     toReviewIntro:
-      "インタビューでお話しいただいた内容から作った文です。お話しいただいた言葉もあわせて表示しています。確認するまで、どこにも掲載されません。",
+      "インタビューでお話しいただいた内容から作った文です。お話しいただいた言葉もあわせて表示しています。",
     toReviewEmpty: "確認待ちの内容はありません。",
     confirmedHeading: "確認済み",
     confirmedIntro:
@@ -102,7 +102,7 @@ export const ownerMessages = defineMessages({
     publicPage: "View the public page",
     toReviewHeading: "To review",
     toReviewIntro:
-      "These statements were written from what you said in your interviews, and your own words are shown with each. Nothing is published until you confirm it.",
+      "These statements were written from what you said in your interviews, and your own words are shown with each.",
     toReviewEmpty: "Nothing is waiting for your review.",
     confirmedHeading: "Confirmed",
     confirmedIntro:

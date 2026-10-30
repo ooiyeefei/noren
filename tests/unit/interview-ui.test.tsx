@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { ConsentForm, consentReady, type ConsentScope } from "@/components/interview/consent-form";
 import { AudioCapture } from "@/components/interview/audio-capture";
-import { TranscriptEditor } from "@/components/interview/transcript-editor";
+import { formatTime, TranscriptEditor } from "@/components/interview/transcript-editor";
 import { uploadWithRetry } from "@/components/interview/upload";
 import { selectionToSpan, textSelectionToSpan } from "@/components/interview/span";
 import { ClaimCard, type ClaimCardData } from "@/components/claims/claim-card";
@@ -209,6 +209,21 @@ describe("components", () => {
     expect(html.match(/data-segment=/g)).toHaveLength(2);
     expect(html.match(/<textarea[^>]*lang="ja"/g)).toHaveLength(2);
     expect(html).toContain("Interviewer");
+  });
+  it("shows segment times as m:ss, and h:mm:ss past an hour", () => {
+    expect(formatTime(0)).toBe("0:00");
+    expect(formatTime(4.7)).toBe("0:04");
+    expect(formatTime(75)).toBe("1:15");
+    expect(formatTime(3725)).toBe("1:02:05");
+    const html = renderToStaticMarkup(
+      <TranscriptEditor
+        locale="en"
+        segments={[{ start: 64, end: 3725, text: "x" }]}
+        lang="ja"
+        onSave={noop}
+      />,
+    );
+    expect(html).toContain("1:04–1:02:05");
   });
   it("offers propose-from-selection only when onProposeSpan is given", () => {
     const props = { locale: "en", segments, lang: "ja", onSave: noop } as const;

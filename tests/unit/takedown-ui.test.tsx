@@ -181,3 +181,39 @@ it("status reads the code query and appeal sends code and note; rate limits rema
   await wireStatus().onAppeal();
   expect(wireStatus().error).toBe(takedownMessages.en.tryLater);
 });
+
+it("removal, lookup and appeal controls have phone-sized targets without changing labels", () => {
+  for (const locale of ["ja", "en"] as const) {
+    const m = takedownMessages[locale];
+    const html = render(<FormView {...form()} locale={locale} />);
+    const lookup = render(
+      <StatusView
+        {...status()}
+        locale={locale}
+        result={{ status: "decided", receivedAt: 0, appealed: false }}
+      />,
+    );
+    const success = render(
+      <FormView
+        {...form()}
+        locale={locale}
+        result={{ code: "MOCK-CODE", hidden: true, matchedPlace: true, receivedAt: 0 }}
+      />,
+    );
+    const controls = [...(html + lookup + success).matchAll(/<(?:input|textarea|button)\b[^>]*>/g)]
+      .map(([tag]) => tag)
+      .filter((tag) => !/name="website"|type="checkbox"/.test(tag));
+    expect(controls).toHaveLength(9);
+    for (const tag of controls) {
+      expect(tag).toContain("min-h-11");
+      expect(tag).toContain("rounded-[10px]");
+      if (!tag.startsWith("<button")) expect(tag).toContain("border-line");
+    }
+    expect(html).toMatch(/<label class="[^"]*min-h-11[^"]*">\s*<input type="checkbox"/);
+    for (const label of [m.pageUrl, m.details, m.contact, m.privacy, m.send])
+      expect(html).toContain(label);
+    for (const label of [m.codeLabel, m.check, m.note, m.appeal]) expect(lookup).toContain(label);
+    expect(html).toContain('aria-describedby="details-count"');
+    expect(lookup).toContain('aria-describedby="appeal-count"');
+  }
+});
