@@ -60,7 +60,7 @@ export function OpenTextView(props: OpenTextProps) {
   return (
     <PageContainer locale={locale} title={m.openText}>
       <div className="min-w-0 space-y-6 text-kon [overflow-wrap:anywhere]">
-        <StewardNav locale={locale} />
+        <StewardNav locale={locale} current="open-text" />
         <StewardFeedback {...props} />
         <p>{m.linkRule}</p>
         <label className="block">
