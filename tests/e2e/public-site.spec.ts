@@ -91,7 +91,8 @@ test("notice credits open data, links removal and exposes no email address", asy
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "About place information and stories",
   );
-  await expect(page.getByRole("link", { name: /OpenStreetMap/ })).toHaveAttribute(
+  // The site footer carries its own OpenStreetMap credit; this checks the notice's.
+  await expect(page.getByRole("main").getByRole("link", { name: /OpenStreetMap/ })).toHaveAttribute(
     "href",
     "https://www.openstreetmap.org/copyright",
   );
