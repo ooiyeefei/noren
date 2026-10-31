@@ -8,7 +8,7 @@ import { ErrorPage } from "@/components/layout/error-page";
 import { PageContainer } from "@/components/layout/page-container";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { creatorMessages } from "@/lib/i18n/messages/creator";
-import type { RegionConfig } from "@/lib/region";
+import { deriveRegionPolicy, type RegionConfig } from "@/lib/region";
 import { api } from "../../../convex/_generated/api";
 import { searchPlaces } from "./geo-search";
 import { CreatorHomeView } from "./creator-home-view";
@@ -120,6 +120,8 @@ export function CreatorHomeContainer({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
   const search = useCreatorSearch(locale, (pin) => setDraft((old) => ({ ...old, pin })));
+  // Before launch, and always for a demo account, a place a member adds is saved as a draft.
+  const onMap = person?.isMock === false && !deriveRegionPolicy(region).realBusinessesDraftOnly;
   async function submit() {
     const errors = validatePlaceDraft(draft, region);
     setErrors(errors);
@@ -132,8 +134,7 @@ export function CreatorHomeContainer({
     setPending(true);
     setError(undefined);
     try {
-      // A demo account's place stays a draft; the server refuses to put it on the map.
-      const result = await create({ ...toCreateArgs(draft, region.id), onMap: !person?.isMock });
+      const result = await create({ ...toCreateArgs(draft, region.id), onMap });
       router.push(`/${locale}/creator/places/${result.placeId}`);
     } catch (error) {
       setError(errorText(error, locale));
@@ -159,6 +160,7 @@ export function CreatorHomeContainer({
         locale={locale}
         region={region}
         role={person.role}
+        onMap={onMap}
         draft={draft}
         onChange={(next) => {
           setDraft(next);

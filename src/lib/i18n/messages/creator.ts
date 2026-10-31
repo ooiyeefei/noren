@@ -43,6 +43,8 @@ export const creatorMessages = defineMessages({
     saveCategory: "カテゴリーを保存",
     businessHint:
       "すぐに地図に載り、今日現地で確認された場所として表示されます。行ったことのある場所だけを追加してください。",
+    draftHint:
+      "Noren の一般公開までは、追加した場所は下書きとして保存され、あなたとスチュワードだけが見られます。行ったことのある場所だけを追加してください。",
     mapsLink: "Google マップのリンクを貼り付け",
     fillFromLink: "リンクから入力",
     fillingFromLink: "リンクを確認中…",
@@ -84,6 +86,7 @@ export const creatorMessages = defineMessages({
     coordinates: "確定したピン",
     noResults: "候補はありません。地図に直接ピンを置けます。",
     create: "地図に追加",
+    createDraft: "場所を保存",
     pending: "保存中…",
     saved: "保存しました。",
     saveNames: "名前を保存",
@@ -178,6 +181,8 @@ export const creatorMessages = defineMessages({
     saveCategory: "Save category",
     businessHint:
       "It goes on the map straight away, shown as confirmed in person today. Add only places you have been to.",
+    draftHint:
+      "Until Noren opens to the public, a place you add is saved as a draft that only you and stewards can see. Add only places you have been to.",
     mapsLink: "Paste a Google Maps link",
     fillFromLink: "Fill from link",
     fillingFromLink: "Checking link…",
@@ -219,6 +224,7 @@ export const creatorMessages = defineMessages({
     coordinates: "Confirmed pin",
     noResults: "No suggestions. You can place a pin directly on the map.",
     create: "Add to the map",
+    createDraft: "Save the place",
     pending: "Saving…",
     saved: "Saved.",
     saveNames: "Save names",

@@ -127,7 +127,9 @@ const rows: Record<string, Row[]> = {
     {
       fn: "places.create on the map",
       call: (as) => as.mutation(api.places.create, { ...input, category: "cafe", onMap: true }),
-      allowed: members,
+      // Before launch no one may put a real place on the map this way.
+      allowed: [],
+      denied: Object.fromEntries(members.map((caller) => [caller, "conflict"])),
     },
     {
       fn: "places.create landmark",
