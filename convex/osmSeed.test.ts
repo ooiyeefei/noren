@@ -648,6 +648,41 @@ describe("synthetic open listing batch APIs", () => {
     });
   });
 
+  it("markChainBranches marks a branch of a branded chain and refuses any other pair", async () => {
+    const b = await listingSetup();
+    await b.t.mutation(
+      f.importCandidates,
+      importArgs([
+        { ...candidate(2), isChain: true, tags: { name: "架空亭 本町店", amenity: "restaurant" } },
+        { ...candidate(3), tags: { name: "架空亭長崎駅前店", amenity: "restaurant" } },
+        { ...candidate(4), tags: { name: "架空亭サン", amenity: "restaurant" } },
+        { ...candidate(5), tags: { name: "架空亭", amenity: "restaurant" } },
+      ]),
+    );
+    const id = async (osmId: number) => (await rows(b)).find((row) => row.osmId === osmId)!._id;
+    const [chain, branch, other, unbranded] = [await id(2), await id(3), await id(4), await id(5)];
+    const mark = (pairs: { branch: typeof chain; chain: typeof chain }[]) =>
+      b.t.mutation(f.markChainBranches, {
+        regionId: "nagasaki",
+        stewardPersonId: b.steward,
+        pairs,
+      });
+    // Not a branch by name; the "chain" carries no brand; the branch is the chain itself.
+    expect(
+      await mark([
+        { branch: other, chain },
+        { branch, chain: unbranded },
+        { branch: chain, chain },
+      ]),
+    ).toEqual({ marked: 0, skipped: 3 });
+    expect(await mark([{ branch, chain }])).toEqual({ marked: 1, skipped: 0 });
+    expect(await mark([{ branch, chain }])).toEqual({ marked: 0, skipped: 1 });
+    expect((await b.run((ctx) => ctx.db.get("seedOsmCandidate", branch)))?.isChain).toBe(true);
+    expect((await b.run((ctx) => ctx.db.get("seedOsmCandidate", other)))?.isChain).toBe(false);
+    const audits = await b.run((ctx) => ctx.db.query("auditLog").take(10));
+    expect(audits.filter((row) => row.action === "osm_candidate.mark_chain")).toHaveLength(1);
+  });
+
   it("hideListings takes a published errand off the map for everyone, audits it, and leaves places to visit", async () => {
     const b = await listingSetup();
     const placeId = (await b.t.mutation(f.publishListings, b.args)).published[0]!.placeId;
