@@ -49,6 +49,8 @@ const placeSummary = v.object({
   isMock: v.boolean(),
   names: v.array(nameView),
   pin: v.union(pinView, v.null()),
+  /** When a person last confirmed the place in person; unset is "Not yet confirmed" (FR-030). */
+  confirmedAt: v.optional(v.number()),
 });
 const mapPlace = placeSummary.extend({ hasStory: v.boolean() });
 const placeDetail = placeSummary.extend({
@@ -146,6 +148,7 @@ async function summary(ctx: QueryCtx, place: Doc<"place">): Promise<Infer<typeof
     isMock: place.isMock,
     names: names.map(({ lang, script, value, isPrimary }) => ({ lang, script, value, isPrimary })),
     pin: pin === null ? null : { lat: pin.lat, lng: pin.lng },
+    confirmedAt: place.confirmedAt,
   };
 }
 
@@ -217,6 +220,7 @@ export const listForMap = query({
           isMock: place.isMock,
           names: place.mapNames ?? (await readMapNames(ctx, place._id)),
           pin: place.mapPin !== undefined ? place.mapPin : await readMapPin(ctx, place._id),
+          confirmedAt: place.confirmedAt,
           hasStory:
             (publicStoriesAllowed(place) || canManage(place)) &&
             (place.hasPublishedPage ?? (await readHasPublishedPage(ctx, place._id))),
@@ -328,6 +332,9 @@ export const create = mutation({
         slug,
         visibility: "draft" as const,
         createdBy: person._id,
+        // The person who placed the pin is the first to confirm the place (FR-030).
+        confirmedAt: Date.now(),
+        confirmedBy: person._id,
       }),
     );
     for (const name of names) {

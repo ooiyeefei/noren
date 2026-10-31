@@ -1,4 +1,4 @@
-import { UnreviewedBadge } from "@/components/badges";
+import { UnconfirmedBadge, UnreviewedBadge } from "@/components/badges";
 import { DemoBadge } from "@/components/badges/demo-badge";
 import { NorenTab } from "@/components/explore/noren-tab";
 import { distanceLabel, type Position } from "@/components/explore/helpers";
@@ -17,6 +17,8 @@ export type PlaceListItem = {
   categoryUnreviewed?: boolean;
   isMock: boolean;
   hasStory?: boolean;
+  /** An open-data listing no person has checked yet (FR-030). */
+  unconfirmed?: boolean;
   names?: readonly string[];
   category?: string;
   pin?: Position | null;
@@ -98,6 +100,7 @@ export function PlaceList({
                   <span className="block">{distanceLabel(item.distance)}</span>
                 )}
                 {showUnreviewed && item.categoryUnreviewed && <UnreviewedBadge locale={locale} />}
+                {item.unconfirmed && <UnconfirmedBadge locale={locale} />}
               </span>
             </a>
           </li>

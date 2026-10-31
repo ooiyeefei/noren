@@ -11,6 +11,7 @@
 import type * as aiActions from "../aiActions.js";
 import type * as aiRequests from "../aiRequests.js";
 import type * as audio from "../audio.js";
+import type * as checks from "../checks.js";
 import type * as claims from "../claims.js";
 import type * as crons from "../crons.js";
 import type * as ids from "../ids.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   aiActions: typeof aiActions;
   aiRequests: typeof aiRequests;
   audio: typeof audio;
+  checks: typeof checks;
   claims: typeof claims;
   crons: typeof crons;
   ids: typeof ids;
