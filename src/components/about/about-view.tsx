@@ -183,15 +183,15 @@ export function AboutView({ locale }: { locale: Locale }) {
           >
             {m.feelTitle}
           </h2>
-          <div className="grid gap-8 md:grid-cols-2">
-            <figure className="flex min-w-0 flex-col gap-4">
+          <div className="grid gap-x-8 gap-y-8 md:grid-cols-2 md:grid-rows-[1fr_auto]">
+            <figure className="grid min-w-0 gap-4 md:row-span-2 md:grid-rows-subgrid">
               <TypicalSketch m={m} />
               <figcaption className="leading-[1.8]">
                 <span className="block font-bold">{m.typicalLabel}</span>
                 {m.typicalCaption}
               </figcaption>
             </figure>
-            <figure className="flex min-w-0 flex-col gap-4">
+            <figure className="grid min-w-0 gap-4 md:row-span-2 md:grid-rows-subgrid">
               <NorenSketch m={m} />
               <figcaption className="leading-[1.8]">
                 <span className="block font-bold">{m.norenLabel}</span>
@@ -318,7 +318,7 @@ function TypicalSketch({ m }: { m: AboutMessages }) {
   return (
     <div
       aria-hidden="true"
-      className="flex-1 space-y-4 rounded-[14px] border border-line bg-white p-5 select-none"
+      className="space-y-4 rounded-[14px] border border-line bg-white p-5 select-none"
     >
       <div className="relative h-28 rounded-[10px] bg-[#e4e7ec]">
         <span className="absolute top-3 left-3 rounded-full bg-[#fde68a] px-3 py-1 text-[13px] font-bold text-[#713f12]">
@@ -351,7 +351,7 @@ function NorenSketch({ m }: { m: AboutMessages }) {
   return (
     <div
       aria-hidden="true"
-      className="flex-1 space-y-4 rounded-[14px] border border-line bg-white p-5 select-none"
+      className="space-y-4 rounded-[14px] border border-line bg-white p-5 select-none"
     >
       <div className="relative h-28 bg-kon">
         <span className="absolute bottom-0 left-1/3 h-10 w-[4px] -translate-x-1/2 bg-white" />
