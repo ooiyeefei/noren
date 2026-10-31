@@ -79,6 +79,12 @@ export const placeTables = {
      */
     confirmedAt: v.optional(v.number()),
     confirmedBy: v.optional(v.id("person")),
+    /**
+     * Why a steward or a steward-run job took the place off the map: an errand rather than a place to
+     * visit, or a report a steward upheld. Such a place is a `draft`, and the map leaves it out even for
+     * stewards, who still reach it by its page. Clearing it never republishes anything by itself.
+     */
+    hiddenReason: v.optional(v.union(v.literal("not_for_visitors"), v.literal("reported"))),
   })
     .index("by_regionId_and_slug", ["regionId", "slug"])
     .index("by_regionId_and_visibility", ["regionId", "visibility"])

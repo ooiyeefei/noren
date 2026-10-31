@@ -9,6 +9,7 @@ import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { shellMessages } from "@/lib/i18n/messages/shell";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { storyMessages } from "@/lib/i18n/messages/story";
+import { checkMessages } from "@/lib/i18n/messages/checks";
 import { page, place, region, sources } from "../fixtures/public-ui";
 
 for (const locale of ["ja", "en"] as const) {
@@ -91,7 +92,6 @@ for (const locale of ["ja", "en"] as const) {
       html.indexOf("<article"),
       html.indexOf('id="posts-heading"'),
       html.indexOf('id="where-heading"'),
-      html.indexOf('id="place-data-heading"'),
       html.indexOf("takedown?page="),
     ];
     expect(positions.every((position) => position >= 0)).toBe(true);
@@ -138,41 +138,24 @@ it("the Demo badge shows only for mock places", () => {
     expect(html.includes('data-badge="demo"')).toBe(isMock);
   }
 });
-it("the place page credits OpenStreetMap with a link when a place has an osm data source and shows nothing when it has none", () => {
+it("names no data provider on the place page and points open-data listings to the data page", () => {
   const detail = (dataSources: PlaceDetailLike["dataSources"]) =>
     render(
       <PlaceView
         locale="en"
         region={region}
-        place={{ ...place, dataSources }}
+        place={{ ...place, isMock: false, dataSources }}
         page={null}
         sources={[]}
       />,
     );
-  expect(detail([{ provider: "osm", ref: "node/123", licence: "ODbL-1.0" }])).toContain(
-    'href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>',
-  );
-  expect(detail([{ provider: "osm", ref: "node/123" }])).toContain(publicMessages.en.osmLicence);
-  expect(detail([])).not.toContain('id="place-data-heading"');
-  expect(detail([])).not.toContain(publicMessages.en.osmLicence);
-  expect(detail([])).not.toContain('href="https://www.openstreetmap.org/node/123"');
-  expect(
-    detail([{ provider: "other", ref: "ref", attribution: "Mock contributor credit" }]),
-  ).toContain("Mock contributor credit");
-});
-it("the OSM object link is built from the ref", () => {
-  for (const ref of ["node/123", "way/456", "relation/789"]) {
-    const html = render(
-      <PlaceView
-        locale="en"
-        region={region}
-        place={{ ...place, dataSources: [{ provider: "osm", ref }] }}
-        page={null}
-        sources={[]}
-      />,
-    );
-    expect(html).toContain(`href="https://www.openstreetmap.org/${ref}"`);
-  }
+  const listed = detail([{ provider: "osm", ref: "node/123", licence: "ODbL-1.0" }]);
+  expect(listed).not.toContain("openstreetmap.org/node/123");
+  expect(listed).not.toContain(publicMessages.en.osmLicence);
+  expect(listed).not.toContain('id="place-data-heading"');
+  expect(listed).toContain(checkMessages.en.fromOpenData);
+  expect(listed).toContain('href="/en/notice"');
+  expect(detail([])).not.toContain(checkMessages.en.fromOpenData);
 });
 
 it("centres the place map on its pin at street zoom", () => {

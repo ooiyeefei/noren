@@ -27,6 +27,9 @@ export function registerPlaceRules(triggers: Triggers<DataModel>) {
         "only a demo_public fictional mock place may have a basis",
       );
     }
+    if (place.hiddenReason !== undefined && place.visibility !== "draft") {
+      throw violation("place_hidden_is_draft", "a place taken off the map must be a draft");
+    }
   });
 
   mustBeUnique(triggers, "person", "person_token_unique", "token identifier", (ctx, person) =>

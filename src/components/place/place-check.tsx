@@ -29,13 +29,14 @@ const BUTTON =
 export function PlaceCheck({
   locale,
   confirmedAt,
-  osmRef,
+  fromOpenData = false,
   actions,
   now,
 }: {
   locale: Locale;
   confirmedAt?: number;
-  osmRef?: string;
+  /** Listed from open map data; the providers are credited on the data page, not here. */
+  fromOpenData?: boolean;
   actions?: PlaceCheckActions;
   now?: number;
 }) {
@@ -91,19 +92,19 @@ export function PlaceCheck({
       </summary>
       <div className="space-y-4 px-4 pb-4 text-[15px]">
         <p>
-          {osmRef && <>{m.fromOsm} </>}
+          {fromOpenData && <>{m.fromOpenData} </>}
           {confirmedAt === undefined
             ? m.noOneYet
             : format(state === "stale" ? m.staleOn : m.confirmedOn, {
                 date: checkDate(confirmedAt, locale),
               })}
         </p>
-        {osmRef && (
+        {fromOpenData && (
           <a
             className="inline-flex min-h-11 items-center text-ai underline"
-            href={`https://www.openstreetmap.org/${osmRef}`}
+            href={localePath(locale, "/notice")}
           >
-            {m.seeOnOsm}
+            {m.aboutData}
           </a>
         )}
         {actions?.signedIn === false && (

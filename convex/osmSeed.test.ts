@@ -1,8 +1,9 @@
 /// <reference types="vite/client" />
 import { anyApi, type ApiFromModules, type FunctionReturnType } from "convex/server";
 import { describe, expect, it } from "vitest";
-import { addPerson, addPlace, newBackend, type Backend } from "../tests/convex/fixtures";
+import { addPerson, addPlace, newBackend, ruleOf, type Backend } from "../tests/convex/fixtures";
 import nagasaki from "../regions/nagasaki.json";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type * as osmSeed from "./osmSeed";
 import type { ParsedCandidate } from "../src/lib/osm/overpass";
@@ -616,10 +617,12 @@ describe("synthetic open listing batch APIs", () => {
     expect(await b.run((ctx) => ctx.db.query("place").take(1))).toEqual([]);
   });
 
-  it("publishes a chain with a Latin-only name: a brand tag can mark a local brand too", async () => {
+  it("publishes a Latin-only name as the shop's own name in both locales", async () => {
     const b = await listingSetup();
     await b.run((ctx) =>
-      ctx.db.patch("seedOsmCandidate", b.id, { isChain: true, tags: { name: "Synthetic Brand" } }),
+      ctx.db.patch("seedOsmCandidate", b.id, {
+        tags: { name: "Synthetic Brand", amenity: "cafe" },
+      }),
     );
     const result = await b.t.mutation(f.publishListings, b.args);
     expect(result.skipped).toEqual([]);
@@ -629,6 +632,52 @@ describe("synthetic open listing batch APIs", () => {
       ["en", "Synthetic Brand"],
       ["ja", "Synthetic Brand"],
     ]);
+  });
+
+  it.each([
+    [{ isChain: true }],
+    [{ tags: { name: "架空マート", shop: "convenience" } }],
+    [{ tags: { name: "架空ストア", shop: "supermarket" } }],
+    [{ tags: { name: "架空工務", craft: "painter" } }],
+  ] as const)("skips an errand %j as not for visitors", async (patch) => {
+    const b = await listingSetup();
+    await b.run((ctx) => ctx.db.patch("seedOsmCandidate", b.id, patch));
+    expect(await b.t.mutation(f.publishListings, b.args)).toEqual({
+      published: [],
+      skipped: [{ candidateId: b.id, reason: "not for visitors" }],
+    });
+  });
+
+  it("hideListings takes a published errand off the map for everyone, audits it, and leaves places to visit", async () => {
+    const b = await listingSetup();
+    const placeId = (await b.t.mutation(f.publishListings, b.args)).published[0]!.placeId;
+    // A place to visit is refused, so a caller cannot hide anything but an errand.
+    expect(await b.t.mutation(f.hideListings, b.args)).toEqual({ hidden: 0, skipped: 1 });
+    // As if the shop turned out to be a chain after it was published.
+    await b.run((ctx) => ctx.db.patch("seedOsmCandidate", b.id, { isChain: true }));
+    expect(await b.t.mutation(f.hideListings, b.args)).toEqual({ hidden: 1, skipped: 0 });
+    expect(await b.t.mutation(f.hideListings, b.args)).toEqual({ hidden: 0, skipped: 1 });
+    const place = await b.run((ctx) => ctx.db.get("place", placeId));
+    expect(place).toMatchObject({ visibility: "draft", hiddenReason: "not_for_visitors" });
+    const audits = await b.run((ctx) => ctx.db.query("auditLog").take(10));
+    expect(audits.filter((row) => row.action === "osm_listing.hide")).toHaveLength(1);
+    const map = (as?: string) =>
+      (as ? b.as(as) : b.t).query(api.places.listForMap, { regionId: "nagasaki" });
+    expect(await map()).toEqual([]);
+    // A steward sees drafts on the map, but not a place taken off it.
+    expect(await map("synthetic-steward")).toEqual([]);
+    // A hidden place cannot go public around the decision that put it back.
+    expect(
+      await ruleOf(b.run((ctx) => ctx.db.patch("place", placeId, { visibility: "public" }))),
+    ).toBe("place_hidden_is_draft");
+    // A steward putting it back on the map is that decision, and it clears the reason.
+    await b
+      .as("synthetic-steward")
+      .mutation(api.places.setVisibility, { placeId, visibility: "public" });
+    const restored = await b.run((ctx) => ctx.db.get("place", placeId));
+    expect(restored).toMatchObject({ visibility: "public" });
+    expect(restored?.hiddenReason).toBeUndefined();
+    expect(await map()).toHaveLength(1);
   });
 
   it("a re-import files a ryokan and a bath under their new categories, and both publish", async () => {

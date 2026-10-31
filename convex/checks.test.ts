@@ -143,7 +143,12 @@ it("a report changes nothing in public until a steward keeps the place or hides 
   ).toBe("forbidden");
 
   await asSteward.mutation(api.checks.resolveReport, { checkId: open[0]!._id, outcome: "hidden" });
-  expect(await placeOf(b, placeId)).toMatchObject({ visibility: "draft" });
+  expect(await placeOf(b, placeId)).toMatchObject({
+    visibility: "draft",
+    hiddenReason: "reported",
+  });
+  // Off the map for stewards too, who otherwise see drafts there.
+  expect(await asSteward.query(api.places.listForMap, { regionId: "nagasaki" })).toEqual([]);
   expect(await asSteward.query(api.checks.listOpenReports, { regionId: "nagasaki" })).toEqual([]);
   const [hidden] = await checksOf(b, placeId);
   expect(hidden).toMatchObject({ outcome: "hidden", reviewedBy: steward, personId: member });

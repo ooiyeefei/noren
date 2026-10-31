@@ -52,7 +52,6 @@ export const publicMessages = defineMessages({
     storyPolicy:
       "ストーリーはお店を営む本人が確認した後に掲載され、同意の撤回により非表示にできます。",
     osmLicence: "データはOpen Database License（ODbL）で利用できます。",
-    osmObject: "OpenStreetMapでこの場所を見る",
     posts: "クリエイターが紹介した投稿",
     location: "所在地：緯度 {lat}、経度 {lng}",
     noPin: "この場所のピンはまだありません。",
@@ -123,7 +122,6 @@ export const publicMessages = defineMessages({
     storyPolicy:
       "Stories appear only after the person who runs the place confirms them and can be withdrawn.",
     osmLicence: "The data is available under the Open Database License (ODbL).",
-    osmObject: "View this place on OpenStreetMap",
     posts: "Posts shared by creators",
     location: "Location: latitude {lat}, longitude {lng}",
     noPin: "This place has no pin yet.",

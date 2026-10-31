@@ -50,12 +50,6 @@ export function SiteFooter({
           >
             {m.askRemoval}
           </Link>
-          <a
-            className="flex min-h-11 items-center underline underline-offset-4 hover:text-ai"
-            href="https://www.openstreetmap.org/copyright"
-          >
-            {m.mapCredit}
-          </a>
         </div>
         <p>{m.japaneseReview}</p>
       </div>

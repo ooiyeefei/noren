@@ -201,11 +201,45 @@ describe("publication CLI with an offline runner", () => {
       { fn: "osmSeed:publishListings", size: 2 },
     ]);
     expect(log.mock.calls[1]?.[0]).toEqual({
+      hidden: 0,
+      hideSkipped: 0,
       dismissed: 101,
       dismissalSkipped: 0,
       published: 102,
       publishSkipped: {},
     });
     expect(log.mock.calls.at(-1)?.[0]).toContain("© OpenStreetMap contributors — ODbL-1.0");
+  });
+
+  it("takes 101 published errands off the map in 100/1 batches and leaves published places to visit", async () => {
+    const errands = Array.from({ length: 101 }, (_, i) =>
+      candidate(i + 1, {
+        category: "shop",
+        tags: { name: `架空マート${i}`, shop: "convenience" },
+        confirmedPlaceId: `place-${i}`,
+      }),
+    );
+    const bakery = candidate(500, {
+      category: "shop",
+      tags: { name: "架空ベーカリー", shop: "bakery" },
+      confirmedPlaceId: "place-bakery",
+    });
+    const calls: { fn: string; ids: unknown[] }[] = [];
+    const run: ConvexRunner = async (fn, args) => {
+      if (fn === "osmSeed:listingCandidates")
+        return { page: [...errands, bakery], isDone: true, continueCursor: "done" };
+      const ids = (args as { candidateIds: unknown[] }).candidateIds;
+      calls.push({ fn, ids });
+      return { hidden: ids.length, skipped: 0 };
+    };
+    const log = vi.fn();
+    await runPublish(["--region", "nagasaki", "--steward", "synthetic"], { cwd: ".", run, log });
+    expect(calls.map(({ fn, ids }) => [fn, ids.length])).toEqual([
+      ["osmSeed:hideListings", 100],
+      ["osmSeed:hideListings", 1],
+    ]);
+    expect(calls.flatMap(({ ids }) => ids)).not.toContain("synthetic-500");
+    expect(log.mock.calls[0]?.[0]).toMatchObject({ publishedErrands: 101 });
+    expect(log.mock.calls[1]?.[0]).toMatchObject({ hidden: 101, published: 0 });
   });
 });
