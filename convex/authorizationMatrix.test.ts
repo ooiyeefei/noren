@@ -226,6 +226,23 @@ const rows: Record<string, Row[]> = {
       allowed: [...callers],
     },
     {
+      fn: "links.follow",
+      call: (as, w) => as.mutation(api.links.follow, { sourceId: w.source }),
+      // Anyone following a link out of Noren; only a post everyone may see is counted (FR-024).
+      allowed: [...callers],
+    },
+    {
+      fn: "links.peek",
+      call: (as, w) => as.query(api.links.peek, { sourceId: w.source }),
+      allowed: [...callers],
+    },
+    {
+      fn: "links.mine",
+      call: (as) => as.query(api.links.mine, {}),
+      allowed: members,
+      denied: { signedOut: "unauthenticated" },
+    },
+    {
       fn: "stories.latest",
       call: (as) => as.query(api.stories.latest, { regionId: "nagasaki" }),
       // The home page's newest stories: only what everyone may read, the same for every caller.

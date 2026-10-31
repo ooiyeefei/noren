@@ -23,6 +23,8 @@ export const SCRIPTS = ["kanji", "kana", "romaji", "latin"] as const;
 export const PLACE_KINDS = ["business", "landmark"] as const;
 
 export const SOURCE_STATUSES = ["live", "gone", "hidden"] as const;
+/** How many of a member's newest shared posts their page lists with visit totals (FR-024). */
+export const SHARED_POSTS_LISTED = 50;
 /** A person saying a place is still there, or reporting that something is wrong (FR-030). */
 export const CHECK_VERDICTS = ["still_here", "something_wrong"] as const;
 export const CHECK_PROBLEMS = ["closed", "moved", "details", "other"] as const;

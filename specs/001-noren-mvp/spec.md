@@ -239,7 +239,7 @@ A steward can see what moderation actions and AI edits happened, an administrato
 
 **Traffic, takedown and operations**
 
-- **FR-024**: Links from the product to an original MUST be counted, and creators and owners MUST see totals only with no information identifying visitors.
+- **FR-024** (amended 2026-10-31): Links from the product to an original MUST be counted, and creators and owners MUST see totals only with no information identifying visitors. A link to a post everyone may see goes through Noren's link-out address, which adds one to the post's count for the day (UTC) and sends the visitor on; prefetches, link previews and crawlers are sent on uncounted, nothing about the visitor is stored and no cookie is set, and the original learns only that the visit came from Noren. A post that only some people may see links straight to its original, uncounted. The member who linked a post sees its totals for the past year and the last 30 days under "Posts you shared" (共有した投稿) on My places, for their 50 newest posts; no one else sees them, and they are never ranked (FR-015). A demo account's post keeps its demo tag on the count, so statistics leave it out.
 - **FR-025**: A public takedown and withdrawal form in Japanese and English MUST exist, with acknowledgement, immediate hiding for privacy or minors, a reasoned outcome, and appeal.
 - **FR-026**: The system MUST keep an audit log of moderation actions and AI edits.
 - **FR-027**: Region-specific settings (languages, map area, enabled platforms, caution vocabulary, consent text, minimum age, retention, takedown contact) MUST be configuration, so a new region needs no change to core behaviour.

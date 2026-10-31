@@ -3,7 +3,13 @@ import { describeSource, embedFor } from "../src/lib/adapters";
 import { SOURCE_ADAPTER_IDS, SOURCE_STATUSES } from "../src/lib/domain/constants";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, query, type QueryCtx } from "./_generated/server";
-import { canEditPlace, canSeeSource, loadReadablePlace, type Viewer } from "./lib/access";
+import {
+  canEditPlace,
+  canSeeSource,
+  isSourceShownToEveryone,
+  loadReadablePlace,
+  type Viewer,
+} from "./lib/access";
 import { writeAudit } from "./lib/audit";
 import { currentPerson, requirePerson, requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
@@ -41,11 +47,14 @@ const sourceViewValidator = v.object({
   /** The name of the member who linked it, once they agreed to show it (FR-033). */
   sharedBy: v.optional(v.string()),
   addedAt: v.number(),
+  /** Whether everyone may see it, so a visit to the original is counted through /out (FR-024). */
+  shownToEveryone: v.boolean(),
 });
 export type SourceView = Infer<typeof sourceViewValidator>;
 
 async function sourceView(
   ctx: QueryCtx,
+  place: Doc<"place">,
   source: Doc<"source">,
   viewer: Viewer,
 ): Promise<SourceView> {
@@ -74,6 +83,7 @@ async function sourceView(
         ? undefined
         : (await ctx.db.get("person", source.addedBy))?.displayName,
     addedAt: source._creationTime,
+    shownToEveryone: isSourceShownToEveryone(place, source),
   };
 }
 
@@ -97,7 +107,7 @@ export const listForPlace = query({
     const visible: SourceView[] = [];
     for (const source of sources) {
       if (await canSeeSource(ctx, viewer, place, source))
-        visible.push(await sourceView(ctx, source, viewer));
+        visible.push(await sourceView(ctx, place, source, viewer));
     }
     return visible;
   },
@@ -108,14 +118,14 @@ export const listForSteward = query({
   returns: v.array(sourceViewValidator),
   handler: async (ctx, { placeId }) => {
     const steward = await requireRole(ctx, ["steward"]);
-    await loadReadablePlace(ctx, steward, placeId);
+    const place = await loadReadablePlace(ctx, steward, placeId);
     const views: SourceView[] = [];
     for (const status of SOURCE_STATUSES) {
       const sources = await ctx.db
         .query("source")
         .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId).eq("status", status))
         .take(100);
-      for (const source of sources) views.push(await sourceView(ctx, source, steward));
+      for (const source of sources) views.push(await sourceView(ctx, place, source, steward));
     }
     return views;
   },
