@@ -207,7 +207,11 @@ export const listForMap = query({
       (viewer.role === "steward" || viewer._id === place.createdBy || owned.has(place._id));
     return await Promise.all(
       places
-        .filter((place) => category === undefined || place.category === category)
+        .filter(
+          (place) =>
+            place.hiddenReason === undefined &&
+            (category === undefined || place.category === category),
+        )
         .slice(0, MAP_PLACE_LIMIT)
         .map(async (place) => ({
           _id: place._id,
@@ -502,7 +506,12 @@ export const setVisibility = mutation({
     }
     const demoPublicBasis = visibility === "demo_public" ? ("fictional" as const) : undefined;
     if (place.visibility === visibility && place.demoPublicBasis === demoPublicBasis) return null;
-    await ctx.db.patch("place", placeId, { visibility, demoPublicBasis });
+    // A steward putting a hidden place back on the map is the decision that undoes the hiding.
+    await ctx.db.patch("place", placeId, {
+      visibility,
+      demoPublicBasis,
+      hiddenReason: visibility === "draft" ? place.hiddenReason : undefined,
+    });
     await writeAudit(ctx, {
       actorKind: "person",
       actorPersonId: person._id,

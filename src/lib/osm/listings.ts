@@ -1,5 +1,5 @@
 import type { Script } from "../domain/constants";
-import { categoryForTags } from "./categories";
+import { categoryForTags, isForVisitors } from "./categories";
 import { detectScript, namesFromTags } from "./tags";
 
 export type ListingCandidate = {
@@ -72,7 +72,9 @@ export function selectListings<T extends ListingCandidate>(
           ? "missing name tag"
           : !focusCategories.includes(candidate.category ?? categoryForTags(candidate.tags))
             ? "non-focus category"
-            : null;
+            : !isForVisitors(candidate.tags, candidate.isChain === true)
+              ? "not for visitors"
+              : null;
     if (reason) skipped.push({ id: candidate._id, reason });
     return reason === null;
   });

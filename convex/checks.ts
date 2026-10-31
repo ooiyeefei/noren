@@ -171,7 +171,11 @@ export const resolveReport = mutation({
     });
     const place = await ctx.db.get("place", check.placeId);
     if (outcome === "hidden" && place !== null && place.visibility !== "draft") {
-      await ctx.db.patch("place", place._id, { visibility: "draft", demoPublicBasis: undefined });
+      await ctx.db.patch("place", place._id, {
+        visibility: "draft",
+        demoPublicBasis: undefined,
+        hiddenReason: "reported",
+      });
     }
     await writeAudit(ctx, {
       actorKind: "person",

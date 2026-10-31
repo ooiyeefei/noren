@@ -331,7 +331,7 @@ it("the logo is a decorative 24px indigo curtain without text", () => {
   expect(html).not.toContain("<text");
 });
 
-it("the footer has the four ordered destinations and review notice in both locales", () => {
+it("the footer has the three ordered destinations and review notice in both locales, naming no data provider", () => {
   for (const locale of SUPPORTED_LOCALES) {
     for (const compact of [false, true]) {
       const html = render(<SiteFooter locale={locale} compact={compact} />);
@@ -339,23 +339,16 @@ it("the footer has the four ordered destinations and review notice in both local
         `/${locale}/about`,
         `/${locale}/notice`,
         `/${locale}/takedown`,
-        "https://www.openstreetmap.org/copyright",
       ]);
-      for (const key of [
-        "whatIsNoren",
-        "aboutData",
-        "askRemoval",
-        "mapCredit",
-        "japaneseReview",
-      ] as const)
+      expect(html).not.toMatch(/OpenStreetMap/);
+      for (const key of ["whatIsNoren", "aboutData", "askRemoval", "japaneseReview"] as const)
         expect(html).toContain(shellMessages[locale][key]);
       expect(html.includes("mt-8")).toBe(!compact);
       expect(html).toContain("border-line");
     }
   }
-  expect(shellMessages.en.aboutData).toBe("About Noren and your data");
+  expect(shellMessages.en.aboutData).toBe("Credits and your data");
   expect(shellMessages.en.askRemoval).toBe("Ask to remove something");
-  expect(shellMessages.en.mapCredit).toBe("Map data © OpenStreetMap contributors");
   expect(shellMessages.en.japaneseReview).toBe(
     "Japanese wording is still being checked by native speakers.",
   );
