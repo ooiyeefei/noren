@@ -140,6 +140,21 @@ for (const locale of ["ja", "en"] as const) {
       <HomeView locale={locale} region={region} model={model} latest={latest} search="cat" />,
     );
     expect(searching).not.toContain('id="latest-stories"');
+    // With no story anywhere yet, the filter says so instead of asking to move the map.
+    const none = (hasStories: boolean) =>
+      render(
+        <HomeView
+          locale={locale}
+          region={region}
+          model={{ ...model, items: [] }}
+          category="stories"
+          view={view}
+          hasStories={hasStories}
+        />,
+      );
+    expect(none(false)).toContain(m.noStoriesYet);
+    expect(none(false)).not.toContain(m.noPlacesInArea);
+    expect(none(true)).toContain(m.noPlacesInArea);
     expect(m.legendStory).toBe(m.storiesChip);
   });
   it(`shows intentional empty states and the guide, and names the active chip when filtered (${locale})`, () => {
