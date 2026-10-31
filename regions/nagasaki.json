@@ -203,13 +203,22 @@
       "focus": true
     },
     {
+      "key": "museum",
+      "labels": {
+        "ja": "美術館・博物館・資料館",
+        "en": "Museum"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
       "key": "attraction",
       "labels": {
         "ja": "名所・観光スポット",
-        "en": "Sight or attraction"
+        "en": "Sight or landmark"
       },
       "labelsReviewedBy": null,
-      "focus": false
+      "focus": true
     },
     {
       "key": "other",

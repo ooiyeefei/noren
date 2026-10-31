@@ -10,6 +10,7 @@ import type {
 import { LocateFixed, Minus, Plus } from "lucide-react";
 import {
   explorePadding,
+  type MapFit,
   type MapView,
   type Position,
   type SheetHeight,
@@ -78,6 +79,8 @@ export type PlaceMapProps = {
     onLocate?(): void;
     /** Called once the map has loaded and again each time it stops moving. */
     onViewChange?(view: MapView): void;
+    /** Moves the map to show these points; each new object moves it once. */
+    fitTo?: MapFit | null;
   };
   picker?: {
     value: { lat: number; lng: number } | null;
@@ -385,6 +388,23 @@ export function PlaceMap({
       map.off("moveend", report);
     };
   }, [runtime, isExplore]);
+
+  const fitTo = explore?.fitTo;
+  useEffect(() => {
+    if (!runtime?.isActive() || !fitTo?.points.length) return;
+    const [first] = fitTo.points;
+    if (fitTo.points.length === 1 && first) {
+      runtime.map.flyTo({
+        center: [first.lng, first.lat],
+        zoom: Math.max(runtime.map.getZoom(), 15),
+      });
+    } else {
+      runtime.map.fitBounds(boundsFor(fitTo.points, [lng, lat, lng, lat]), {
+        padding: 40,
+        maxZoom: 16,
+      });
+    }
+  }, [runtime, fitTo, lng, lat]);
 
   const position = explore?.position;
   useEffect(() => {

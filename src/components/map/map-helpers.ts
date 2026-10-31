@@ -83,7 +83,7 @@ export function visibleView(
 }
 
 export function boundsFor(
-  markers: readonly MapMarker[],
+  markers: readonly Pick<MapMarker, "lat" | "lng">[],
   fallback: readonly [number, number, number, number],
 ): LngLatBounds {
   if (!markers.length)

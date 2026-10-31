@@ -35,9 +35,8 @@ export const placeTables = {
     regionId: v.string(),
     slug: v.string(),
     /**
-     * Unset means "business". Noren is about local businesses (bars, restaurants, cafes, shops, music
-     * shops, galleries), not tourist attractions (owner's rule, 2026-10-30), so `landmark` is a legacy
-     * label that grants nothing: it never makes a place public.
+     * Unset means "business". `landmark` is a legacy label that grants nothing: it never makes a place
+     * public. Museums and sights are shown under their own map categories instead (owner, 2026-10-31).
      */
     kind: v.optional(placeKindValidator),
     visibility: visibilityValidator,
@@ -52,6 +51,24 @@ export const placeTables = {
     category: v.optional(v.string()),
     createdBy: v.id("person"),
     isMock: v.boolean(),
+    /**
+     * Copies of the place's names, pin and whether it has a published page, kept in step by the
+     * triggers in lib/rules/mapCopies.ts so the map reads one row per place instead of three lookups
+     * (a query may make 4,096). The name, pin and pageVersion tables stay the truth; unset means "not
+     * copied yet", and readers then look the values up.
+     */
+    mapNames: v.optional(
+      v.array(
+        v.object({
+          lang: v.string(),
+          script: scriptValidator,
+          value: v.string(),
+          isPrimary: v.boolean(),
+        }),
+      ),
+    ),
+    mapPin: v.optional(v.union(v.object({ lat: v.number(), lng: v.number() }), v.null())),
+    hasPublishedPage: v.optional(v.boolean()),
   })
     .index("by_regionId_and_slug", ["regionId", "slug"])
     .index("by_regionId_and_visibility", ["regionId", "visibility"])

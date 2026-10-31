@@ -17,6 +17,7 @@ import { currentPerson, requirePerson, requireRole } from "./lib/auth";
 import { transitionClaim } from "./lib/claimEffects";
 import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
+import { readHasPublishedPage, readMapNames, readMapPin } from "./lib/mapCopies";
 import { withMock } from "./lib/mock";
 import {
   isCategoryKey,
@@ -169,34 +170,57 @@ async function detail(ctx: QueryCtx, viewer: Viewer, place: Doc<"place"> | null)
   };
 }
 
-const MAP_PLACE_LIMIT = 1200;
+const MAP_PLACE_LIMIT = 4000;
 
 export const listForMap = query({
   args: { regionId: v.string(), category: v.optional(v.string()) },
   returns: v.array(mapPlace),
   handler: async (ctx, { regionId, category }) => {
     const viewer = await currentPerson(ctx);
-    // A query may run at most 4,096 index ranges. Each place costs up to three (names, pin, and the
-    // published page or the owner check behind the story tab), so 1,200 places and the visibility
-    // queries fit. readablePlaces limits each visibility separately; the map's contract caps the total.
+    // A query may run at most 4,096 index ranges, 32,000 documents and 16 MiB. Each place row
+    // carries copies of its names, pin and published page (lib/mapCopies.ts), so a place costs one
+    // document and no ranges; a row not copied yet costs up to three lookups. readablePlaces limits
+    // each visibility separately; the map's contract caps the total.
     const places = await readablePlaces(ctx, viewer, { regionId, limit: MAP_PLACE_LIMIT });
+    if (places.length >= MAP_PLACE_LIMIT) {
+      console.warn(
+        `listForMap: ${places.length} places in ${regionId}, showing ${MAP_PLACE_LIMIT}`,
+      );
+    }
+    const owned =
+      viewer?.role === "business_owner"
+        ? new Set(
+            (
+              await ctx.db
+                .query("placeOwner")
+                .withIndex("by_personId", (q) => q.eq("personId", viewer._id))
+                .take(200)
+            ).map(({ placeId }) => placeId),
+          )
+        : new Set<Id<"place">>();
+    // canManagePlace without a lookup per place.
+    const canManage = (place: Doc<"place">) =>
+      viewer !== null &&
+      (viewer.role === "steward" || viewer._id === place.createdBy || owned.has(place._id));
     return await Promise.all(
       places
         .filter((place) => category === undefined || place.category === category)
         .slice(0, MAP_PLACE_LIMIT)
-        .map(async (place) => {
-          const canSeeStory =
-            publicStoriesAllowed(place) || (await canManagePlace(ctx, viewer, place));
-          const page = canSeeStory
-            ? await ctx.db
-                .query("pageVersion")
-                .withIndex("by_placeId_and_status_and_version", (q) =>
-                  q.eq("placeId", place._id).eq("status", "published"),
-                )
-                .first()
-            : null;
-          return { ...(await summary(ctx, place)), hasStory: page !== null };
-        }),
+        .map(async (place) => ({
+          _id: place._id,
+          regionId: place.regionId,
+          slug: place.slug,
+          kind: placeKind(place),
+          visibility: place.visibility,
+          demoPublicBasis: place.demoPublicBasis,
+          category: place.category,
+          isMock: place.isMock,
+          names: place.mapNames ?? (await readMapNames(ctx, place._id)),
+          pin: place.mapPin !== undefined ? place.mapPin : await readMapPin(ctx, place._id),
+          hasStory:
+            (publicStoriesAllowed(place) || canManage(place)) &&
+            (place.hasPublishedPage ?? (await readHasPublishedPage(ctx, place._id))),
+        })),
     );
   },
 });

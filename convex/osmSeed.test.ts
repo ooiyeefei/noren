@@ -130,11 +130,11 @@ describe("OSM seed via real gate", () => {
       f.importCandidates,
       importArgs([
         { ...candidate(2), isChain: true },
-        { ...candidate(3), tags: { name: "Synthetic Attraction", tourism: "museum" } },
+        { ...candidate(3), tags: { name: "Synthetic Library", amenity: "library" } },
         {
           ...candidate(4),
           isChain: true,
-          tags: { name: "Synthetic Chain Attraction", tourism: "museum" },
+          tags: { name: "Synthetic Chain Library", amenity: "library" },
         },
       ]),
     );
@@ -147,8 +147,8 @@ describe("OSM seed via real gate", () => {
     expect(await allPages(b, { includeChains: true })).toEqual(stored.map((row) => row._id));
     expect(await allPages(b, { focusOnly: true })).toEqual([b.id]);
     expect(await allPages(b, { focusOnly: true, includeChains: true })).toHaveLength(2);
-    expect(await allPages(b, { category: "attraction" })).toHaveLength(1);
-    expect(await allPages(b, { category: "attraction", includeChains: true })).toHaveLength(2);
+    expect(await allPages(b, { category: "other" })).toHaveLength(1);
+    expect(await allPages(b, { category: "other", includeChains: true })).toHaveLength(2);
     const page = await b.as("mock-steward").query(f.listCandidates, {
       ...pageArgs,
       includeChains: true,
@@ -307,14 +307,15 @@ describe("OSM seed via real gate", () => {
     await b.t.mutation(
       f.importCandidates,
       importArgs([
-        { ...candidate(2), tags: { name: "Synthetic Attraction", tourism: "museum", amenity: "" } },
-        { ...candidate(3), tags: { name: "Synthetic Other", amenity: "unknown" } },
+        { ...candidate(2), tags: { name: "Synthetic Library", amenity: "library" } },
+        { ...candidate(3), tags: { name: "Synthetic Museum", tourism: "museum", amenity: "" } },
       ]),
     );
     expect(await allPages(b)).toHaveLength(3);
-    expect(await allPages(b, { focusOnly: true })).toEqual([b.id]);
-    expect(await allPages(b, { category: "attraction" })).toHaveLength(1);
-    expect(await allPages(b, { category: "attraction", focusOnly: true })).toHaveLength(0);
+    // Museums are shown on the map (owner, 2026-10-31); a library is not.
+    expect(await allPages(b, { focusOnly: true })).toHaveLength(2);
+    expect(await allPages(b, { category: "other" })).toHaveLength(1);
+    expect(await allPages(b, { category: "other", focusOnly: true })).toHaveLength(0);
   });
   it("confirm creates place + names + pin + external ref with attribution and links the candidate", async () => {
     const b = await setup();
@@ -603,7 +604,7 @@ describe("synthetic open listing batch APIs", () => {
     [{ regionId: "elsewhere" }, "wrong region"],
     [{ dismissedAt: 0 }, "already dismissed"],
     [{ tags: { "name:ja": "架空" } }, "missing name tag"],
-    [{ category: "attraction" }, "non-focus category"],
+    [{ category: "other" }, "non-focus category"],
     [{ tags: { name: "x".repeat(121) } }, "no valid listing names in region locales"],
   ] as const)("skips an ineligible candidate %j with reason %s", async (patch, reason) => {
     const b = await listingSetup();
@@ -660,6 +661,40 @@ describe("synthetic open listing batch APIs", () => {
     ]);
     const values = (await b.run((ctx) => ctx.db.query("placeName").take(5))).map((n) => n.value);
     expect(values.sort()).toEqual(["架空旅館", "架空温泉 かくうの湯"]);
+  });
+
+  it("a re-import files a museum as a museum and keeps a viewpoint a sight; both publish with map copies", async () => {
+    const b = await listingSetup();
+    // As stored when museums and sights were one hidden category.
+    await b.run((ctx) =>
+      ctx.db.patch("seedOsmCandidate", b.id, {
+        category: "attraction",
+        tags: { name: "架空絵本美術館", tourism: "museum" },
+      }),
+    );
+    await b.t.mutation(
+      f.importCandidates,
+      importArgs([
+        { ...candidate(), tags: { name: "架空絵本美術館", tourism: "museum" } },
+        { ...candidate(2), tags: { name: "架空展望台", tourism: "viewpoint" } },
+      ]),
+    );
+    const candidates = await rows(b);
+    expect(candidates.map((row) => row.category).sort()).toEqual(["attraction", "museum"]);
+    const result = await b.t.mutation(f.publishListings, {
+      ...b.args,
+      candidateIds: candidates.map((row) => row._id),
+    });
+    expect(result.skipped).toEqual([]);
+    const places = await b.run((ctx) => ctx.db.query("place").take(5));
+    expect(places.map((place) => [place.category, place.visibility]).sort()).toEqual([
+      ["attraction", "public"],
+      ["museum", "public"],
+    ]);
+    for (const place of places) {
+      expect(place.mapNames).toEqual([expect.objectContaining({ lang: "ja", isPrimary: true })]);
+      expect(place.mapPin).toEqual({ lat: expect.any(Number), lng: expect.any(Number) });
+    }
   });
 
   it("skips a candidate whose OSM ref is already used", async () => {
