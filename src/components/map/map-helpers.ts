@@ -1,4 +1,6 @@
+import type { Map as LibreMap } from "maplibre-gl";
 import type { MapView } from "@/components/explore/helpers";
+import type { AerialPhoto } from "@/lib/region/schema";
 
 export const MAPLIBRE_WORKER_PATH = "/maplibre/maplibre-gl-worker.mjs";
 
@@ -114,6 +116,40 @@ export function normalisePoint(point: { lat: number; lng: number }): { lat: numb
   const clamp = (value: number, limit: number) =>
     Number(Math.max(-limit, Math.min(limit, Number.isNaN(value) ? 0 : value)).toFixed(6));
   return { lat: clamp(point.lat, 90), lng: clamp(point.lng, 180) };
+}
+
+export const AERIAL_PHOTO_LAYER = "aerial-photo";
+
+/**
+ * Shows or hides the aerial photos under the map's first label layer, so street and place names stay
+ * on top. The photos are added on first use, so a map nobody switches makes no requests for them.
+ */
+export function showAerialPhoto(
+  map: Pick<LibreMap, "getSource" | "addSource" | "addLayer" | "getStyle" | "setLayoutProperty">,
+  aerial: AerialPhoto,
+  visible: boolean,
+): void {
+  if (!map.getSource(AERIAL_PHOTO_LAYER)) {
+    if (!visible) return;
+    map.addSource(AERIAL_PHOTO_LAYER, {
+      type: "raster",
+      tiles: [aerial.tiles],
+      tileSize: 256,
+      minzoom: aerial.minZoom,
+      maxzoom: aerial.maxZoom,
+    });
+    const labels = map.getStyle().layers.find((layer) => layer.type === "symbol")?.id;
+    map.addLayer(
+      {
+        id: AERIAL_PHOTO_LAYER,
+        type: "raster",
+        source: AERIAL_PHOTO_LAYER,
+        minzoom: aerial.minZoom,
+      },
+      labels,
+    );
+  }
+  map.setLayoutProperty(AERIAL_PHOTO_LAYER, "visibility", visible ? "visible" : "none");
 }
 
 export const NOREN_PATH = "M2 2H26V30H15V21H13V30H2Z";

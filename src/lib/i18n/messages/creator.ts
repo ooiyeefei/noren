@@ -62,6 +62,8 @@ export const creatorMessages = defineMessages({
     fillingFromLink: "リンクを確認中…",
     checkMapsSuggestion: "名前も確認してください。",
     linkFound: "見つかりました。下の地図の＋が、リンクの場所です。",
+    linkArea:
+      "このリンクにはお店のピンがなく、地図の表示範囲だけが入っています。＋はその範囲の中心で、お店からずれていることがあります。",
     pinAtLink: "この場所にピンを置く",
     pinnedAtLink: "リンクの場所にピンを置きました。",
     mapsLinkFailure: "リンクを読み取れませんでした。もう一度試すか、名前とピンを入力してください。",
@@ -89,6 +91,8 @@ export const creatorMessages = defineMessages({
     pinHint: "地図をタップしてピンを置いてください。",
     entranceHint:
       "＋がその場所です。お店の上にあれば、地図の下の「ここにピンを置く」を押してください。違う場合は、地図でお店の入口をタップしてください。",
+    areaHint: "＋の近くでお店を探し、地図でお店の入口をタップしてください。",
+    photoHint: "建物が見分けにくいときは、地図の「航空写真」を押してください。",
     putPinHere: "ここにピンを置く",
     pinPlaced: "ピンを配置済み",
     movePin: "ピンを動かす",
@@ -216,6 +220,8 @@ export const creatorMessages = defineMessages({
     fillingFromLink: "Checking link…",
     checkMapsSuggestion: "Check the name too.",
     linkFound: "Found it. The + on the map below marks the spot from your link.",
+    linkArea:
+      "This link has no pin for the shop, only an area of the map. The + is the middle of that area and may be off the shop.",
     pinAtLink: "Put the pin on this spot",
     pinnedAtLink: "Pin placed on the spot from your link.",
     mapsLinkFailure: "The link could not be read. Try again or enter the name and pin yourself.",
@@ -243,6 +249,8 @@ export const creatorMessages = defineMessages({
     pinHint: "Tap the map to place the pin.",
     entranceHint:
       "The + marks the spot. If it is on the shop, tap Put the pin here under the map. If not, tap the shop's entrance on the map.",
+    areaHint: "Look for the shop near the +, then tap its entrance on the map.",
+    photoHint: "If the buildings are hard to tell apart, tap Aerial photo on the map.",
     putPinHere: "Put the pin here",
     pinPlaced: "Pin placed",
     movePin: "Move the pin",

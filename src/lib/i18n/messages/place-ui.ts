@@ -15,6 +15,9 @@ export const placeUiMessages = defineMessages({
     pickerHint:
       "地図をクリックしてピンを置きます。キーボードでは、矢印キーで地図を動かし、Enterキーで中央にピンを置けます。",
     mapFailed: "地図を読み込めませんでした。場所の一覧をご利用ください。",
+    mapViews: "地図の表示",
+    mapLayer: "地図",
+    photoLayer: "航空写真",
     attribution: "地図の出典",
     emptyList: "表示する場所はありません。",
     loadPost: "{platform}の投稿を読み込む",
@@ -39,6 +42,9 @@ export const placeUiMessages = defineMessages({
     pickerHint:
       "Click to place a pin. With a keyboard, use the arrow keys to move the map, then Enter to place the pin at its centre.",
     mapFailed: "The map could not load. You can use the place list.",
+    mapViews: "Map view",
+    mapLayer: "Map",
+    photoLayer: "Aerial photo",
     attribution: "Map attribution",
     emptyList: "No places to show.",
     loadPost: "Load this post from {platform}",

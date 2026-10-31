@@ -120,12 +120,15 @@ export function MapsLinkFeedback({
   locale,
   error,
   suggested,
+  area,
   pinned,
   onPin,
 }: {
   locale: Locale;
   error?: string;
   suggested?: boolean;
+  /** Whether the link gave only the middle of a map view, not the shop's own pin. */
+  area?: boolean;
   /** Whether the pin is already on the spot from the link. */
   pinned?: boolean;
   /**
@@ -141,9 +144,9 @@ export function MapsLinkFeedback({
       {suggested && (
         <div className="space-y-3">
           <p role="status">
-            {pinned ? m.pinnedAtLink : m.linkFound} {m.checkMapsSuggestion}
+            {area ? m.linkArea : pinned ? m.pinnedAtLink : m.linkFound} {m.checkMapsSuggestion}
           </p>
-          {!pinned && onPin && (
+          {!area && !pinned && onPin && (
             <Button
               className="min-h-11 rounded-[10px] px-4 whitespace-normal"
               type="button"
@@ -174,7 +177,7 @@ function MapsLinkField({
   const [url, setUrl] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
-  const [spot, setSpot] = useState<NonNullable<PlaceDraft["pin"]>>();
+  const [spot, setSpot] = useState<{ pin: NonNullable<PlaceDraft["pin"]>; exact: boolean }>();
   const inFlight = useRef(false);
   async function fill() {
     if (inFlight.current) return;
@@ -208,7 +211,8 @@ function MapsLinkField({
         return;
       }
       onSuggestion(suggestion);
-      setSpot(normalisePoint(suggestion));
+      // Anything but a clear yes is treated as an area, so the one-tap pin is never offered by mistake.
+      setSpot({ pin: normalisePoint(suggestion), exact: suggestion.exact === true });
     } catch {
       setError(m.mapsLinkFailure);
     } finally {
@@ -240,8 +244,9 @@ function MapsLinkField({
         locale={locale}
         error={error}
         suggested={!!spot}
-        pinned={!!spot && pin?.lat === spot.lat && pin.lng === spot.lng}
-        onPin={spot && (() => onPin(spot))}
+        area={!!spot && !spot.exact}
+        pinned={!!spot && pin?.lat === spot.pin.lat && pin.lng === spot.pin.lng}
+        onPin={spot?.exact ? () => onPin(spot.pin) : undefined}
       />
     </section>
   );
@@ -434,27 +439,32 @@ export function PinPicker({
   locale: Locale;
   region: RegionConfig;
   draft: PlaceDraft;
-  center?: { lat: number; lng: number };
+  /** Where to centre the map; `area` when it is only the middle of a Maps link's view. */
+  center?: { lat: number; lng: number; area?: boolean };
   errors?: PlaceErrors;
   onChange(pin: NonNullable<PlaceDraft["pin"]>): void;
 }) {
   const m = messagesFor(creatorMessages, locale);
   const style = createOpenFreeMapStyle(region);
   const [initialPin] = useState(draft.pin);
+  const start = center ?? initialPin;
+  const aerial = region.geo.aerialPhoto;
   return (
     <section className="space-y-3">
-      {center && !draft.pin && <p role="status">{m.entranceHint}</p>}
-      <p className="text-sm">{m.pinHint}</p>
+      {center && !draft.pin && <p role="status">{center.area ? m.areaHint : m.entranceHint}</p>}
+      <p className="text-sm">
+        {m.pinHint}
+        {aerial && ` ${m.photoHint}`}
+      </p>
       <PlaceMap
         locale={locale}
         label={m.pin}
         styleUrl={style.styleUrl(region, "liberty", locale)}
         attribution={style.attribution}
-        center={
-          center || initialPin ? { ...(center ?? initialPin!), zoom: 17 } : region.defaultCenter
-        }
+        center={start ? { lat: start.lat, lng: start.lng, zoom: 17 } : region.defaultCenter}
         markers={[]}
         picker={{ value: draft.pin, onChange, centreLabel: m.putPinHere }}
+        aerial={aerial}
       />
       {draft.pin && <p role="status">{m.pinPlaced}</p>}
       {errors.pin && <p role="alert">{m[errors.pin]}</p>}
@@ -480,7 +490,7 @@ export function PlacePinSearch({
   prefillNames?: boolean;
 }) {
   const m = messagesFor(creatorMessages, locale);
-  const [center, setCenter] = useState<{ lat: number; lng: number }>();
+  const [center, setCenter] = useState<{ lat: number; lng: number; area?: boolean }>();
   const [locating, setLocating] = useState(false);
   const [locationOff, setLocationOff] = useState(false);
   const latest = useRef({ draft, onChange });
@@ -503,7 +513,11 @@ export function PlacePinSearch({
         onSuggestion={(suggestion) => {
           if (prefillNames)
             latest.current.onChange(prefillMapsResult(latest.current.draft, suggestion));
-          setCenter({ lat: suggestion.lat, lng: suggestion.lng });
+          setCenter({
+            lat: suggestion.lat,
+            lng: suggestion.lng,
+            ...(suggestion.exact === true ? {} : { area: true }),
+          });
         }}
         onPin={(pin) => latest.current.onChange({ ...latest.current.draft, pin })}
       />

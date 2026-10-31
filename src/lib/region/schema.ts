@@ -27,6 +27,19 @@ export const regionSchema = z
       search: z.array(z.enum(["nominatim"])).min(1),
       countrycodes: z.array(z.string().regex(/^[a-z]{2}$/)).min(1),
       attribution: z.array(z.string().min(1)).min(1),
+      /**
+       * Aerial photos a pin map can switch to, for telling buildings apart. `credit` links to
+       * `creditUrl` while the photos show.
+       */
+      aerialPhoto: z
+        .strictObject({
+          tiles: z.string().regex(/^https:\/\/[a-z0-9.-]+\/\S*\{z\}\/\{x\}\/\{y\}\S*$/),
+          minZoom: z.number().int().min(0).max(22),
+          maxZoom: z.number().int().min(0).max(22),
+          credit: z.string().min(1),
+          creditUrl: z.url(),
+        })
+        .optional(),
     }),
     enabledSourceAdapters: z.array(z.enum(SOURCE_ADAPTER_IDS)).min(1),
     cautionVocabulary: z
@@ -159,6 +172,7 @@ export const regionSchema = z
   });
 
 export type RegionConfig = z.infer<typeof regionSchema>;
+export type AerialPhoto = NonNullable<RegionConfig["geo"]["aerialPhoto"]>;
 
 export type RegionPolicy = {
   inviteOnly: boolean;
