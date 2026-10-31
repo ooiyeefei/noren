@@ -27,9 +27,11 @@ Created on a person's first sign-in with role `user`. The Clerk user ID comes fr
 `place_id`, `person_id`, `verified_by`, `verified_at`. Links a business owner to the one place they may confirm. Unique per pair.
 
 ### place
-`id`, `region_id`, `slug` (unique per region), `visibility`, `created_by`, `confirmed_at`, `confirmed_by`, `is_mock`.
+`id`, `region_id`, `slug` (unique per region), `visibility`, `created_by`, `confirmed_at`, `confirmed_by`, `hidden_reason`, `is_mock`.
 A real place or a labelled mock place. Visibility `draft` for real businesses until the owner agrees. A draft is readable only by stewards, the place's verified owner and the place's creator (`created_by`).
 `confirmed_at`/`confirmed_by` record the last person who said in person that the place is there: set when a person places the pin or says "Still here", never by an import or a steward's desk approval. Unset shows "Not yet confirmed"; older than 12 months shows as such (FR-030).
+
+`hidden_reason` (not_for_visitors, reported) marks a place a steward or a steward-run job took off the map: an errand (FR-031) or an upheld report (FR-030). Such a place is always a draft, and the map leaves it out even for stewards. A steward setting it back to public clears the reason.
 
 ### place_check
 `place_id`, `region_id`, `person_id`, `verdict`, `problem` (reports only), `note` (reports only, at most 500 characters), `reviewed_by`, `reviewed_at`, `outcome` (the three set together, reports only), `is_mock`.

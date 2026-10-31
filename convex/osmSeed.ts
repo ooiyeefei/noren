@@ -1,6 +1,6 @@
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v, type Infer } from "convex/values";
-import { categoryForTags } from "../src/lib/osm/categories";
+import { categoryForTags, isForVisitors } from "../src/lib/osm/categories";
 import { listingNames, selectListings } from "../src/lib/osm/listings";
 import { namesFromTags, pickTags } from "../src/lib/osm/tags";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -415,6 +415,61 @@ export const publishListings = internalMutation({
       published.push({ candidateId, ...result });
     }
     return { published, skipped };
+  },
+});
+
+/**
+ * Takes published listings that are errands (convenience stores, supermarkets, chains: see
+ * isForVisitors) off the map. Each place becomes a draft marked `not_for_visitors`; a steward can put
+ * one back with setVisibility. The rule is checked here again, so a caller cannot hide anything else.
+ */
+export const hideListings = internalMutation({
+  args: {
+    regionId: v.string(),
+    stewardPersonId: v.id("person"),
+    candidateIds: v.array(v.id("seedOsmCandidate")),
+  },
+  returns: v.object({ hidden: v.number(), skipped: v.number() }),
+  handler: async (ctx, { regionId, stewardPersonId, candidateIds }) => {
+    const steward = await listingSteward(ctx, stewardPersonId);
+    if (candidateIds.length > 100) throw appError("invalid_input", "hide at most 100 listings");
+    regionConfig(regionId);
+    const result = { hidden: 0, skipped: 0 };
+    for (const candidateId of candidateIds) {
+      const candidate = await ctx.db.get("seedOsmCandidate", candidateId);
+      const place = candidate?.confirmedPlaceId
+        ? await ctx.db.get("place", candidate.confirmedPlaceId)
+        : null;
+      if (
+        !candidate ||
+        !place ||
+        candidate.regionId !== regionId ||
+        isForVisitors(candidate.tags, candidate.isChain === true) ||
+        place.visibility !== "public" ||
+        place.isMock
+      ) {
+        result.skipped++;
+        continue;
+      }
+      await ctx.db.patch("place", place._id, {
+        visibility: "draft",
+        hiddenReason: "not_for_visitors",
+      });
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: steward._id,
+        action: "osm_listing.hide",
+        targetType: "place",
+        targetId: place._id,
+        diff: {
+          candidateId,
+          visibility: { from: "public", to: "draft" },
+          hiddenReason: "not_for_visitors",
+        },
+      });
+      result.hidden++;
+    }
+    return result;
   },
 });
 

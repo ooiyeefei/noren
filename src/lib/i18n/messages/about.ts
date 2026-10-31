@@ -59,7 +59,7 @@ export const aboutMessages = defineMessages({
       "確かめていないことは、そう書きます。オープンデータから載せた場所は、行った人が「今もあります」と伝えるまで「未確認」のままです。",
     p6Title: "ひらかれている",
     p6Body:
-      "コードはオープンソース（Apache-2.0）、地図のデータは OpenStreetMap。地図は私たちのものではなく、まちのものです。",
+      "コードはオープンソース（Apache-2.0）、地図はオープンデータ。地図は私たちのものではなく、まちのものです。",
     whyTitle: "Noren をつくった理由",
     why1: "どのまちも、小さなお店で成り立っています。始発の路面電車より早く開くコーヒーカウンター、三代続く家族のお店、名前を覚えてくれる店主のいるバー。多くのアプリでは、そうしたお店はピンと星の数でしかありません。誰が営んでいるのか、なぜそこにあるのか、そこではどう振る舞うのか。行く価値をつくっている部分は、画面に出てきません。",
     why2: "その差をいちばん感じるのは、まちに来たばかりの人です。旅行者、デジタルノマド、興味はあるけれど、どう入っていけばいいかわからない人。お店の物語は入り口になります。聞いてみたいこと、また来る理由、最初の会話のきっかけに。",
@@ -67,7 +67,7 @@ export const aboutMessages = defineMessages({
     statusTitle: "いまの Noren",
     nowLabel: "いま",
     nowBody:
-      "長崎。OpenStreetMap から千を超える地元のお店をひとつの地図に。行ったことのある人が「今もあります」と伝えるまで、どの場所にも「未確認」の表示がつきます。",
+      "長崎。行く価値のある地元のお店や場所、数百か所をひとつの地図に。行ったことのある人が「今もあります」と伝えるまで、どの場所にも「未確認」の表示がつきます。",
     nextLabel: "これから",
     nextBody:
       "ひとつの地区から順に。脚注つきの店主の物語、このまちのやり方とその理由、そしてあなた自身のまちでの思い出。",
@@ -135,7 +135,7 @@ export const aboutMessages = defineMessages({
       "Noren says what it has not checked. A place listed from open data stays “Not yet confirmed” until someone who has been there says “Still here”.",
     p6Title: "Open",
     p6Body:
-      "Open-source code (Apache-2.0) and open map data from OpenStreetMap. The map belongs to the city, not to us.",
+      "Open-source code (Apache-2.0) and open map data. The map belongs to the city, not to us.",
     whyTitle: "Why Noren exists",
     why1: "Every city runs on small places: a coffee counter that opens before the first tram, a shop one family has kept for three generations, a bar where the owner learns your name. On most apps they are a pin and a star rating. The part that makes them worth the visit, who runs them, why they exist and how things are done there, never reaches the screen.",
     why2: "That gap is felt most by people who are new in town: travellers, digital nomads, anyone curious who is not sure how to begin. A place's story is a way in: something to ask about, a reason to come back, a first conversation.",
@@ -143,7 +143,7 @@ export const aboutMessages = defineMessages({
     statusTitle: "Where it is today",
     nowLabel: "Now",
     nowBody:
-      "Nagasaki. Over a thousand local places from OpenStreetMap on one map, each labelled “Not yet confirmed” until a member who has been there says “Still here”.",
+      "Nagasaki. Hundreds of local places worth a visit on one map, each labelled “Not yet confirmed” until a member who has been there says “Still here”.",
     nextLabel: "Next",
     nextBody:
       "One neighbourhood at a time: owners' stories with footnotes, local ways (how things work here, and why), and your own moments in the city.",

@@ -97,7 +97,7 @@ export function PlaceView({
             <PlaceCheck
               locale={locale}
               confirmedAt={place.confirmedAt}
-              osmRef={place.dataSources.find((source) => source.provider === "osm")?.ref}
+              fromOpenData={place.dataSources.length > 0}
               actions={checks}
             />
           )}
@@ -191,34 +191,6 @@ export function PlaceView({
                 markers={markers}
               />
             </div>
-          </section>
-        )}
-        {place.dataSources.some((source) => source.provider === "osm" || source.attribution) && (
-          <section
-            aria-labelledby="place-data-heading"
-            className="space-y-3 border-t border-line pt-10 text-[15px] text-muted-foreground"
-          >
-            <h2 id="place-data-heading" className="font-sans text-[22px] font-bold text-kon">
-              {ui.placeInformation}
-            </h2>
-            {place.dataSources.map((source, index) =>
-              source.provider === "osm" ? (
-                <div key={index}>
-                  <a className="text-ai underline" href="https://www.openstreetmap.org/copyright">
-                    © OpenStreetMap contributors
-                  </a>
-                  <p>{m.osmLicence}</p>
-                  <a
-                    className="text-ai underline"
-                    href={`https://www.openstreetmap.org/${source.ref}`}
-                  >
-                    {m.osmObject}
-                  </a>
-                </div>
-              ) : source.attribution ? (
-                <p key={index}>{source.attribution}</p>
-              ) : null,
-            )}
           </section>
         )}
         <div className="border-t border-line pt-10 pb-4">

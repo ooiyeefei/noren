@@ -191,7 +191,7 @@ describe("creator UI", () => {
       />,
     );
     for (const text of [
-      "Suggestion from OpenStreetMap",
+      "Suggestion from map search",
       "© OpenStreetMap contributors",
       "Mock attribution",
     ])
