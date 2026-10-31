@@ -27,6 +27,8 @@ export function EmbedView(props: {
   outboundHref?: string;
   scriptOrigins: readonly string[];
   frameOrigins: readonly string[];
+  /** Shown at the foot of the post, such as who shared it. */
+  children?: React.ReactNode;
 }): React.JSX.Element {
   // A changed source gets a fresh consent boundary even when the caller reuses this component.
   return <Post key={JSON.stringify([props.source.id, props.source.embed])} {...props} />;
@@ -38,6 +40,7 @@ function Post({
   outboundHref,
   scriptOrigins,
   frameOrigins,
+  children,
 }: Parameters<typeof EmbedView>[0]): React.JSX.Element {
   const messages = messagesFor(placeUiMessages, locale);
   const [loaded, setLoaded] = useState(false);
@@ -141,6 +144,7 @@ function Post({
       <a href={href} {...external} className="underline underline-offset-4">
         {messages.viewOriginal}
       </a>
+      {children}
     </article>
   );
 }

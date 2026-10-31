@@ -56,6 +56,16 @@ async function world() {
     .as("steward")
     .mutation(api.places.create, { ...input, kind: "landmark" });
   const source = await addSource(b, { placeId: P, addedBy: creatorA, demoConsentBy: steward });
+  const story = await b.run((ctx) =>
+    ctx.db.insert("story", {
+      placeId: P,
+      authorPersonId: creatorA,
+      body: "架空の話。",
+      lang: "ja",
+      status: "live",
+      isMock: false,
+    }),
+  );
   const interview = await addInterview(b, { placeId: P, interviewerId: creatorA });
   const { transcriptId, text } = await addCorrectedTranscript(b, {
     interviewId: interview,
@@ -90,6 +100,7 @@ async function world() {
     M,
     L,
     source,
+    story,
     interview,
     transcriptId,
     text,
@@ -127,9 +138,8 @@ const rows: Record<string, Row[]> = {
     {
       fn: "places.create on the map",
       call: (as) => as.mutation(api.places.create, { ...input, category: "cafe", onMap: true }),
-      // Before launch no one may put a real place on the map this way.
-      allowed: [],
-      denied: Object.fromEntries(members.map((caller) => [caller, "conflict"])),
+      // A member who has been there puts it on the map, before launch too (FR-032).
+      allowed: members,
     },
     {
       fn: "places.create landmark",
@@ -198,6 +208,26 @@ const rows: Record<string, Row[]> = {
     {
       fn: "sources.remove",
       call: (as, w) => as.mutation(api.sources.remove, { sourceId: w.source }),
+      allowed: editors,
+      denied: unreadable,
+    },
+    {
+      fn: "stories.add",
+      call: (as, w) =>
+        as.mutation(api.stories.add, { placeId: w.P, body: "架空の話。", lang: "ja" }),
+      // Any member who can read the place may write a story (FR-033); P is a draft.
+      allowed: ["creatorA", "ownerP", "steward"],
+      denied: unreadable,
+    },
+    {
+      fn: "stories.listForPlace",
+      call: (as, w) => as.query(api.stories.listForPlace, { placeId: w.P }),
+      // Anyone may ask; a place they cannot read has no stories for them.
+      allowed: [...callers],
+    },
+    {
+      fn: "stories.remove",
+      call: (as, w) => as.mutation(api.stories.remove, { storyId: w.story }),
       allowed: editors,
       denied: unreadable,
     },

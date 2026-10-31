@@ -7,7 +7,7 @@ Conventions. All responses carry `X-Robots-Tag: noindex, nofollow`. Authenticati
 | Path | Who | Shows |
 |---|---|---|
 | `/[lang]` | Public | Map and list of `demo_public` places (signed-in users also see `pilot`); a list view is always present |
-| `/[lang]/places/[slug]` | Public for `demo_public`; U and above for `pilot`; S, that place's O and the place's creator for `draft` | Bilingual footnoted page, embeds (to the public only those whose source has `demo_consent_at`), topics, phrase cards, notes |
+| `/[lang]/places/[slug]` | Public for `demo_public`; U and above for `pilot`; S, that place's O and the place's creator for `draft` | Bilingual footnoted page; "Stories from people who've been here": written stories and embeds, newest first (to the public only sources with `shared_at` or `demo_consent_at`, FR-033); topics, phrase cards, notes |
 | `/[lang]/creator` | U and above | Add places and attach sources (FR-032); C and S also run interviews |
 | `/[lang]/owner/[placeId]` | O (own place) | Confirmation cards, topics, notes and replies |
 | `/[lang]/steward` | S | Invitations, verification, moderation, takedowns, audit log |
@@ -20,9 +20,13 @@ Conventions. All responses carry `X-Robots-Tag: noindex, nofollow`. Authenticati
 | Method and path | Who | Request | Response |
 |---|---|---|---|
 | `GET /api/geo/search?q&lang` | U and above (FR-032) | Query text | Up to 5 suggestions `{name, lat, lng, provider, attribution}`; server cached; 429 above 1 request per second (FR-003) |
-| `POST /api/places` | U and above (FR-032) | `{regionId, names[{lang, script, value}], pin{lat,lng}, category?, onMap?}` | Place in `draft`, or `public` with `onMap` (needs a category, a business, a real account and a complete launch pack, else 409); 429 above 20 a day except for S |
+| `POST /api/places` | U and above (FR-032) | `{regionId, names[{lang, script, value}], pin{lat,lng}, category?, onMap?}` | Place in `draft`, or `public` with `onMap` and `shared_at` set (needs a category, a business and a real account, else 400; before launch too, FR-033); 429 above 20 a day except for S |
 | `PATCH /api/places/:id/pin` | C (creator of place), S | `{lat, lng}` | Updated pin |
-| `POST /api/places/:id/sources` | U and above, on a place they can read (FR-032) | `{url, note, noteLang, title?, authorHandle?}` | Source with the matched adapter and an embed descriptor; unsupported URLs become a link card (FR-004, 005); 429 above 50 a day except for S |
+| `POST /api/places/:id/sources` | U and above, on a place they can read (FR-032) | `{url, note, noteLang, title?, authorHandle?}` | Source with the matched adapter and an embed descriptor, public at once with `shared_at` set and shown with the member's name; unsupported URLs become a link card (FR-004, 005, 033); 429 above 50 a day except for S |
+| `DELETE /api/sources/:id` | The member who linked it, the place's editor, S (FR-033) | none | Source hidden; audit entry when S removes someone else's |
+| `GET /api/places/:id/stories` | Anyone who can read the place | none | Live written stories, newest first, each `{body, lang, authorName, addedAt, canRemove}`; a demo account's story only to its writer on a real place (FR-033) |
+| `POST /api/places/:id/stories` | U and above, on a place they can read (FR-033) | `{body, lang}` | Story, public at once with the member's name; 400 for an empty body, over 1,000 characters or a language the region does not use; 429 above 50 a day except for S |
+| `DELETE /api/stories/:id` | The writer, the place's editor, S (FR-033) | none | Story hidden; audit entry when S removes someone else's |
 | `POST /api/interviews` | C | `{placeId, language}` | Interview in `consent_pending` |
 | `POST /api/interviews/:id/consent` | C or S (assisted) | `{scope{publish, aiProcessing, transferAbroad, voiceRetention}, textVersion, assisted}` | Consent row; 409 if any scope is missing (FR-008) |
 | `POST /api/interviews/:id/audio/token` | C | `{contentType, size}` | Short-lived upload token; 409 without consent |
@@ -55,7 +59,8 @@ Conventions. All responses carry `X-Robots-Tag: noindex, nofollow`. Authenticati
 |---|---|---|---|---|
 | Read `demo_public` | yes | yes | yes | yes |
 | Read `draft` | no | places they created | own place | yes |
-| Create place, sources (FR-032) | yes | yes | yes | yes |
+| Create place, sources, stories (FR-032, FR-033) | yes | yes | yes | yes |
+| Remove a source or story | their own, or on a place they added | their own, or on a place they added | their own, or on a place they added | yes |
 | Create interviews | no | yes | no | yes |
 | Confirm or edit claims | no | no | own place | no |
 | Add cautions | no | no | via claim confirmation | no |

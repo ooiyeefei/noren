@@ -21,6 +21,7 @@ for (const locale of ["ja", "en"] as const) {
         place={place}
         page={page}
         sources={sources}
+        stories={[]}
         {...overrides}
       />,
     );
@@ -76,7 +77,11 @@ for (const locale of ["ja", "en"] as const) {
       expect(html).toContain('data-badge="machine-translation"');
     }
     expect(detail({ sources: [sources[2]!] })).not.toContain(placeUiMessages[locale].notice);
-    expect(detail({ page: null, sources: [] })).toContain(storyMessages[locale].noStoryYet);
+    // With no composed story, the page goes straight to what people shared.
+    const noPage = detail({ page: null, sources: [], place: { ...place, isMock: false } });
+    expect(noPage).not.toContain(storyMessages[locale].noStoryYet);
+    expect(noPage).not.toContain('data-badge="story"');
+    expect(noPage).toContain('id="stories-heading"');
   });
   it(`orders the quiet reading sections after the noren and actions (${locale})`, () => {
     const html = detail({
@@ -90,7 +95,7 @@ for (const locale of ["ja", "en"] as const) {
       html.indexOf('data-badge="story"'),
       html.indexOf("google.com/maps/dir/"),
       html.indexOf("<article"),
-      html.indexOf('id="posts-heading"'),
+      html.indexOf('id="stories-heading"'),
       html.indexOf('id="where-heading"'),
       html.indexOf("takedown?page="),
     ];

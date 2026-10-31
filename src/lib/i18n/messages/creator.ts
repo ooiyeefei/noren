@@ -42,9 +42,9 @@ export const creatorMessages = defineMessages({
     noCategory: "未選択",
     saveCategory: "カテゴリーを保存",
     businessHint:
-      "すぐに地図に載り、今日現地で確認された場所として表示されます。行ったことのある場所だけを追加してください。",
+      "すぐに公開の地図に載り、今日現地で確認された場所として表示されます。行ったことのある場所だけを追加してください。",
     draftHint:
-      "Noren の一般公開までは、追加した場所は下書きとして保存され、あなたとスチュワードだけが見られます。行ったことのある場所だけを追加してください。",
+      "デモ用アカウントで追加した場所は下書きとして保存され、あなたとスチュワードだけが見られます。",
     mapsLink: "Google マップのリンクを貼り付け",
     fillFromLink: "リンクから入力",
     fillingFromLink: "リンクを確認中…",
@@ -180,9 +180,9 @@ export const creatorMessages = defineMessages({
     noCategory: "Not selected",
     saveCategory: "Save category",
     businessHint:
-      "It goes on the map straight away, shown as confirmed in person today. Add only places you have been to.",
+      "It goes on the public map straight away, shown as confirmed in person today. Add only places you have been to.",
     draftHint:
-      "Until Noren opens to the public, a place you add is saved as a draft that only you and stewards can see. Add only places you have been to.",
+      "A place added from a demo account is saved as a draft that only you and stewards can see.",
     mapsLink: "Paste a Google Maps link",
     fillFromLink: "Fill from link",
     fillingFromLink: "Checking link…",

@@ -38,10 +38,17 @@ const sourceViewValidator = v.object({
   hasDemoConsent: v.boolean(),
   isMock: v.boolean(),
   addedByMe: v.boolean(),
+  /** The name of the member who linked it, once they agreed to show it (FR-033). */
+  sharedBy: v.optional(v.string()),
+  addedAt: v.number(),
 });
 export type SourceView = Infer<typeof sourceViewValidator>;
 
-function sourceView(source: Doc<"source">, viewer: Viewer): SourceView {
+async function sourceView(
+  ctx: QueryCtx,
+  source: Doc<"source">,
+  viewer: Viewer,
+): Promise<SourceView> {
   const adapter = SOURCE_ADAPTER_IDS.find((id) => id === source.adapter);
   if (adapter === undefined) throw appError("invalid_input", "unknown source adapter");
   return {
@@ -62,6 +69,11 @@ function sourceView(source: Doc<"source">, viewer: Viewer): SourceView {
     hasDemoConsent: source.demoConsentAt !== undefined,
     isMock: source.isMock,
     addedByMe: viewer?._id === source.addedBy,
+    sharedBy:
+      source.sharedAt === undefined
+        ? undefined
+        : (await ctx.db.get("person", source.addedBy))?.displayName,
+    addedAt: source._creationTime,
   };
 }
 
@@ -84,7 +96,8 @@ export const listForPlace = query({
       .take(50);
     const visible: SourceView[] = [];
     for (const source of sources) {
-      if (await canSeeSource(ctx, viewer, place, source)) visible.push(sourceView(source, viewer));
+      if (await canSeeSource(ctx, viewer, place, source))
+        visible.push(await sourceView(ctx, source, viewer));
     }
     return visible;
   },
@@ -102,7 +115,7 @@ export const listForSteward = query({
         .query("source")
         .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId).eq("status", status))
         .take(100);
-      views.push(...sources.map((source) => sourceView(source, steward)));
+      for (const source of sources) views.push(await sourceView(ctx, source, steward));
     }
     return views;
   },
@@ -186,6 +199,8 @@ export const add = mutation({
         noteLang: args.noteLang,
         addedBy: person._id,
         status: "live" as const,
+        // The add form says the post is shown with the member's line and name (FR-033).
+        sharedAt: Date.now(),
       }),
     );
     return { sourceId, adapter: source.adapter, platform: source.platform };

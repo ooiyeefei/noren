@@ -1,8 +1,8 @@
 import { describeSource } from "@/lib/adapters";
 import type { SourceAdapterId } from "@/lib/domain/constants";
 
-export type StoryDraft = { url: string; note: string; title: string; author: string };
-export type StoryProblem = "url" | "note" | "title";
+export type StoryDraft = { url: string; note: string; title: string; author: string; body: string };
+export type StoryProblem = "url" | "note" | "title" | "body";
 export type StoryArgs = {
   url: string;
   note: string;
@@ -10,6 +10,7 @@ export type StoryArgs = {
   title?: string;
   authorHandle?: string;
 };
+export type WrittenStoryArgs = { body: string; lang: string };
 export type StoryRegion = {
   sourceAdapters: readonly SourceAdapterId[];
   locales: readonly string[];
@@ -19,6 +20,7 @@ export type StoryRegion = {
 export const NOTE_LIMIT = 1000;
 export const TITLE_LIMIT = 200;
 export const AUTHOR_LIMIT = 100;
+export const BODY_LIMIT = 1000;
 
 const JAPANESE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
 
@@ -26,6 +28,16 @@ const JAPANESE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
 export function noteLanguage(note: string, region: StoryRegion): string {
   const guess = JAPANESE.test(note) ? "ja" : "en";
   return region.locales.includes(guess) ? guess : region.defaultLocale;
+}
+
+/** A story written here, in the member's own words; it is shown with their name (FR-033). */
+export function toWrittenArgs(
+  draft: StoryDraft,
+  region: StoryRegion,
+): { ok: true; args: WrittenStoryArgs } | { ok: false; problem: "body" } {
+  const body = draft.body.trim();
+  if (!body || body.length > BODY_LIMIT) return { ok: false, problem: "body" };
+  return { ok: true, args: { body, lang: noteLanguage(body, region) } };
 }
 
 /** What the pasted link is, as far as the form needs to know: a link card needs a typed title. */
