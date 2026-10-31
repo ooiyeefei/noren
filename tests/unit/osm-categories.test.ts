@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { categoryForTags, isForVisitors } from "../../src/lib/osm/categories";
-import { isChainFromTags, namesFromTags, pickTags } from "../../src/lib/osm/tags";
+import {
+  branchOf,
+  chainNames,
+  isChainFromTags,
+  namesFromTags,
+  pickTags,
+} from "../../src/lib/osm/tags";
 
 // All fixtures are synthetic; none describe a real business.
 describe("OSM categories and tags", () => {
@@ -25,6 +31,27 @@ describe("OSM categories and tags", () => {
     expect(visit({ shop: "books" }, true)).toBe(false);
     expect(visit({ amenity: "fast_food" }, true)).toBe(false);
     expect(visit({ tourism: "hotel" }, true)).toBe(true);
+  });
+  it("chainNames drops a trailing branch name; branchOf finds untagged branches and nothing else", () => {
+    expect(chainNames({ name: "架空亭 本町店", "name:en": "Kakuutei" })).toEqual([
+      "架空亭",
+      "kakuutei",
+    ]);
+    expect(chainNames({ name: "架空珈琲店" })).toEqual(["架空珈琲店"]);
+    expect(chainNames({ name: "X" })).toEqual([]);
+    const chains = ["架空亭", "kakuutei"];
+    for (const name of [
+      "架空亭",
+      "架空亭 駅前店",
+      "架空亭　駅前店",
+      "架空亭長崎駅前店",
+      "架空亭 Annex",
+    ])
+      expect(branchOf({ name }, chains), name).toBe("架空亭");
+    expect(branchOf({ name: "別の名前", "name:en": "Kakuutei Station" }, chains)).toBe("kakuutei");
+    // Another chain whose name only starts the same way, and a word that starts with the chain's name.
+    for (const name of ["架空亭サン 木鉢店", "架空亭ロノミア", "本町の架空亭"])
+      expect(branchOf({ name }, chains), name).toBeUndefined();
   });
   it("isChainFromTags: brand, brand:wikidata, blank brand, none", () => {
     expect(isChainFromTags({ brand: "Synthetic Brand" })).toBe(true);

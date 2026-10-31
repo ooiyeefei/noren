@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { categoryForTags, isForVisitors } from "../src/lib/osm/categories";
-import { selectListings, type ListingCandidate } from "../src/lib/osm/listings";
+import { chainBranches, selectListings, type ListingCandidate } from "../src/lib/osm/listings";
 import { getRegionConfig } from "../src/lib/region/registry";
 import { createCliRunner, type ConvexRunner } from "./lib/convex-run";
 
@@ -44,7 +44,7 @@ export async function runPublish(
 ) {
   if (argv.includes("--help")) {
     options.log(
-      "Usage: npx tsx scripts/publish-osm-listings.ts --region nagasaki --steward <personId> [--dry-run] [--prod]\nUses Convex admin CLI credentials. --steward must name an existing steward acting on the owner's explicit instruction. Dry run reads all candidate pages and writes nothing. Without --dry-run, takes published errands off the map (batches of 100), dismisses duplicates in batches of 100 and publishes listings in batches of 50. --prod targets production; otherwise uses the configured development deployment. Does not change the launch pack, invite-only access or noindex.",
+      "Usage: npx tsx scripts/publish-osm-listings.ts --region nagasaki --steward <personId> [--dry-run] [--prod]\nUses Convex admin CLI credentials. --steward must name an existing steward acting on the owner's explicit instruction. Dry run reads all candidate pages and writes nothing. Without --dry-run, marks untagged branches of branded chains as chains and takes published errands off the map (batches of 100), dismisses duplicates in batches of 100 and publishes listings in batches of 50. --prod targets production; otherwise uses the configured development deployment. Does not change the launch pack, invite-only access or noindex.",
     );
     options.log(attribution);
     return;
@@ -62,6 +62,9 @@ export async function runPublish(
     candidates.push(...page.page);
     cursor = page.isDone ? null : page.continueCursor;
   } while (cursor !== null);
+  // Branches OSM left untagged; mark them locally too, so everything below sees what the server stores.
+  const branches = chainBranches(candidates);
+  for (const { branch } of branches) branch.isChain = true;
   const selection = selectListings(candidates, {
     focusCategories:
       region.categories?.filter((category) => category.focus).map((category) => category.key) ?? [],
@@ -84,11 +87,30 @@ export async function runPublish(
     duplicates: selection.duplicates.length,
     skipped: countReasons(selection.skipped),
     firstFiveNames: selection.publish.slice(0, 5).map((candidate) => candidate.tags.name),
+    chainBranches: branches.length,
     publishedErrands: errands.length,
   });
   if (!flags.dryRun) {
     const args = { regionId: region.id, stewardPersonId: flags.steward };
-    const totals = { hidden: 0, hideSkipped: 0, dismissed: 0, dismissalSkipped: 0, published: 0 };
+    const totals = {
+      marked: 0,
+      markSkipped: 0,
+      hidden: 0,
+      hideSkipped: 0,
+      dismissed: 0,
+      dismissalSkipped: 0,
+      published: 0,
+    };
+    for (let i = 0; i < branches.length; i += 100) {
+      const result = (await run("osmSeed:markChainBranches", {
+        ...args,
+        pairs: branches
+          .slice(i, i + 100)
+          .map(({ branch, chain }) => ({ branch: branch._id, chain: chain._id })),
+      })) as { marked: number; skipped: number };
+      totals.marked += result.marked;
+      totals.markSkipped += result.skipped;
+    }
     for (let i = 0; i < errands.length; i += 100) {
       const result = (await run("osmSeed:hideListings", {
         ...args,
