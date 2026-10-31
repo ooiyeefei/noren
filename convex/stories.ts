@@ -1,17 +1,28 @@
-import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import { v, type Infer } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
-import { canEditPlace, loadReadablePlace } from "./lib/access";
+import {
+  canEditPlace,
+  isPubliclyReadablePlace,
+  isSharedPublicly,
+  isStoryShown,
+  loadReadablePlace,
+} from "./lib/access";
 import { writeAudit } from "./lib/audit";
 import { currentPerson, requirePerson } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
+import { readMapNames } from "./lib/mapCopies";
 import { limitContribution } from "./lib/rateLimit";
 import { isRegionLocale, regionConfig } from "./lib/region";
+import { scriptValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
 
 const BODY_LIMIT = 1000;
+/** How many of the newest stories and shared posts the home page looks through, and shows. */
+const LATEST_SCAN = 40;
+const LATEST_LIMIT = 8;
 
 const storyView = v.object({
   _id: v.id("story"),
@@ -69,7 +80,7 @@ export const listForPlace = query({
     const views = [];
     for (const story of stories) {
       const addedByMe = viewer !== null && story.authorPersonId === viewer._id;
-      if (story.isMock !== place.isMock && !addedByMe) continue;
+      if (!isStoryShown(place, story) && !addedByMe) continue;
       const author = await ctx.db.get("person", story.authorPersonId);
       views.push({
         _id: story._id,
@@ -83,6 +94,95 @@ export const listForPlace = query({
       });
     }
     return views;
+  },
+});
+
+const latestEntry = v.object({
+  kind: v.union(v.literal("written"), v.literal("post")),
+  id: v.string(),
+  placeSlug: v.string(),
+  placeNames: v.array(
+    v.object({
+      lang: v.string(),
+      script: scriptValidator,
+      value: v.string(),
+      isPrimary: v.boolean(),
+    }),
+  ),
+  /** A written story, or the member's own line about a post they shared; never the post itself. */
+  text: v.optional(v.string()),
+  lang: v.optional(v.string()),
+  platform: v.optional(v.string()),
+  sharedBy: v.string(),
+  addedAt: v.number(),
+});
+
+/**
+ * The newest stories people shared about real places in the region, for the home page (FR-033):
+ * written ones and linked posts together, newest first, each with the member's name. Only what
+ * everyone may read, the same for every viewer; demo content stays with the walkthrough.
+ */
+export const latest = query({
+  args: { regionId: v.string() },
+  returns: v.array(latestEntry),
+  handler: async (ctx, { regionId }) => {
+    const places = new Map<Id<"place">, Doc<"place"> | null>();
+    async function readable(placeId: Id<"place">) {
+      if (!places.has(placeId)) {
+        const place = await ctx.db.get("place", placeId);
+        const ok =
+          place !== null &&
+          place.regionId === regionId &&
+          isPubliclyReadablePlace(place) &&
+          !place.isMock;
+        places.set(placeId, ok ? place : null);
+      }
+      return places.get(placeId) ?? null;
+    }
+    async function nameOf(personId: Id<"person">) {
+      return (await ctx.db.get("person", personId))?.displayName ?? "";
+    }
+    const entries: Infer<typeof latestEntry>[] = [];
+    const written = await ctx.db
+      .query("story")
+      .withIndex("by_status", (q) => q.eq("status", "live"))
+      .order("desc")
+      .take(LATEST_SCAN);
+    for (const story of written) {
+      const place = await readable(story.placeId);
+      if (place === null || !isStoryShown(place, story)) continue;
+      entries.push({
+        kind: "written",
+        id: story._id,
+        placeSlug: place.slug,
+        placeNames: place.mapNames ?? (await readMapNames(ctx, place._id)),
+        text: story.body,
+        lang: story.lang,
+        sharedBy: await nameOf(story.authorPersonId),
+        addedAt: story._creationTime,
+      });
+    }
+    const shared = await ctx.db
+      .query("source")
+      .withIndex("by_status_and_sharedAt", (q) => q.eq("status", "live").gte("sharedAt", 0))
+      .order("desc")
+      .take(LATEST_SCAN);
+    for (const source of shared) {
+      const place = await readable(source.placeId);
+      if (place === null || !isSharedPublicly(place, source)) continue;
+      entries.push({
+        kind: "post",
+        id: source._id,
+        placeSlug: place.slug,
+        placeNames: place.mapNames ?? (await readMapNames(ctx, place._id)),
+        text: source.creatorNote,
+        lang: source.noteLang,
+        platform: source.platform,
+        sharedBy: await nameOf(source.addedBy),
+        addedAt: source.sharedAt ?? source._creationTime,
+      });
+    }
+    return entries.sort((a, b) => b.addedAt - a.addedAt).slice(0, LATEST_LIMIT);
   },
 });
 

@@ -227,8 +227,11 @@ export const listForMap = query({
           pin: place.mapPin !== undefined ? place.mapPin : await readMapPin(ctx, place._id),
           confirmedAt: place.confirmedAt,
           hasStory:
-            (publicStoriesAllowed(place) || canManage(place)) &&
-            (place.hasPublishedPage ?? (await readHasPublishedPage(ctx, place._id))),
+            ((publicStoriesAllowed(place) || canManage(place)) &&
+              (place.hasPublishedPage ?? (await readHasPublishedPage(ctx, place._id)))) ||
+            // Unset reads as none: a lookup per place would pass Convex's index-range limit on a
+            // full map, every story and shared post sets the copy, and the backfill covers older rows.
+            place.hasPeopleStories === true,
         })),
     );
   },

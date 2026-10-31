@@ -11,6 +11,7 @@ import {
   locateInBrowser,
   haversine,
   normaliseSearch,
+  STORIES_FILTER,
   type MapView,
 } from "@/components/explore/helpers";
 import { toHomeModel } from "@/components/public/mapping";
@@ -66,6 +67,11 @@ it("filters a single category or Demo together with search; clearing restores ev
   expect(filter("Beta", "demo")).toEqual([]);
   expect(filter("Zulu", "bar")).toEqual([]);
   expect(filter()).toHaveLength(3);
+});
+it("the With stories chip keeps the places someone has shared a story about", () => {
+  expect(filter("", STORIES_FILTER).map((item) => item.id)).toEqual(["z"]);
+  expect(filter("Beta", STORIES_FILTER)).toEqual([]);
+  expect(region.categories?.some((category) => category.key === STORIES_FILTER)).toBe(false);
 });
 it("sorts stories first, then distance from the position, with missing pins last", () => {
   expect(filter().map((item) => item.id)).toEqual(["z", "a", "b"]);
