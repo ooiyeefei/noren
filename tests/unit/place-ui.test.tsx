@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { PlaceMap } from "@/components/map/place-map";
+import { PlaceMap, type PlaceMapProps } from "@/components/map/place-map";
 import {
   attributionText,
   boundsFor,
@@ -21,6 +21,10 @@ const mapState = vi.hoisted(() => ({
   capture: false,
   effects: [] as Array<() => void | (() => void)>,
   options: null as Record<string, unknown> | null,
+  runtime: null as unknown,
+  element: null as unknown,
+  refs: [] as Array<{ current: unknown }>,
+  refIndex: 0,
 }));
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
@@ -30,9 +34,17 @@ vi.mock("react", async (importOriginal) => {
       if (mapState.capture) mapState.effects.push(effect);
       actual.useEffect(effect, deps);
     },
-    useRef: (initial: unknown) =>
-      actual.useRef(mapState.capture && initial === null ? {} : initial),
-    useState: (initial: unknown) => actual.useState(initial === false ? mapState.failed : initial),
+    useRef: (initial: unknown) => {
+      if (mapState.runtime) {
+        const index = mapState.refIndex++;
+        return (mapState.refs[index] ??= { current: initial ?? mapState.element });
+      }
+      return actual.useRef(mapState.capture && initial === null ? {} : initial);
+    },
+    useState: (initial: unknown) =>
+      actual.useState(
+        initial === false ? mapState.failed : initial === null ? mapState.runtime : initial,
+      ),
   };
 });
 
@@ -76,6 +88,283 @@ const renderEmbed = (embed: EmbedDescriptor = source.embed, title?: string) =>
   );
 
 describe("place UI", () => {
+  it("explore loads one clustered layer set, updates data, selects, expands, reports and unmounts safely", async () => {
+    type Listener = (event?: unknown) => void;
+    const listeners = new Map<string, Set<Listener>>();
+    const emit = (key: string, event?: unknown) => {
+      for (const listener of listeners.get(key) ?? []) listener(event);
+    };
+    const node = () => ({
+      type: "",
+      className: "",
+      dataset: {},
+      style: {},
+      setAttribute: vi.fn(),
+      append: vi.fn(),
+      addEventListener: vi.fn(),
+    });
+    const canvas = { ...node(), clientWidth: 400, clientHeight: 800, style: { cursor: "" } };
+    const context = {
+      scale: vi.fn(),
+      fill: vi.fn(),
+      stroke: vi.fn(),
+      getImageData: vi.fn(() => ({
+        width: 56,
+        height: 64,
+        data: new Uint8ClampedArray(56 * 64 * 4),
+      })),
+    };
+    vi.stubGlobal("document", {
+      createElement: (tag: string) =>
+        tag === "canvas" ? { ...node(), getContext: () => context } : node(),
+      createElementNS: node,
+    });
+    vi.stubGlobal(
+      "Path2D",
+      class {
+        constructor(readonly path: string) {}
+      },
+    );
+    vi.stubGlobal("window", {
+      matchMedia: () => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    });
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect = disconnect;
+      },
+    );
+    let loaded = false;
+    let active = true;
+    let installed = false;
+    let padding = { top: 0, bottom: 0, left: 0, right: 0 };
+    let expansion: ((zoom: number) => void) | undefined;
+    const source = {
+      setData: vi.fn().mockResolvedValue(undefined),
+      getClusterExpansionZoom: vi.fn(
+        () =>
+          new Promise<number>((resolve) => {
+            expansion = resolve;
+          }),
+      ),
+    };
+    const map = {
+      getSource: vi.fn(() => (installed ? source : undefined)),
+      addSource: vi.fn(() => {
+        installed = true;
+      }),
+      addImage: vi.fn(),
+      addLayer: vi.fn(),
+      on: (
+        event: string,
+        layer: string | ((event?: unknown) => void),
+        callback?: (event?: unknown) => void,
+      ) => {
+        const key = `${event}:${typeof layer === "string" ? layer : ""}`;
+        if (!listeners.has(key)) listeners.set(key, new Set());
+        listeners.get(key)!.add(typeof layer === "string" ? callback! : layer);
+      },
+      off: (event: string, layer: string | Listener, callback?: Listener) => {
+        const key = `${event}:${typeof layer === "string" ? layer : ""}`;
+        const handlers = listeners.get(key);
+        handlers?.delete(typeof layer === "string" ? callback! : layer);
+        if (!handlers?.size) listeners.delete(key);
+      },
+      isStyleLoaded: () => loaded,
+      getCanvas: () => canvas,
+      getPadding: () => padding,
+      unproject: ([x, y]: [number, number]) => ({ lng: 129 + x / 400, lat: 34 - y / 800 }),
+      getCenter: () => ({ lng: 129, lat: 32 }),
+      getZoom: () => 12,
+      stop: vi.fn(),
+      fitBounds: vi.fn(),
+      flyTo: vi.fn(),
+      easeTo: vi.fn(),
+      jumpTo: vi.fn((options: { padding: typeof padding }) => {
+        padding = options.padding;
+      }),
+    };
+    const domMarkers: Array<{
+      options: { element: ReturnType<typeof node>; anchor?: string };
+      remove: ReturnType<typeof vi.fn>;
+    }> = [];
+    class Marker {
+      remove = vi.fn();
+      constructor(readonly options: { element: ReturnType<typeof node>; anchor?: string }) {
+        domMarkers.push(this);
+      }
+      setLngLat() {
+        return this;
+      }
+      addTo() {
+        return this;
+      }
+    }
+    class Popup {
+      setLngLat() {
+        return this;
+      }
+      setDOMContent() {
+        return this;
+      }
+      addTo() {
+        return this;
+      }
+      remove() {}
+    }
+    const select = vi.fn();
+    const view = vi.fn();
+    const props: PlaceMapProps = {
+      locale: "en",
+      label: "Mock map",
+      styleUrl: "mock.json",
+      attribution: ["Mock credit"],
+      center: { lng: 129, lat: 32, zoom: 12 },
+      markers: [
+        {
+          id: "selected",
+          label: "Mock selected",
+          isMock: true,
+          hasStory: true,
+          lng: 129.8,
+          lat: 32.7,
+        },
+        { id: "plain", label: "Mock plain", isMock: false, lng: 129.9, lat: 32.8 },
+      ],
+      explore: { selectedId: "selected", sheet: "half", onSelect: select, onViewChange: view },
+    };
+    const render = (props: PlaceMapProps) => {
+      mapState.effects = [];
+      mapState.refIndex = 0;
+      renderToStaticMarkup(<PlaceMap {...props} />);
+      return mapState.effects;
+    };
+    mapState.capture = true;
+    mapState.element = { getBoundingClientRect: () => ({ height: 800, top: 0 }) };
+    mapState.runtime = { map, lib: { Marker, Popup }, isActive: () => active };
+    mapState.refs = [];
+    const cleanups: Array<() => void> = [];
+    try {
+      const effects = render(props);
+      for (const [index, effect] of effects.entries()) {
+        if (index === 1) continue; // The map constructor is covered separately.
+        const cleanup = effect();
+        if (cleanup) cleanups.push(cleanup);
+      }
+      expect(map.addSource).not.toHaveBeenCalled();
+      expect(map.addImage).not.toHaveBeenCalled();
+      expect(map.fitBounds).not.toHaveBeenCalled();
+      expect(view).not.toHaveBeenCalled();
+      expect(domMarkers).toHaveLength(1);
+      expect(domMarkers[0]!.options.anchor).toBe("bottom");
+      expect(domMarkers[0]!.options.element.setAttribute).toHaveBeenCalledWith(
+        "aria-label",
+        "Mock selected (Demo)",
+      );
+      expect(domMarkers[0]!.options.element.className).toContain("ring-ai");
+      expect(map.flyTo).toHaveBeenCalledWith({ center: [129.8, 32.7], zoom: 15 });
+
+      loaded = true;
+      emit("load:");
+      expect(map.addSource).toHaveBeenCalledExactlyOnceWith(
+        "explore-places",
+        expect.objectContaining({
+          cluster: true,
+          clusterRadius: 40,
+          clusterMaxZoom: 15,
+          data: expect.objectContaining({
+            features: [
+              expect.objectContaining({
+                properties: { id: "plain", hasStory: false, isMock: false },
+              }),
+            ],
+          }),
+        }),
+      );
+      expect(map.addImage).toHaveBeenCalledTimes(2);
+      expect(map.addImage.mock.calls[0]).toEqual([
+        "explore-noren-story",
+        expect.objectContaining({ width: 56, height: 64 }),
+        { pixelRatio: 2 },
+      ]);
+      expect(map.addLayer).toHaveBeenCalledTimes(3);
+      expect(map.addLayer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "explore-cluster-count",
+          layout: expect.objectContaining({ "text-font": ["Noto Sans Bold"] }),
+        }),
+      );
+      expect(view).toHaveBeenCalledWith(
+        expect.objectContaining({
+          south: 33.55,
+          north: 33.835,
+          center: { lng: 129.5, lat: 33.6925 },
+          zoom: 12,
+        }),
+      );
+      emit("moveend:");
+      expect(view).toHaveBeenCalledTimes(2);
+      emit("click:explore-single-places", {
+        features: [{ properties: { id: "plain" } }],
+      });
+      expect(select).toHaveBeenCalledExactlyOnceWith("plain");
+      emit("mouseenter:explore-clusters");
+      expect(canvas.style.cursor).toBe("pointer");
+      emit("mouseleave:explore-clusters");
+      expect(canvas.style.cursor).toBe("");
+      const cluster = {
+        features: [
+          {
+            geometry: { type: "Point", coordinates: [129.85, 32.75] },
+            properties: { cluster_id: 7 },
+          },
+        ],
+      };
+      emit("click:explore-clusters", cluster);
+      expect(source.getClusterExpansionZoom).toHaveBeenCalledWith(7);
+      expansion!(14);
+      await Promise.resolve();
+      expect(map.easeTo).toHaveBeenCalledExactlyOnceWith({ center: [129.85, 32.75], zoom: 14 });
+
+      const updated = render({
+        ...props,
+        markers: props.markers.slice(1),
+        explore: { ...props.explore, selectedId: null },
+      });
+      updated[0]!();
+      updated[3]!();
+      expect(source.setData).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          features: [
+            expect.objectContaining({ properties: expect.objectContaining({ id: "plain" }) }),
+          ],
+        }),
+      );
+      expect(map.addSource).toHaveBeenCalledTimes(1);
+      expect(map.addLayer).toHaveBeenCalledTimes(3);
+      emit("click:explore-clusters", cluster);
+      active = false;
+      expansion!(16);
+      await Promise.resolve();
+      expect(map.easeTo).toHaveBeenCalledTimes(1);
+    } finally {
+      for (const cleanup of cleanups.reverse()) cleanup();
+      mapState.runtime = null;
+      mapState.capture = false;
+      mapState.refs = [];
+      vi.unstubAllGlobals();
+    }
+    expect(listeners.size).toBe(0);
+    expect(domMarkers[0]!.remove).toHaveBeenCalledOnce();
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
+
   it("selecting a tab preserves MapLibre positioning classes and updates pressed state", () => {
     const classes = new Set(["maplibregl-marker", "maplibregl-marker-covered", "h-8", "w-7"]);
     const setAttribute = vi.fn();

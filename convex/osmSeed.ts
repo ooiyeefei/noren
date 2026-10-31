@@ -1,9 +1,10 @@
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { categoryForTags } from "../src/lib/osm/categories";
+import { listingNames, selectListings } from "../src/lib/osm/listings";
 import { namesFromTags, pickTags } from "../src/lib/osm/tags";
-import type { Id } from "./_generated/dataModel";
-import { query, type QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { internalQuery, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { writeAudit } from "./lib/audit";
 import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
@@ -46,6 +47,68 @@ const confirmedName = v.object({
   value: v.string(),
   isPrimary: v.boolean(),
 });
+
+const listingCandidate = v.object({
+  _id: v.id("seedOsmCandidate"),
+  osmType,
+  osmId: v.number(),
+  tags: v.record(v.string(), v.string()),
+  lat: v.number(),
+  lng: v.number(),
+  category: v.optional(v.string()),
+  isChain: v.optional(v.boolean()),
+  confirmedPlaceId: v.optional(v.id("place")),
+  dismissedAt: v.optional(v.number()),
+});
+
+async function listingSteward(ctx: QueryCtx, personId: Id<"person">) {
+  const person = await ctx.db.get("person", personId);
+  if (person?.role !== "steward")
+    throw appError("invalid_input", "stewardPersonId must name an existing steward");
+  return person;
+}
+
+async function insertCandidatePlace(
+  ctx: MutationCtx,
+  steward: Doc<"person">,
+  candidate: Doc<"seedOsmCandidate">,
+  names: Infer<typeof confirmedName>[],
+  pin: { lat: number; lng: number },
+  category: string,
+  visibility: "draft" | "public",
+) {
+  const base = slugBase(names);
+  // An OSM identifier is a slug fallback, never a fabricated translation of a Japanese name.
+  const slug = await uniqueSlug(
+    ctx,
+    candidate.regionId,
+    base === "place" ? `osm-${candidate.osmType}-${candidate.osmId}` : base,
+  );
+  const placeId = await ctx.db.insert(
+    "place",
+    withMock(steward, {
+      regionId: candidate.regionId,
+      slug,
+      kind: "business" as const,
+      visibility,
+      category,
+      createdBy: steward._id,
+    }),
+  );
+  for (const name of names)
+    await ctx.db.insert("placeName", { ...name, placeId, confirmedBy: steward._id });
+  await ctx.db.insert("pin", { placeId, ...pin, placedBy: steward._id, placedAt: Date.now() });
+  await ctx.db.insert("placeExternalRef", {
+    placeId,
+    provider: "osm",
+    ref: `${candidate.osmType}/${candidate.osmId}`,
+    licence: "ODbL-1.0",
+    attribution,
+    retrievedAt: candidate.retrievedAt ?? candidate._creationTime,
+  });
+  await ctx.db.patch("seedOsmCandidate", candidate._id, { confirmedPlaceId: placeId });
+  return { placeId, slug };
+}
 
 function checkCategory(regionId: string, category: string) {
   if (!regionConfig(regionId).categories?.some((item) => item.key === category))
@@ -217,30 +280,15 @@ export const confirmCandidate = mutation({
     const ref = `${candidate.osmType}/${candidate.osmId}`;
     if (await hasExternalRef(ctx, ref))
       throw appError("conflict", "OSM reference already belongs to a place");
-    const slug = await uniqueSlug(ctx, candidate.regionId, slugBase(cleanNames));
-    const placeId = await ctx.db.insert(
-      "place",
-      withMock(steward, {
-        regionId: candidate.regionId,
-        slug,
-        kind: "business" as const,
-        visibility: "draft" as const,
-        category,
-        createdBy: steward._id,
-      }),
+    const { placeId, slug } = await insertCandidatePlace(
+      ctx,
+      steward,
+      candidate,
+      cleanNames,
+      pin,
+      category,
+      "draft",
     );
-    for (const name of cleanNames)
-      await ctx.db.insert("placeName", { ...name, placeId, confirmedBy: steward._id });
-    await ctx.db.insert("pin", { placeId, ...pin, placedBy: steward._id, placedAt: Date.now() });
-    await ctx.db.insert("placeExternalRef", {
-      placeId,
-      provider: "osm",
-      ref,
-      licence: "ODbL-1.0",
-      attribution,
-      retrievedAt: candidate.retrievedAt ?? candidate._creationTime,
-    });
-    await ctx.db.patch("seedOsmCandidate", candidateId, { confirmedPlaceId: placeId });
     await writeAudit(ctx, {
       actorKind: "person",
       actorPersonId: steward._id,
@@ -270,5 +318,152 @@ export const dismissCandidate = mutation({
       diff: { dismissedAt },
     });
     return null;
+  },
+});
+
+export const listingCandidates = internalQuery({
+  args: { regionId: v.string(), paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(listingCandidate),
+  handler: async (ctx, { regionId, paginationOpts }) => {
+    regionConfig(regionId);
+    const result = await ctx.db
+      .query("seedOsmCandidate")
+      .withIndex("by_regionId", (q) => q.eq("regionId", regionId))
+      .paginate(paginationOpts);
+    return {
+      ...result,
+      page: result.page.map((candidate) => ({
+        _id: candidate._id,
+        osmType: candidate.osmType,
+        osmId: candidate.osmId,
+        tags: candidate.tags,
+        lat: candidate.lat,
+        lng: candidate.lng,
+        category: candidate.category,
+        isChain: candidate.isChain,
+        confirmedPlaceId: candidate.confirmedPlaceId,
+        dismissedAt: candidate.dismissedAt,
+      })),
+    };
+  },
+});
+
+export const publishListings = internalMutation({
+  args: {
+    regionId: v.string(),
+    stewardPersonId: v.id("person"),
+    candidateIds: v.array(v.id("seedOsmCandidate")),
+  },
+  returns: v.object({
+    published: v.array(
+      v.object({ candidateId: v.id("seedOsmCandidate"), placeId: v.id("place"), slug: v.string() }),
+    ),
+    skipped: v.array(v.object({ candidateId: v.id("seedOsmCandidate"), reason: v.string() })),
+  }),
+  handler: async (ctx, { regionId, stewardPersonId, candidateIds }) => {
+    const steward = await listingSteward(ctx, stewardPersonId);
+    if (steward.isMock)
+      throw appError("invalid_input", "a mock steward cannot publish real listings");
+    if (candidateIds.length > 50) throw appError("invalid_input", "publish at most 50 candidates");
+    const region = regionConfig(regionId);
+    const focusCategories =
+      region.categories?.filter((item) => item.focus).map((item) => item.key) ?? [];
+    const published: { candidateId: Id<"seedOsmCandidate">; placeId: Id<"place">; slug: string }[] =
+      [];
+    const skipped: { candidateId: Id<"seedOsmCandidate">; reason: string }[] = [];
+    for (const candidateId of candidateIds) {
+      const candidate = await ctx.db.get("seedOsmCandidate", candidateId);
+      let reason = !candidate
+        ? "candidate not found"
+        : candidate.regionId !== regionId
+          ? "wrong region"
+          : null;
+      if (!candidate || reason) {
+        skipped.push({ candidateId, reason: reason! });
+        continue;
+      }
+      const selection = selectListings([candidate], { focusCategories });
+      reason = selection.skipped[0]?.reason ?? null;
+      const category = candidate.category ?? categoryForTags(candidate.tags);
+      const names = listingNames(candidate.tags, region.locales);
+      const ref = `${candidate.osmType}/${candidate.osmId}`;
+      if (!reason && !isInsideRegion(region, candidate)) reason = "outside region bbox";
+      if (!reason && (!names.length || names.some((name) => name.value.length > 120)))
+        reason = "no valid listing names in region locales";
+      if (!reason && (await hasExternalRef(ctx, ref))) reason = "OSM reference already used";
+      if (reason) {
+        skipped.push({ candidateId, reason });
+        continue;
+      }
+      const result = await insertCandidatePlace(
+        ctx,
+        steward,
+        candidate,
+        names,
+        { lat: candidate.lat, lng: candidate.lng },
+        category,
+        "public",
+      );
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: steward._id,
+        action: "osm_listing.publish",
+        targetType: "place",
+        targetId: result.placeId,
+        diff: { candidateId, osmRef: ref, category },
+      });
+      published.push({ candidateId, ...result });
+    }
+    return { published, skipped };
+  },
+});
+
+export const dismissDuplicates = internalMutation({
+  args: {
+    regionId: v.string(),
+    stewardPersonId: v.id("person"),
+    pairs: v.array(v.object({ keep: v.id("seedOsmCandidate"), drop: v.id("seedOsmCandidate") })),
+  },
+  returns: v.object({ dismissed: v.number(), skipped: v.number() }),
+  handler: async (ctx, { regionId, stewardPersonId, pairs }) => {
+    const steward = await listingSteward(ctx, stewardPersonId);
+    if (pairs.length > 100) throw appError("invalid_input", "dismiss at most 100 duplicates");
+    const region = regionConfig(regionId);
+    const focusCategories =
+      region.categories?.filter((item) => item.focus).map((item) => item.key) ?? [];
+    const result = { dismissed: 0, skipped: 0 };
+    for (const { keep, drop } of pairs) {
+      const keeper = await ctx.db.get("seedOsmCandidate", keep);
+      const candidate = await ctx.db.get("seedOsmCandidate", drop);
+      if (
+        !keeper ||
+        !candidate ||
+        keep === drop ||
+        keeper.regionId !== regionId ||
+        candidate.regionId !== regionId ||
+        keeper.confirmedPlaceId ||
+        keeper.dismissedAt !== undefined ||
+        candidate.confirmedPlaceId ||
+        candidate.dismissedAt !== undefined ||
+        !selectListings([keeper, candidate], { focusCategories }).duplicates.some(
+          (pair) => pair.keep === keep && pair.drop === drop,
+        )
+      ) {
+        result.skipped++;
+        continue;
+      }
+      const dismissedAt = Date.now();
+      await ctx.db.patch("seedOsmCandidate", drop, { dismissedAt });
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: steward._id,
+        action: "osm_candidate.dismiss",
+        targetType: "seedOsmCandidate",
+        targetId: drop,
+        diff: { reason: "duplicate", keep, dismissedAt },
+      });
+      result.dismissed++;
+    }
+    return result;
   },
 });

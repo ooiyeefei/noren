@@ -55,6 +55,23 @@ async function setup() {
 }
 const pageArgs = { regionId: "nagasaki", paginationOpts: { numItems: 2, cursor: null } };
 
+async function listingSetup() {
+  const b = newBackend(modules);
+  const steward = await addPerson(b, "synthetic-steward", "steward");
+  await b.t.mutation(
+    f.importCandidates,
+    importArgs([
+      {
+        ...candidate(),
+        tags: { name: "架空カフェ", "name:en": "Synthetic Cafe", amenity: "cafe" },
+      },
+    ]),
+  );
+  const id = (await rows(b))[0]!._id;
+  const args = { regionId: "nagasaki", stewardPersonId: steward, candidateIds: [id] };
+  return { ...b, steward, id, args };
+}
+
 async function allPages(
   b: Backend,
   extra: { category?: string; focusOnly?: boolean; includeChains?: boolean } = {},
@@ -433,5 +450,271 @@ describe("OSM seed via real gate", () => {
     ).rejects.toMatchObject({
       data: { code: "rule_violation", rule: "seed_osm_candidate_unique" },
     });
+  });
+});
+
+describe("synthetic open listing batch APIs", () => {
+  it("listingCandidates paginates all selection fields including linked and dismissed rows", async () => {
+    const b = await listingSetup();
+    await b.t.mutation(f.importCandidates, importArgs([candidate(2), candidate(3)]));
+    await b.t.mutation(f.publishListings, b.args);
+    const all = await rows(b);
+    await b.run((ctx) => ctx.db.patch("seedOsmCandidate", all[1]!._id, { dismissedAt: 1 }));
+    const first = await b.t.query(f.listingCandidates, pageArgs);
+    expect(first.page).toHaveLength(2);
+    expect(first.isDone).toBe(false);
+    expect(first.page.find((row) => row._id === b.id)).toMatchObject({
+      tags: { name: "架空カフェ" },
+      category: "cafe",
+      isChain: false,
+      confirmedPlaceId: expect.any(String),
+      ...point,
+    });
+    expect(first.page.find((row) => row._id === all[1]!._id)?.dismissedAt).toBe(1);
+    const last = await b.t.query(f.listingCandidates, {
+      ...pageArgs,
+      paginationOpts: { numItems: 2, cursor: first.continueCursor },
+    });
+    expect(last.page).toHaveLength(1);
+    expect(last.isDone).toBe(true);
+  });
+
+  it("publishListings creates a public place, names, pin, OSM ref, links the candidate and audits the steward", async () => {
+    const b = await listingSetup();
+    const result = await b.t.mutation(f.publishListings, b.args);
+    expect(result.skipped).toEqual([]);
+    expect(result.published).toHaveLength(1);
+    const { placeId, slug } = result.published[0]!;
+    expect(await b.run((ctx) => ctx.db.get("place", placeId))).toMatchObject({
+      visibility: "public",
+      kind: "business",
+      category: "cafe",
+      isMock: false,
+      createdBy: b.steward,
+    });
+    const detail = await b.t.query((await import("./_generated/api")).api.places.get, { placeId });
+    expect(detail).toMatchObject({
+      slug,
+      pin: point,
+      dataSources: [
+        {
+          provider: "osm",
+          ref: "node/1",
+          licence: "ODbL-1.0",
+          attribution: "© OpenStreetMap contributors",
+        },
+      ],
+    });
+    expect(detail?.names).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          lang: "ja",
+          value: "架空カフェ",
+          script: "kanji",
+          isPrimary: true,
+        }),
+        expect.objectContaining({
+          lang: "en",
+          value: "Synthetic Cafe",
+          script: "latin",
+          isPrimary: true,
+        }),
+      ]),
+    );
+    expect(
+      await b.run((ctx) =>
+        ctx.db
+          .query("placeName")
+          .withIndex("by_placeId_and_lang", (q) => q.eq("placeId", placeId))
+          .take(12),
+      ),
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ confirmedBy: b.steward })]));
+    expect(
+      await b.run((ctx) =>
+        ctx.db
+          .query("pin")
+          .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
+          .unique(),
+      ),
+    ).toMatchObject({ ...point, placedBy: b.steward });
+    expect(
+      await b.run((ctx) =>
+        ctx.db
+          .query("placeExternalRef")
+          .withIndex("by_provider_and_ref", (q) => q.eq("provider", "osm").eq("ref", "node/1"))
+          .unique(),
+      ),
+    ).toMatchObject({ retrievedAt: 123 });
+    expect((await rows(b))[0]?.confirmedPlaceId).toBe(placeId);
+    expect(await b.run((ctx) => ctx.db.query("claim").take(1))).toEqual([]);
+    expect(await b.run((ctx) => ctx.db.query("auditLog").take(10))).toMatchObject([
+      {
+        action: "osm_listing.publish",
+        actorKind: "person",
+        actorPersonId: b.steward,
+        targetId: placeId,
+        diff: { osmRef: "node/1", category: "cafe", candidateId: b.id },
+      },
+    ]);
+  });
+
+  it("refuses a non-steward person id and a missing person", async () => {
+    const b = await listingSetup();
+    const personId = await addPerson(b, "synthetic-user", "user");
+    for (const deleted of [false, true]) {
+      if (deleted) await b.run((ctx) => ctx.db.delete("person", personId));
+      await expect(
+        b.t.mutation(f.publishListings, { ...b.args, stewardPersonId: personId }),
+      ).rejects.toMatchObject({ data: { code: "invalid_input" } });
+      await expect(
+        b.t.mutation(f.dismissDuplicates, {
+          regionId: "nagasaki",
+          stewardPersonId: personId,
+          pairs: [],
+        }),
+      ).rejects.toMatchObject({ data: { code: "invalid_input" } });
+    }
+  });
+
+  it("skips an already linked candidate (idempotent)", async () => {
+    const b = await listingSetup();
+    await b.t.mutation(f.publishListings, b.args);
+    expect(await b.t.mutation(f.publishListings, b.args)).toEqual({
+      published: [],
+      skipped: [{ candidateId: b.id, reason: "already confirmed" }],
+    });
+    expect(await b.run((ctx) => ctx.db.query("place").take(10))).toHaveLength(1);
+    expect(await b.run((ctx) => ctx.db.query("auditLog").take(10))).toHaveLength(1);
+  });
+
+  it("refuses more than 50", async () => {
+    const b = await listingSetup();
+    await expect(
+      b.t.mutation(f.publishListings, {
+        ...b.args,
+        candidateIds: Array.from({ length: 51 }, () => b.id),
+      }),
+    ).rejects.toMatchObject({ data: { code: "invalid_input" } });
+    expect(await b.run((ctx) => ctx.db.query("place").take(1))).toEqual([]);
+  });
+
+  it.each([
+    [{ lat: 0 }, "outside region bbox"],
+    [{ regionId: "elsewhere" }, "wrong region"],
+    [{ dismissedAt: 0 }, "already dismissed"],
+    [{ tags: { "name:ja": "架空" } }, "missing name tag"],
+    [{ category: "attraction" }, "non-focus category"],
+    [{ tags: { name: "x".repeat(121) } }, "no valid listing names in region locales"],
+  ] as const)("skips an ineligible candidate %j with reason %s", async (patch, reason) => {
+    const b = await listingSetup();
+    await b.run((ctx) => ctx.db.patch("seedOsmCandidate", b.id, patch));
+    expect(await b.t.mutation(f.publishListings, b.args)).toEqual({
+      published: [],
+      skipped: [{ candidateId: b.id, reason }],
+    });
+    expect(await b.run((ctx) => ctx.db.query("place").take(1))).toEqual([]);
+  });
+
+  it("publishes a chain with a Latin-only name: a brand tag can mark a local brand too", async () => {
+    const b = await listingSetup();
+    await b.run((ctx) =>
+      ctx.db.patch("seedOsmCandidate", b.id, { isChain: true, tags: { name: "Synthetic Brand" } }),
+    );
+    const result = await b.t.mutation(f.publishListings, b.args);
+    expect(result.skipped).toEqual([]);
+    expect(result.published).toHaveLength(1);
+    const names = await b.run((ctx) => ctx.db.query("placeName").take(5));
+    expect(names.map(({ lang, value }) => [lang, value]).sort()).toEqual([
+      ["en", "Synthetic Brand"],
+      ["ja", "Synthetic Brand"],
+    ]);
+  });
+
+  it("skips a candidate whose OSM ref is already used", async () => {
+    const b = await listingSetup();
+    const placeId = await addPlace(b, { createdBy: b.steward });
+    await b.run((ctx) =>
+      ctx.db.insert("placeExternalRef", {
+        placeId,
+        provider: "osm",
+        ref: "node/1",
+        licence: "ODbL-1.0",
+        retrievedAt: 1,
+      }),
+    );
+    expect(await b.t.mutation(f.publishListings, b.args)).toEqual({
+      published: [],
+      skipped: [{ candidateId: b.id, reason: "OSM reference already used" }],
+    });
+  });
+
+  it("publishes 60 Japanese-only listings across batches without invented names or slug exhaustion", async () => {
+    const b = await listingSetup();
+    await b.run((ctx) => ctx.db.patch("seedOsmCandidate", b.id, { tags: { name: "架空店1" } }));
+    await b.t.mutation(
+      f.importCandidates,
+      importArgs(
+        Array.from({ length: 59 }, (_, i) => ({
+          ...candidate(i + 2),
+          tags: { name: `架空店${i + 2}`, amenity: "cafe" },
+        })),
+      ),
+    );
+    const candidates = await rows(b);
+    const first = await b.t.mutation(f.publishListings, {
+      ...b.args,
+      candidateIds: candidates.slice(0, 50).map((row) => row._id),
+    });
+    const last = await b.t.mutation(f.publishListings, {
+      ...b.args,
+      candidateIds: candidates.slice(50).map((row) => row._id),
+    });
+    expect(first.published).toHaveLength(50);
+    expect(last.published).toHaveLength(10);
+    expect(new Set([...first.published, ...last.published].map((row) => row.slug)).size).toBe(60);
+    expect(await b.run((ctx) => ctx.db.query("placeName").take(100))).toEqual(
+      expect.arrayContaining([expect.objectContaining({ lang: "ja", script: "kanji" })]),
+    );
+    expect(
+      (await b.run((ctx) => ctx.db.query("placeName").take(100))).every((row) => row.lang === "ja"),
+    ).toBe(true);
+  });
+
+  it("dismissDuplicates dismisses and audits, and skips confirmed/dismissed rows on rerun", async () => {
+    const b = await listingSetup();
+    await b.t.mutation(
+      f.importCandidates,
+      importArgs([
+        { ...candidate(2), osmType: "way", tags: { name: "架空カフェ", amenity: "cafe" } },
+      ]),
+    );
+    const drop = (await rows(b)).find((row) => row.osmId === 2)!._id;
+    const args = {
+      regionId: "nagasaki",
+      stewardPersonId: b.steward,
+      pairs: [{ keep: b.id, drop }],
+    };
+    expect(await b.t.mutation(f.dismissDuplicates, args)).toEqual({ dismissed: 1, skipped: 0 });
+    expect(await b.run((ctx) => ctx.db.get("seedOsmCandidate", drop))).toMatchObject({
+      dismissedAt: expect.any(Number),
+    });
+    expect(await b.run((ctx) => ctx.db.query("auditLog").take(10))).toMatchObject([
+      {
+        action: "osm_candidate.dismiss",
+        actorPersonId: b.steward,
+        targetId: drop,
+        diff: { reason: "duplicate", keep: b.id },
+      },
+    ]);
+    expect(await b.t.mutation(f.dismissDuplicates, args)).toEqual({ dismissed: 0, skipped: 1 });
+    await b.run((ctx) => ctx.db.patch("seedOsmCandidate", drop, { dismissedAt: undefined }));
+    await b.t.mutation(f.publishListings, { ...b.args, candidateIds: [drop] });
+    expect(await b.t.mutation(f.dismissDuplicates, args)).toEqual({ dismissed: 0, skipped: 1 });
+    await expect(
+      b.t.mutation(f.dismissDuplicates, {
+        ...args,
+        pairs: Array.from({ length: 101 }, () => args.pairs[0]!),
+      }),
+    ).rejects.toMatchObject({ data: { code: "invalid_input" } });
   });
 });

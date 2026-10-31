@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import nagasaki from "../regions/nagasaki.json";
 import {
   addClaim,
@@ -16,7 +16,7 @@ import {
   ruleOf,
 } from "../tests/convex/fixtures";
 import { api } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { isPubliclyReadablePlace } from "./lib/access";
 import * as region from "./lib/region";
 
@@ -44,6 +44,19 @@ function completeLaunchPack() {
     ...region.regionPolicy("nagasaki"),
     realBusinessesDraftOnly: false,
   });
+}
+
+async function addOsmRef(b: ReturnType<typeof newBackend>, placeId: Id<"place">) {
+  return b.run((ctx) =>
+    ctx.db.insert("placeExternalRef", {
+      placeId,
+      provider: "osm",
+      ref: "node/9000001",
+      licence: "ODbL-1.0",
+      attribution: "© OpenStreetMap contributors",
+      retrievedAt: 1,
+    }),
+  );
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -78,6 +91,7 @@ describe.each(states)("viewer matrix: $label", (state) => {
     "%s: get, getBySlug, map, published page and sources agree",
     async (viewer) => {
       const { b, creator, owner, demoted, steward } = await setup();
+      completeLaunchPack();
       const placeId = await addPlace(b, { createdBy: creator, isMock: state.isMock });
       await addOwner(b, placeId, owner, steward);
       await addOwner(b, placeId, demoted, steward);
@@ -125,6 +139,75 @@ describe.each(states)("viewer matrix: $label", (state) => {
 });
 
 describe("real place publication", () => {
+  it("before launch, a confirmed real place with an OSM ref can go public", async () => {
+    const { b, creator } = await setup();
+    const placeId = await addPlace(b, { createdBy: creator });
+    await addOsmRef(b, placeId);
+    expect(region.regionPolicy("nagasaki")).toMatchObject({
+      realBusinessesDraftOnly: true,
+      inviteOnly: true,
+      noindex: true,
+      allowPilotVisibility: false,
+    });
+    await b.as("steward").mutation(api.places.setVisibility, { placeId, visibility: "public" });
+    expect(await b.t.query(api.places.get, { placeId })).toMatchObject({ visibility: "public" });
+    expect(region.regionConfig("nagasaki").legal.launchPackComplete).toBe(false);
+  });
+
+  it.each([
+    { withNames: false, withPin: true, message: "confirmed name" },
+    { withNames: true, withPin: false, message: "pin is required" },
+  ])("an open listing still requires confirmed names and a pin: $message", async (input) => {
+    const { b, creator } = await setup();
+    const placeId = await addPlace(b, {
+      createdBy: creator,
+      withNames: input.withNames,
+      withPin: input.withPin,
+    });
+    await addOsmRef(b, placeId);
+    await expect(
+      b.as("steward").mutation(api.places.setVisibility, { placeId, visibility: "public" }),
+    ).rejects.toMatchObject({
+      data: { code: "conflict", message: expect.stringContaining(input.message) },
+    });
+  });
+
+  it.each(["pilot", "demo_public"] as const)(
+    "an open listing does not bypass the pre-launch %s rules",
+    async (visibility) => {
+      const { b, creator } = await setup();
+      const placeId = await addPlace(b, { createdBy: creator });
+      await addOsmRef(b, placeId);
+      expect(
+        await errorCode(
+          b.as("steward").mutation(api.places.setVisibility, {
+            placeId,
+            visibility,
+            confirmFictional: true,
+            agreementRecorded: true,
+          }),
+        ),
+      ).toBe("conflict");
+    },
+  );
+
+  it("after launch, the open-listing rule changes nothing", async () => {
+    const { b, creator } = await setup();
+    completeLaunchPack();
+    for (const osm of [false, true]) {
+      const placeId = await addPlace(b, { createdBy: creator });
+      if (osm) await addOsmRef(b, placeId);
+      await b.as("steward").mutation(api.places.setVisibility, { placeId, visibility: "public" });
+      const claimId = await addClaim(b, { placeId, status: "published" });
+      await addPage(b, {
+        placeId,
+        sentences: [{ lang: "ja", text: "Synthetic post-launch sentence", claimIds: [claimId] }],
+      });
+      expect(
+        (await b.t.query(api.pages.getPublished, { placeId }))?.claims.map((row) => row._id),
+      ).toEqual([claimId]);
+    }
+  });
   it.each([undefined, false, true])(
     "a steward publishes a real place with no owner involved (agreementRecorded=%s)",
     async (agreementRecorded) => {
@@ -183,7 +266,7 @@ describe("real place publication", () => {
     });
   });
 
-  it("publishing is refused while the launch pack is incomplete and the message names the launch pack, not an owner", async () => {
+  it("before launch, a real place without an OSM ref cannot go public, with the existing launch-pack message", async () => {
     const { b, creator } = await setup();
     const placeId = await addPlace(b, { createdBy: creator });
     expect(region.regionPolicy("nagasaki").realBusinessesDraftOnly).toBe(true);
@@ -287,6 +370,7 @@ describe("real place publication", () => {
   });
 
   it("going back to draft hides it from anonymous callers", async () => {
+    completeLaunchPack();
     const { b, creator, steward } = await setup();
     const placeId = await addPlace(b, { createdBy: creator, visibility: "public" });
     const claimId = await addClaim(b, { placeId, status: "published" });
@@ -308,7 +392,119 @@ describe("real place publication", () => {
   });
 });
 
+describe("synthetic pre-launch open listing content", () => {
+  async function fixture() {
+    const world = await setup();
+    const { b, creator, owner, steward } = world;
+    const placeId = await addPlace(b, { createdBy: creator, visibility: "public" });
+    await addOsmRef(b, placeId);
+    await addOwner(b, placeId, owner, steward);
+    const interviewId = await addInterview(b, {
+      placeId,
+      interviewerId: creator,
+      ownerPersonId: owner,
+    });
+    const { transcriptId } = await addCorrectedTranscript(b, { interviewId, createdBy: creator });
+    const claimId = await addClaim(b, {
+      placeId,
+      origin: "interview",
+      transcriptId,
+      status: "published",
+    });
+    await b.as("steward").mutation(api.pages.compose, { placeId });
+    return { ...world, placeId, claimId };
+  }
+
+  it("before launch, a public OSM place hides its page and claims from signed-out and unrelated signed-in viewers", async () => {
+    const { b, placeId } = await fixture();
+    for (const caller of [b.t, b.as("user"), b.as("other")]) {
+      expect(await caller.query(api.places.get, { placeId })).toMatchObject({
+        visibility: "public",
+        names: expect.any(Array),
+        pin: expect.any(Object),
+        dataSources: [expect.objectContaining({ provider: "osm", licence: "ODbL-1.0" })],
+      });
+      expect(await caller.query(api.pages.getPublished, { placeId })).toBeNull();
+      expect(await errorCode(caller.query(api.claims.listForPlace, { placeId }))).toBe("forbidden");
+    }
+  });
+
+  it("before launch, its steward, creator and verified owner still see its page and claims", async () => {
+    const { b, placeId, claimId } = await fixture();
+    for (const viewer of ["steward", "creator", "owner"]) {
+      expect(
+        (await b.as(viewer).query(api.pages.getPublished, { placeId }))?.claims.map(
+          (claim) => claim._id,
+        ),
+      ).toEqual([claimId]);
+      expect(
+        (await b.as(viewer).query(api.claims.listForPlace, { placeId })).map((claim) => claim._id),
+      ).toEqual([claimId]);
+      expect(
+        (await b.as(viewer).query(api.places.listForMap, { regionId: "nagasaki" }))[0]?.hasStory,
+      ).toBe(true);
+    }
+  });
+
+  it("before launch, listForMap reports hasStory false to the public for a real place with a published page", async () => {
+    const { b, placeId } = await fixture();
+    for (const caller of [b.t, b.as("user"), b.as("other")]) {
+      expect(await caller.query(api.places.listForMap, { regionId: "nagasaki" })).toEqual([
+        expect.objectContaining({ _id: placeId, hasStory: false }),
+      ]);
+    }
+  });
+
+  it("before launch, even open-text claims on a real listing stay behind the composed-page gate", async () => {
+    const { b, creator } = await setup();
+    const placeId = await addPlace(b, { createdBy: creator, visibility: "public" });
+    await addOsmRef(b, placeId);
+    const id = await addClaim(b, { placeId, origin: "open_text", status: "published" });
+    await addPage(b, {
+      placeId,
+      sentences: [{ lang: "ja", text: "Synthetic open text", claimIds: [id] }],
+    });
+    expect(await b.t.query(api.pages.getPublished, { placeId })).toBeNull();
+    expect((await b.as("creator").query(api.pages.getPublished, { placeId }))?.claims[0]?._id).toBe(
+      id,
+    );
+  });
+
+  it("before launch, only creator posts already allowed by today's consent rules remain public", async () => {
+    const { b, placeId, creator, steward } = await fixture();
+    await addSource(b, { placeId, addedBy: creator });
+    const consented = await addSource(b, { placeId, addedBy: creator, demoConsentBy: steward });
+    expect((await b.t.query(api.sources.listForPlace, { placeId })).map((row) => row._id)).toEqual([
+      consented,
+    ]);
+  });
+
+  it("the mock Demo Cafe is unaffected", async () => {
+    const { b, steward } = await setup();
+    const creator = await addPerson(b, "mock-demo-creator", "creator", { isMock: true });
+    const placeId = await addPlace(b, {
+      createdBy: creator,
+      visibility: "demo_public",
+      slug: "synthetic-demo-cafe",
+    });
+    const id = await addClaim(b, { placeId, status: "published", isMock: true });
+    await addPage(b, {
+      placeId,
+      sentences: [{ lang: "ja", text: "Synthetic Demo Cafe story", claimIds: [id] }],
+    });
+    const sourceId = await addSource(b, { placeId, addedBy: creator, demoConsentBy: steward });
+    expect((await b.t.query(api.pages.getPublished, { placeId }))?.claims[0]?._id).toBe(id);
+    expect((await b.t.query(api.sources.listForPlace, { placeId }))[0]?._id).toBe(sourceId);
+    expect((await b.t.query(api.places.listForMap, { regionId: "nagasaki" }))[0]).toMatchObject({
+      _id: placeId,
+      hasStory: true,
+      isMock: true,
+    });
+  });
+});
+
 describe("public real-place content", () => {
+  beforeEach(completeLaunchPack);
   it("an owner-confirmed published claim shows on a public place to an anonymous caller and a proposed one does not", async () => {
     const { b, creator, owner, steward } = await setup();
     const placeId = await addPlace(b, { createdBy: creator, visibility: "public" });
@@ -564,15 +760,11 @@ it("listForMap makes a bounded number of reads (does not scan)", async () => {
   ).toEqual([real, mock].sort());
 });
 
-it("listForMap caps the public visibility and the combined result at 200", async () => {
-  // A read budget, far under Convex's real 4,096 ranges: three index ranges per place (names, pin and
-  // whether a published page exists for the yellow "story" tab) plus a few for the visibility queries.
-  const b = newBackend(modules, {
-    transactionLimits: { documentsRead: 210, databaseQueries: 610 },
-  });
+it("listForMap returns more than 200 places to a signed-out visitor and caps the combined result at 1200", async () => {
+  const b = newBackend(modules, { transactionLimits: { databaseQueries: 4096 } });
   const creator = await addPerson(b, "creator", "creator");
   await b.t.run(async (ctx) => {
-    for (let i = 0; i < 201; i++)
+    for (let i = 0; i < 1201; i++)
       await ctx.db.insert("place", {
         regionId: "nagasaki",
         slug: `fixture-${i}`,
@@ -581,5 +773,40 @@ it("listForMap caps the public visibility and the combined result at 200", async
         isMock: false,
       });
   });
-  expect(await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).toHaveLength(200);
+  expect(await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).toHaveLength(1200);
+});
+
+it("a steward's map of 1200 named, pinned places stays within Convex's 4,096 index ranges", async () => {
+  // The steward is the worst case: every place also checks for a published page (the story tab).
+  const b = newBackend(modules, { transactionLimits: { databaseQueries: 4096 } });
+  const steward = await addPerson(b, "steward", "steward");
+  await b.t.run(async (ctx) => {
+    for (let i = 0; i < 1201; i++) {
+      const placeId = await ctx.db.insert("place", {
+        regionId: "nagasaki",
+        slug: `fixture-${i}`,
+        visibility: "public",
+        createdBy: steward,
+        isMock: false,
+      });
+      await ctx.db.insert("placeName", {
+        placeId,
+        lang: "ja",
+        script: "kanji",
+        value: `試験店${i}`,
+        isPrimary: true,
+        confirmedBy: steward,
+      });
+      await ctx.db.insert("pin", {
+        placeId,
+        lat: 32.75,
+        lng: 129.87,
+        placedBy: steward,
+        placedAt: 0,
+      });
+    }
+  });
+  expect(await b.as("steward").query(api.places.listForMap, { regionId: "nagasaki" })).toHaveLength(
+    1200,
+  );
 });

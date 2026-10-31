@@ -2,6 +2,7 @@ import { errorText } from "@/components/layout/error-text";
 import type { Script } from "@/lib/domain/constants";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { candidateMessages } from "@/lib/i18n/messages/candidates";
+import { detectScript } from "@/lib/osm/tags";
 import { getRegionConfig } from "@/lib/region/registry";
 import type { RegionConfig } from "@/lib/region/schema";
 
@@ -51,12 +52,7 @@ export function showChainBadge(candidate: Pick<Candidate, "isChain">, localOnly:
   return !localOnly && candidate.isChain === true;
 }
 
-export function detectScript(value: string): Script {
-  // A mixed Japanese name follows its most specific script, even with Latin brand text.
-  if (/\p{Script=Han}/u.test(value)) return "kanji";
-  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(value)) return "kana";
-  return "latin";
-}
+export { detectScript };
 
 export function buildNameSet(
   inputs: readonly NameInput[],
