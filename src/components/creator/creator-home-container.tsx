@@ -8,7 +8,9 @@ import { ErrorPage } from "@/components/layout/error-page";
 import { PageContainer } from "@/components/layout/page-container";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { creatorMessages } from "@/lib/i18n/messages/creator";
-import { deriveRegionPolicy, type RegionConfig } from "@/lib/region";
+import type { RegionConfig } from "@/lib/region";
+// The schema module, not the region index: the index reads region files from disk on the server.
+import { deriveRegionPolicy } from "@/lib/region/schema";
 import { api } from "../../../convex/_generated/api";
 import { searchPlaces } from "./geo-search";
 import { CreatorHomeView } from "./creator-home-view";
