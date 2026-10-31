@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { categoryForTags } from "../src/lib/osm/categories";
+import { categoryForTags, isForVisitors } from "../src/lib/osm/categories";
 import { selectListings, type ListingCandidate } from "../src/lib/osm/listings";
 import { getRegionConfig } from "../src/lib/region/registry";
 import { createCliRunner, type ConvexRunner } from "./lib/convex-run";
@@ -44,7 +44,7 @@ export async function runPublish(
 ) {
   if (argv.includes("--help")) {
     options.log(
-      "Usage: npx tsx scripts/publish-osm-listings.ts --region nagasaki --steward <personId> [--dry-run] [--prod]\nUses Convex admin CLI credentials. --steward must name an existing steward acting on the owner's explicit instruction. Dry run reads all candidate pages and writes nothing. Without --dry-run, dismisses duplicates in batches of 100 and publishes listings in batches of 50. --prod targets production; otherwise uses the configured development deployment. Does not change the launch pack, invite-only access or noindex.",
+      "Usage: npx tsx scripts/publish-osm-listings.ts --region nagasaki --steward <personId> [--dry-run] [--prod]\nUses Convex admin CLI credentials. --steward must name an existing steward acting on the owner's explicit instruction. Dry run reads all candidate pages and writes nothing. Without --dry-run, takes published errands off the map (batches of 100), dismisses duplicates in batches of 100 and publishes listings in batches of 50. --prod targets production; otherwise uses the configured development deployment. Does not change the launch pack, invite-only access or noindex.",
     );
     options.log(attribution);
     return;
@@ -66,6 +66,12 @@ export async function runPublish(
     focusCategories:
       region.categories?.filter((category) => category.focus).map((category) => category.key) ?? [],
   });
+  // Listings published before the errand rule existed; the mutation checks each one again.
+  const errands = candidates.filter(
+    (candidate) =>
+      candidate.confirmedPlaceId !== undefined &&
+      !isForVisitors(candidate.tags, candidate.isChain === true),
+  );
   const categories: Record<string, number> = {};
   for (const candidate of selection.publish) {
     const category = candidate.category ?? categoryForTags(candidate.tags);
@@ -78,10 +84,19 @@ export async function runPublish(
     duplicates: selection.duplicates.length,
     skipped: countReasons(selection.skipped),
     firstFiveNames: selection.publish.slice(0, 5).map((candidate) => candidate.tags.name),
+    publishedErrands: errands.length,
   });
   if (!flags.dryRun) {
     const args = { regionId: region.id, stewardPersonId: flags.steward };
-    const totals = { dismissed: 0, dismissalSkipped: 0, published: 0 };
+    const totals = { hidden: 0, hideSkipped: 0, dismissed: 0, dismissalSkipped: 0, published: 0 };
+    for (let i = 0; i < errands.length; i += 100) {
+      const result = (await run("osmSeed:hideListings", {
+        ...args,
+        candidateIds: errands.slice(i, i + 100).map((candidate) => candidate._id),
+      })) as { hidden: number; skipped: number };
+      totals.hidden += result.hidden;
+      totals.hideSkipped += result.skipped;
+    }
     const publishSkipped: { reason: string }[] = [];
     for (let i = 0; i < selection.duplicates.length; i += 100) {
       const result = (await run("osmSeed:dismissDuplicates", {

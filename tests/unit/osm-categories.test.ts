@@ -1,9 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { categoryForTags } from "../../src/lib/osm/categories";
+import { categoryForTags, isForVisitors } from "../../src/lib/osm/categories";
 import { isChainFromTags, namesFromTags, pickTags } from "../../src/lib/osm/tags";
 
 // All fixtures are synthetic; none describe a real business.
 describe("OSM categories and tags", () => {
+  it("isForVisitors keeps places worth a visit and drops errands and chains of shops and food", () => {
+    const visit = (tags: Record<string, string>, isChain = false) =>
+      isForVisitors({ name: "架空", ...tags }, isChain);
+    for (const shop of ["confectionery", "bakery", "books", "second_hand", "alcohol", "gift;books"])
+      expect(visit({ shop }), shop).toBe(true);
+    for (const shop of ["convenience", "supermarket", "car", "hairdresser", "mobile_phone", "yes"])
+      expect(visit({ shop }), shop).toBe(false);
+    expect(visit({ craft: "pottery" })).toBe(true);
+    expect(visit({ craft: "caterer" })).toBe(false);
+    // A shop tag decides over a craft tag; other categories are not shops.
+    expect(visit({ shop: "convenience", craft: "confectionery" })).toBe(false);
+    for (const tags of [
+      { amenity: "cafe" },
+      { tourism: "museum" },
+      { historic: "memorial" },
+    ] as Record<string, string>[])
+      expect(visit(tags)).toBe(true);
+    // A chain shop or place to eat is the same everywhere; a chain hotel still gives a traveller a bed.
+    expect(visit({ shop: "books" }, true)).toBe(false);
+    expect(visit({ amenity: "fast_food" }, true)).toBe(false);
+    expect(visit({ tourism: "hotel" }, true)).toBe(true);
+  });
   it("isChainFromTags: brand, brand:wikidata, blank brand, none", () => {
     expect(isChainFromTags({ brand: "Synthetic Brand" })).toBe(true);
     expect(isChainFromTags({ "brand:wikidata": "Q123" })).toBe(true);

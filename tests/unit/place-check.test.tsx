@@ -31,16 +31,17 @@ for (const locale of ["ja", "en"] as const) {
   const check = (props: Partial<Parameters<typeof PlaceCheck>[0]> = {}) =>
     render(<PlaceCheck locale={locale} now={NOW} {...props} />);
 
-  it(`labels an open-data listing and shows where it came from (${locale})`, () => {
-    const html = check({ osmRef: "node/42", actions: actions(false) });
+  it(`labels an open-data listing and points to the data page, naming no provider (${locale})`, () => {
+    const html = check({ fromOpenData: true, actions: actions(false) });
     expect(html).toContain('data-check="unconfirmed"');
     expect(html).toMatch(/<details[^>]*class="[^"]*border-dashed/);
     expect(html).toContain(
       `<span class="min-w-0 flex-1">${badgeMessages[locale].unconfirmed}</span>`,
     );
-    expect(html).toContain(m.fromOsm);
+    expect(html).toContain(m.fromOpenData);
     expect(html).toContain(m.noOneYet);
-    expect(html).toContain('href="https://www.openstreetmap.org/node/42"');
+    expect(html).toContain(`href="/${locale}/notice"`);
+    expect(html).not.toMatch(/OpenStreetMap|openstreetmap\.org/);
     expect(html).toContain(m.signInToCheck);
     expect(html).toContain(`href="/${locale}/sign-in"`);
     expect(html).not.toContain(button(m.stillHere));
@@ -51,7 +52,7 @@ for (const locale of ["ja", "en"] as const) {
     expect(member).toContain(button(m.stillHere));
     expect(member).toContain(button(m.somethingWrong));
     expect(member).not.toContain(m.signInToCheck);
-    expect(member).not.toContain(m.fromOsm);
+    expect(member).not.toContain(m.fromOpenData);
     for (const loading of [check({ actions: actions(undefined) }), check()]) {
       expect(loading).not.toContain(button(m.stillHere));
       expect(loading).not.toContain(m.signInToCheck);
@@ -84,8 +85,8 @@ for (const locale of ["ja", "en"] as const) {
       />,
     );
     expect(real).toContain('data-check="unconfirmed"');
-    expect(real).toContain('href="https://www.openstreetmap.org/way/7"');
-    expect(real.indexOf("data-check=")).toBeLessThan(real.indexOf('id="place-data-heading"'));
+    expect(real).toContain(`href="/${locale}/notice"`);
+    expect(real.indexOf("data-check=")).toBeLessThan(real.indexOf('id="where-heading"'));
     const demo = render(
       <PlaceView locale={locale} region={region} place={place} page={null} sources={[]} />,
     );
