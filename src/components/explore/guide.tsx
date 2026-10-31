@@ -1,4 +1,4 @@
-import { messagesFor, type Locale } from "@/lib/i18n";
+import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { publicMessages } from "@/lib/i18n/messages/public";
 
 export function ExploreGuide({ locale, onDismiss }: { locale: Locale; onDismiss?(): void }) {
@@ -14,13 +14,21 @@ export function ExploreGuide({ locale, onDismiss }: { locale: Locale; onDismiss?
         <li>{m.guide2}</li>
         <li>{m.guide3}</li>
       </ol>
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="mt-2 min-h-11 rounded-[10px] bg-kon px-4 font-bold text-white"
-      >
-        {m.gotIt}
-      </button>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4">
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="min-h-11 rounded-[10px] bg-kon px-4 font-bold text-white"
+        >
+          {m.gotIt}
+        </button>
+        <a
+          className="inline-flex min-h-11 items-center text-ai underline"
+          href={localePath(locale, "/about")}
+        >
+          {m.whyNoren}
+        </a>
+      </div>
     </aside>
   );
 }
