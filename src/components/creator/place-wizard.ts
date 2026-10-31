@@ -76,7 +76,8 @@ export function stepError(
   const errors = validatePlaceDraft(draft, region);
   if (step === 1) return errors.pin;
   if (step === 2) return Object.entries(errors).find(([key]) => key !== "pin")?.[1];
-  return undefined;
+  // A place goes on the map as soon as it is added, and the map needs to know what kind it is.
+  return draft.category ? undefined : "no_category";
 }
 
 export function wizardStep(value: string | null): WizardStep {

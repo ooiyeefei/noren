@@ -25,12 +25,14 @@ export function CreatorHomeView({
   places,
   children,
   adding = !!children,
+  canInterview = true,
 }: {
   locale: Locale;
   region: RegionConfig;
   places: CreatorPlace[];
   children?: ReactNode;
   adding?: boolean;
+  canInterview?: boolean;
 }) {
   const m = messagesFor(creatorMessages, locale);
   const add = (
@@ -59,7 +61,9 @@ export function CreatorHomeView({
       {!adding && (
         <StepsPanel
           title={m.whatToDo}
-          steps={[m.guideAdd, m.guidePosts, m.guideInterview]}
+          steps={
+            canInterview ? [m.guideAdd, m.guidePosts, m.guideInterview] : [m.guideAdd, m.guidePosts]
+          }
           action={add}
           done={places.length > 0}
           lang={locale}

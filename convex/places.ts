@@ -19,6 +19,7 @@ import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
 import { readHasPublishedPage, readMapNames, readMapPin } from "./lib/mapCopies";
 import { withMock } from "./lib/mock";
+import { limitContribution } from "./lib/rateLimit";
 import {
   isCategoryKey,
   isInsideRegion,
@@ -256,14 +257,21 @@ export const listMine = query({
   args: { regionId: v.string() },
   returns: v.array(placeSummary),
   handler: async (ctx, { regionId }) => {
-    const person = await requireRole(ctx, ["creator"]);
+    const person = await requirePerson(ctx);
+    // Places the person made by hand, newest first. A steward is recorded as the maker of every
+    // listing they published from open data; those are not confirmed at creation and carry an
+    // open-data reference, so they are left out.
     const places = await ctx.db
       .query("place")
       .withIndex("by_createdBy", (q) => q.eq("createdBy", person._id))
+      .order("desc")
+      .filter((q) =>
+        q.and(q.eq(q.field("regionId"), regionId), q.neq(q.field("confirmedAt"), undefined)),
+      )
       .take(200);
-    return await Promise.all(
-      places.filter((place) => place.regionId === regionId).map((place) => summary(ctx, place)),
-    );
+    const mine: Doc<"place">[] = [];
+    for (const place of places) if (!(await isOpenListing(ctx, place._id))) mine.push(place);
+    return await Promise.all(mine.map((place) => summary(ctx, place)));
   },
 });
 
@@ -316,16 +324,30 @@ export const create = mutation({
     names: v.array(nameInput),
     pin: pinView,
     category: v.optional(v.string()),
+    /**
+     * Put the place on the public map now (FR-032): its names, pin and category are public facts the
+     * person checked there, like a listing from open data. Stories about the business still wait for
+     * its owner. Without it the place starts as a draft, as a creator's business page does.
+     */
+    onMap: v.optional(v.boolean()),
   },
   returns: v.object({ placeId: v.id("place"), slug: v.string() }),
   handler: async (ctx, args) => {
-    const person = await requireRole(ctx, ["creator"]);
+    // Any signed-in member who has been there may add a missing place (FR-032).
+    const person = await requirePerson(ctx);
     if (args.kind === "landmark" && person.role !== "steward") {
       throw appError("forbidden", "only a steward may mark a place as a landmark");
     }
     const names = checkedNames(args.regionId, args.names);
     checkPin(args.regionId, args.pin);
     if (args.category !== undefined) checkCategory(args.regionId, args.category);
+    if (args.onMap && (args.category === undefined || args.kind === "landmark" || person.isMock)) {
+      throw appError(
+        "invalid_input",
+        "a place goes on the map with a category, as a real business, from a real account",
+      );
+    }
+    await limitContribution(ctx, person, "place");
     const slug = await uniqueSlug(ctx, args.regionId, slugBase(names));
     const placeId = await ctx.db.insert(
       "place",
@@ -334,7 +356,7 @@ export const create = mutation({
         kind: args.kind,
         category: args.category,
         slug,
-        visibility: "draft" as const,
+        visibility: args.onMap ? ("public" as const) : ("draft" as const),
         createdBy: person._id,
         // The person who placed the pin is the first to confirm the place (FR-030).
         confirmedAt: Date.now(),

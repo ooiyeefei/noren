@@ -9,9 +9,9 @@ import type { GeoCandidate } from "@/lib/ports";
 import { activeRegionConfig } from "@/lib/region/registry";
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/convex/server", () => ({ requireRoleOnServer: vi.fn() }));
+vi.mock("@/lib/convex/server", () => ({ requirePersonOnServer: vi.fn() }));
 
-import { requireRoleOnServer } from "@/lib/convex/server";
+import { requirePersonOnServer } from "@/lib/convex/server";
 
 const region = activeRegionConfig();
 const userAgent = "Noren-test/1.0 (+https://example.invalid/geo-policy)";
@@ -70,7 +70,7 @@ afterEach(() => {
 describe("geo search route", () => {
   it.each([
     ["signed out", 401, "unauthenticated"],
-    ["a user role", 403, "forbidden"],
+    ["refused", 403, "forbidden"],
   ] as const)("%s is %s and never calls the provider", async (_label, status, code) => {
     const { get, fetch, authorize } = setup();
     authorize.mockImplementation(async () => ({
@@ -220,7 +220,7 @@ describe("geo search route", () => {
   });
 
   it("route.ts wires the real handler", async () => {
-    vi.mocked(requireRoleOnServer).mockImplementation(async () => ({
+    vi.mocked(requirePersonOnServer).mockImplementation(async () => ({
       ok: false,
       response: jsonError("unauthenticated", "sign in to continue"),
     }));
@@ -231,7 +231,8 @@ describe("geo search route", () => {
       401,
       "unauthenticated",
     );
-    expect(requireRoleOnServer).toHaveBeenCalledWith(["creator"]);
+    // Any signed-in member may search for a place to add (FR-032).
+    expect(requirePersonOnServer).toHaveBeenCalledWith();
     expect(fetch).not.toHaveBeenCalled();
   });
 });

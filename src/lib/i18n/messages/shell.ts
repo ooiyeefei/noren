@@ -20,7 +20,7 @@ export const shellMessages = defineMessages({
     creator: "クリエイター",
     business_owner: "店舗オーナー",
     steward: "運営担当者",
-    creatorPages: "自分のお店",
+    creatorPages: "追加した場所",
     ownerPages: "自分の店舗",
     stewardPages: "運営デスク",
     pageForRoles: "このページは{roles}向けです。",

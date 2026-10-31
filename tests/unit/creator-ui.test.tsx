@@ -16,6 +16,7 @@ import { loadRegions } from "@/lib/region";
 import { creatorMessages } from "@/lib/i18n/messages/creator";
 import { useMutation, useQuery } from "convex/react";
 import { getFunctionName } from "convex/server";
+import { CreatorHomeContainer } from "@/components/creator/creator-home-container";
 import { PlaceEditorGate } from "@/components/creator/place-editor-container";
 
 // Views run without a DOM; this harness drives their real handlers and rerenders state.
@@ -47,6 +48,9 @@ vi.mock("react", async (importOriginal) => {
       return state.values[index];
     },
     useId: () => (hooks.current ? "test-view" : react.useId()),
+    // Tests pass an already-settled promise carrying its value, as React does once one resolves.
+    use: (usable: Promise<unknown>) =>
+      hooks.current ? (usable as unknown as { value: unknown }).value : react.use(usable),
     useEffect: (...args: Parameters<typeof react.useEffect>) => {
       if (!hooks.current) react.useEffect(...args);
     },
@@ -86,7 +90,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => router,
+  useSearchParams: () => new URLSearchParams("add=1&step=3"),
+}));
 vi.mock("convex/react", () => ({ useQuery: vi.fn(), useMutation: vi.fn() }));
 vi.mock("maplibre-gl", () => {
   throw new Error("No map runtime during SSR");
@@ -141,7 +149,7 @@ describe("creator UI", () => {
       .map((step) => renderToStaticMarkup(<NewPlaceView {...newProps} step={step} />))
       .join("");
     for (const text of [
-      "カテゴリー（任意）",
+      "カテゴリー",
       "カフェ・喫茶店",
       "場所の名前",
       "漢字",
@@ -543,7 +551,7 @@ function invokeComponent(node: ReactNode): ReactNode {
   return (node.type as (props: Record<string, unknown>) => ReactNode)(node.props);
 }
 
-function editorContainer() {
+function editorContainer(role: "user" | "creator" = "creator") {
   const place = {
     _id: "mock-place",
     slug: "mock-place",
@@ -563,6 +571,8 @@ function editorContainer() {
         return place._id;
       case "places:get":
         return place;
+      case "people:current":
+        return { _id: "mock-person", role, isMock: true, displayName: "Mock person" };
       case "sources:listForPlace":
       case "interviews:listForPlace":
         return [];
@@ -635,4 +645,143 @@ it("details Save still rejects a missing name before any mutation", () => {
   current().onSaveDetails();
   expect(current().errors?.names).toBe("no_name");
   for (const mutation of mutations.values()) expect(mutation).not.toHaveBeenCalled();
+});
+
+it("a member who added the place links posts but is not offered owner interviews", () => {
+  const { current } = editorContainer("user");
+  expect(current().canInterview).toBe(false);
+  expect(
+    vi
+      .mocked(useQuery)
+      .mock.calls.filter(([reference]) => getFunctionName(reference) === "interviews:listForPlace")
+      .every(([, args]) => args === "skip"),
+  ).toBe(true);
+  const html = renderToStaticMarkup(<PlaceEditorView {...editorProps} canInterview={false} />);
+  expect(renderToStaticMarkup(<PlaceEditorView {...editorProps} />)).toContain(
+    creatorMessages.en.ownerInterview,
+  );
+  expect(html).not.toContain(creatorMessages.en.ownerInterview);
+  expect(html).not.toContain(creatorMessages.en.startInterview);
+  expect(html).toContain('id="posts"');
+  expect(editorContainer("creator").current().canInterview).toBe(true);
+});
+
+it("the last wizard step needs a category before the place can go on the map", () => {
+  const m = creatorMessages.ja;
+  const without = renderToStaticMarkup(<NewPlaceView {...newProps} step={3} />);
+  expect(without).toMatch(
+    new RegExp(`disabled=""[^>]*aria-describedby="[^"]+"[^>]*>${m.create}</button>`),
+  );
+  expect(without).toContain(m.no_category);
+  expect(without).not.toContain(`>${m.noCategory}</button>`);
+  const chosen = renderToStaticMarkup(
+    <NewPlaceView {...newProps} step={3} draft={{ ...newProps.draft, category: "cafe" }} />,
+  );
+  expect(chosen).not.toMatch(new RegExp(`disabled=""[^>]*>${m.create}</button>`));
+  expect(chosen).not.toContain(m.no_category);
+});
+
+describe("adding a place from the wizard", () => {
+  async function addPlace(person: { role: string; isMock: boolean }) {
+    vi.mocked(useQuery).mockImplementation((...args: Parameters<typeof useQuery>) => {
+      switch (getFunctionName(args[0])) {
+        case "people:current":
+          return { _id: "mock-person", displayName: "Mock person", ...person };
+        case "places:listMine":
+          return [];
+        default:
+          throw new Error(`Unexpected query ${getFunctionName(args[0])}`);
+      }
+    });
+    const create = vi
+      .fn<(...args: unknown[]) => Promise<{ placeId: string; slug: string }>>()
+      .mockResolvedValue({ placeId: "new-place", slug: "new-place" });
+    vi.mocked(useMutation).mockImplementation(() =>
+      Object.assign(create, { withOptimisticUpdate: vi.fn() }),
+    );
+    const render = mountView(
+      () =>
+        CreatorHomeContainer({
+          params: Object.assign(Promise.resolve({ lang: "ja" }), {
+            status: "fulfilled",
+            value: { lang: "ja" },
+          }),
+          locale: "ja",
+          region,
+        }),
+      {},
+    );
+    const wizard = () => element<NewPlaceViewProps>(render(), NewPlaceView).props;
+    wizard().onChange({
+      kind: "business",
+      category: "cafe",
+      names: [{ lang: "ja", script: "kanji", value: "仮の場所", isPrimary: true }],
+      pin: { lat: 32.75, lng: 129.87 },
+    });
+    wizard().onCreate();
+    await vi.waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith("/ja/creator/places/new-place"),
+    );
+    return create.mock.calls[0]![0] as Record<string, unknown>;
+  }
+  it("puts a member's place straight on the map", async () => {
+    for (const role of ["user", "creator", "business_owner", "steward"]) {
+      expect(await addPlace({ role, isMock: false })).toMatchObject({
+        category: "cafe",
+        onMap: true,
+      });
+      vi.clearAllMocks();
+    }
+  });
+  it("sends nothing while the place has no category", async () => {
+    vi.mocked(useQuery).mockImplementation((...args: Parameters<typeof useQuery>) =>
+      getFunctionName(args[0]) === "people:current"
+        ? { _id: "mock-person", displayName: "Mock person", role: "user", isMock: false }
+        : [],
+    );
+    const create = vi.fn();
+    vi.mocked(useMutation).mockImplementation(() =>
+      Object.assign(create, { withOptimisticUpdate: vi.fn() }),
+    );
+    const render = mountView(
+      () =>
+        CreatorHomeContainer({
+          params: Object.assign(Promise.resolve({ lang: "ja" }), {
+            status: "fulfilled",
+            value: { lang: "ja" },
+          }),
+          locale: "ja",
+          region,
+        }),
+      {},
+    );
+    const wizard = () => element<NewPlaceViewProps>(render(), NewPlaceView).props;
+    wizard().onChange({
+      kind: "business",
+      names: [{ lang: "ja", script: "kanji", value: "仮の場所", isPrimary: true }],
+      pin: { lat: 32.75, lng: 129.87 },
+    });
+    wizard().onCreate();
+    await Promise.resolve();
+    expect(create).not.toHaveBeenCalled();
+    expect(wizard().pending).toBe(false);
+  });
+  it("keeps a demo account's place off the map", async () => {
+    expect(await addPlace({ role: "user", isMock: true })).toMatchObject({ onMap: false });
+  });
+});
+
+it("a member's guide leaves out the owner interview", () => {
+  for (const locale of ["ja", "en"] as const) {
+    const m = creatorMessages[locale];
+    const member = renderToStaticMarkup(
+      <CreatorHomeView locale={locale} region={region} places={[]} canInterview={false} />,
+    );
+    expect(member).toContain(m.guideAdd);
+    expect(member).toContain(m.guidePosts);
+    expect(member).not.toContain(m.guideInterview);
+    expect(
+      renderToStaticMarkup(<CreatorHomeView locale={locale} region={region} places={[]} />),
+    ).toContain(m.guideInterview);
+  }
 });

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { CreatorErrorBoundary } from "@/components/creator/creator-home-container";
 import { PlaceEditorContainer } from "@/components/creator/place-editor-container";
 import { RequireRole } from "@/components/layout/require-role";
+import { ROLES } from "@/lib/domain/constants";
 import { getLocale } from "@/lib/i18n/server";
 import { getActiveRegion } from "@/lib/region";
 
@@ -16,7 +17,8 @@ async function Content({ params }: { params: Promise<{ lang: string; placeId: st
   const locale = await getLocale();
   return (
     <CreatorErrorBoundary locale={locale}>
-      <RequireRole locale={locale} roles={["creator"]}>
+      {/* Any signed-in member may add a missing place and link posts to it (FR-032). */}
+      <RequireRole locale={locale} roles={ROLES}>
         <PlaceEditorContainer params={params} locale={locale} region={getActiveRegion()} />
       </RequireRole>
     </CreatorErrorBoundary>

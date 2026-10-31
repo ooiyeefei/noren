@@ -126,10 +126,13 @@ it("a steward sees creator and steward links", () => {
   expect(html).toContain('href="/en/creator"');
   expect(html).toContain('href="/en/steward"');
 });
-it("a business owner sees the owner link", () => {
+it("a business owner sees the owner link and the places they added", () => {
   const html = account("business_owner");
   expect(html).toContain('href="/en/owner"');
-  expect(html).not.toContain('href="/en/creator"');
+  expect(html).toContain('href="/en/creator"');
+});
+it("a visitor can reach the places they added", () => {
+  expect(account("user")).toContain('href="/en/creator"');
 });
 it("a mock account shows the Demo badge", () => {
   expect(account("user", true)).toContain('data-badge="demo"');
@@ -285,9 +288,9 @@ it("keeps the role and demo line inside the menu, with localised trigger names",
 
 it("lists exactly each role's destinations, in order, in both languages", () => {
   const paths = {
-    user: [""],
+    user: ["/creator", ""],
     creator: ["/creator", ""],
-    business_owner: ["/owner", ""],
+    business_owner: ["/creator", "/owner", ""],
     steward: ["/creator", "/steward", ""],
   };
   for (const locale of SUPPORTED_LOCALES) {

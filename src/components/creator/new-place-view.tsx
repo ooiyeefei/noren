@@ -637,7 +637,8 @@ export function NewPlaceView({
             <Button
               className="min-h-11 rounded-[10px] px-5 whitespace-normal"
               type="button"
-              disabled={pending}
+              disabled={!!reason || pending}
+              aria-describedby={reason ? reasonId : undefined}
               onClick={onCreate}
             >
               {pending ? m.pending : m.create}
@@ -662,7 +663,7 @@ export function CategoryChips({
 }) {
   const m = messagesFor(creatorMessages, locale);
   const options = categoryOptions(region, locale);
-  const choices = [{ key: "", label: m.noCategory }, ...options];
+  const choices: { key: string; label: string }[] = [...options];
   if (value && !options.some((option) => option.key === value))
     choices.push({ key: value, label: value });
   return (

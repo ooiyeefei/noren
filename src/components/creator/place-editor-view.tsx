@@ -43,6 +43,7 @@ export type PlaceEditorViewProps = {
   sourceError?: keyof SourceDraft;
   posts: EmbedSourceView[];
   interviews: EditorInterview[];
+  canInterview?: boolean;
   interviewLanguage: string;
   pending?: string;
   error?: string;
@@ -69,6 +70,7 @@ export function PlaceEditorView(props: PlaceEditorViewProps) {
     sourceError,
     posts,
     interviews,
+    canInterview = true,
     interviewLanguage,
     pending,
     error,
@@ -147,64 +149,69 @@ export function PlaceEditorView(props: PlaceEditorViewProps) {
       {error && <Alert>{error}</Alert>}
       {saved && <p role="status">{m.saved}</p>}
       {!place.canEdit && <p>{m.readOnly}</p>}
-      <section className="space-y-4 border-b border-line pb-6" aria-labelledby={`${id}-interviews`}>
-        <h2 id={`${id}-interviews`} className="text-[22px] font-bold">
-          {m.ownerInterview}
-        </h2>
-        {!interviews.length && <p>{m.noInterviews}</p>}
-        <ul className="space-y-2">
-          {interviews.map((interview) => (
-            <li
-              key={interview.id}
-              className="flex min-h-16 flex-wrap items-center gap-3 border-b border-line py-3"
-            >
-              <Link
-                className="inline-flex min-h-11 min-w-0 items-center break-words text-ai underline"
-                href={`/${locale}/creator/interviews/${interview.id}`}
+      {canInterview && (
+        <section
+          className="space-y-4 border-b border-line pb-6"
+          aria-labelledby={`${id}-interviews`}
+        >
+          <h2 id={`${id}-interviews`} className="text-[22px] font-bold">
+            {m.ownerInterview}
+          </h2>
+          {!interviews.length && <p>{m.noInterviews}</p>}
+          <ul className="space-y-2">
+            {interviews.map((interview) => (
+              <li
+                key={interview.id}
+                className="flex min-h-16 flex-wrap items-center gap-3 border-b border-line py-3"
               >
-                {m.interviewLabel
-                  .replace(
-                    "{language}",
-                    interview.language === "ja"
-                      ? m.interviewJapanese
-                      : interview.language === "en"
-                        ? m.interviewEnglish
-                        : interview.language,
-                  )
-                  .replace(
-                    "{status}",
-                    interview.status === "done"
-                      ? m.interviewFinished
-                      : m[interview.status].toLocaleLowerCase(locale),
-                  )}
-              </Link>
-              {interview.isMock && <DemoBadge locale={locale} />}
-            </li>
-          ))}
-        </ul>
-        {place.canEdit && (
-          <fieldset disabled={!!pending} className="flex flex-wrap items-end gap-3">
-            <div>
-              <Label htmlFor={`${id}-interview`}>{m.interviewLanguage}</Label>
-              <select
-                id={`${id}-interview`}
-                className="min-h-11 max-w-full rounded-[10px] border border-input p-2"
-                value={interviewLanguage}
-                onChange={(event) => props.onInterviewLanguage(event.target.value)}
+                <Link
+                  className="inline-flex min-h-11 min-w-0 items-center break-words text-ai underline"
+                  href={`/${locale}/creator/interviews/${interview.id}`}
+                >
+                  {m.interviewLabel
+                    .replace(
+                      "{language}",
+                      interview.language === "ja"
+                        ? m.interviewJapanese
+                        : interview.language === "en"
+                          ? m.interviewEnglish
+                          : interview.language,
+                    )
+                    .replace(
+                      "{status}",
+                      interview.status === "done"
+                        ? m.interviewFinished
+                        : m[interview.status].toLocaleLowerCase(locale),
+                    )}
+                </Link>
+                {interview.isMock && <DemoBadge locale={locale} />}
+              </li>
+            ))}
+          </ul>
+          {place.canEdit && (
+            <fieldset disabled={!!pending} className="flex flex-wrap items-end gap-3">
+              <div>
+                <Label htmlFor={`${id}-interview`}>{m.interviewLanguage}</Label>
+                <select
+                  id={`${id}-interview`}
+                  className="min-h-11 max-w-full rounded-[10px] border border-input p-2"
+                  value={interviewLanguage}
+                  onChange={(event) => props.onInterviewLanguage(event.target.value)}
+                >
+                  {languageOptions}
+                </select>
+              </div>
+              <Button
+                className="min-h-11 rounded-[10px] px-4 whitespace-normal"
+                type="button"
+                onClick={props.onStartInterview}
               >
-                {languageOptions}
-              </select>
-            </div>
-            <Button
-              className="min-h-11 rounded-[10px] px-4 whitespace-normal"
-              type="button"
-              onClick={props.onStartInterview}
-            >
-              {pending === "interview" ? m.pending : m.startInterview}
-            </Button>
-          </fieldset>
-        )}
-      </section>
+                {pending === "interview" ? m.pending : m.startInterview}
+              </Button>
+            </fieldset>
+          )}
+        </section>
+      )}
       {place.canEdit ? (
         <form
           onSubmit={(event) => {
