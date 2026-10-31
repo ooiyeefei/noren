@@ -82,7 +82,7 @@ function admin(locale: Locale): PlaceAdminProps {
         isMock: true,
         addedByMe: false,
         addedAt: 0,
-        shownToEveryone: false,
+        countsVisits: false,
       },
     ],
     onSource: noop,

@@ -1,4 +1,5 @@
-import type { PlaceKind } from "../../src/lib/domain/constants";
+import { ADAPTERS } from "../../src/lib/adapters";
+import { SOURCE_ADAPTER_IDS, type PlaceKind } from "../../src/lib/domain/constants";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { requirePerson } from "./auth";
@@ -140,14 +141,32 @@ export function isStoryShown(
   return story.status === "live" && story.isMock === place.isMock;
 }
 
-/** Whether anyone at all, signed in to the region or not, may see this post on its place. */
+/** Whether anyone at all, signed in or not, may see this post on its place. */
 export function isSourceShownToEveryone(
   place: Pick<Doc<"place">, "visibility" | "demoPublicBasis" | "isMock">,
   source: Pick<Doc<"source">, "status" | "sharedAt" | "demoConsentAt" | "isMock">,
 ): boolean {
+  return isPubliclyReadablePlace(place) && isSharedPublicly(place, source);
+}
+
+/**
+ * Whether a link to this post's original goes through Noren's counter, /out (FR-024): a post on a
+ * platform that everyone may see, whose stored address is still on that platform. A web page a
+ * member typed in is linked to directly, so Noren's address never forwards anyone to it.
+ */
+export function countsVisits(
+  place: Pick<Doc<"place">, "visibility" | "demoPublicBasis" | "isMock">,
+  source: Pick<
+    Doc<"source">,
+    "status" | "sharedAt" | "demoConsentAt" | "isMock" | "adapter" | "canonicalUrl"
+  >,
+): boolean {
+  const adapter = SOURCE_ADAPTER_IDS.find((id) => id === source.adapter);
   return (
-    (isPubliclyReadablePlace(place) || place.visibility === "pilot") &&
-    isSharedPublicly(place, source)
+    isSourceShownToEveryone(place, source) &&
+    adapter !== undefined &&
+    adapter !== "link_card" &&
+    ADAPTERS[adapter].matches(source.canonicalUrl)
   );
 }
 
@@ -161,6 +180,8 @@ export async function canSeeSource(
   if (source.placeId !== place._id || source.status !== "live") return false;
   return (
     isSourceShownToEveryone(place, source) ||
+    // A pilot place is for signed-in people, and the caller has let this one read it.
+    (place.visibility === "pilot" && isSharedPublicly(place, source)) ||
     (viewer !== null && source.addedBy === viewer._id) ||
     (await canManagePlace(ctx, viewer, place))
   );

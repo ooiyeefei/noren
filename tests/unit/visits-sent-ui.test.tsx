@@ -8,10 +8,15 @@ import { format } from "@/lib/i18n";
 import { creatorMessages } from "@/lib/i18n/messages/creator";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { loadRegions } from "@/lib/region";
-import { region, sources } from "../fixtures/public-ui";
+import { region } from "../fixtures/public-ui";
 
+// A Google Maps link shows as a card, so both of its links lead to the original.
 const linked = (fields: Partial<SourceViewLike>): SourceViewLike => ({
-  ...sources[2]!,
+  _id: "maps",
+  platform: "google_maps",
+  canonicalUrl: "https://maps.app.goo.gl/mock",
+  embed: { kind: "link", url: "https://maps.app.goo.gl/mock" },
+  title: "Mock cat cafe",
   isMock: false,
   addedAt: Date.UTC(2026, 9, 1),
   ...fields,
@@ -24,11 +29,11 @@ const anchors = (html: string) =>
   );
 
 describe("a link to a shared post's original", () => {
-  it("goes through Noren's counter only for a post everyone may see", () => {
+  it("goes through Noren's counter only for a post the server says is counted", () => {
     const feed = toStoryFeed(
       [
-        linked({ _id: "public post", shownToEveryone: true }),
-        linked({ _id: "mine only", shownToEveryone: false, addedAt: 0 }),
+        linked({ _id: "public post", countsVisits: true }),
+        linked({ _id: "mine only", countsVisits: false, addedAt: 0 }),
         linked({ _id: "unsaid", addedAt: -1 }),
       ],
       [],
@@ -47,8 +52,8 @@ describe("a link to a shared post's original", () => {
         locale="en"
         entries={toStoryFeed(
           [
-            linked({ _id: "counted", shownToEveryone: true }),
-            linked({ _id: "uncounted", shownToEveryone: false, addedAt: 0 }),
+            linked({ _id: "counted", countsVisits: true }),
+            linked({ _id: "uncounted", countsVisits: false, addedAt: 0 }),
           ],
           [],
           false,
@@ -59,18 +64,18 @@ describe("a link to a shared post's original", () => {
     );
     const links = anchors(html).filter((link) => link.target === "_blank");
     expect(links).toEqual([
-      // The link card and "View the original" of the post everyone may see...
+      // The link card and "View the original" of the counted post...
       { href: "/out/counted", target: "_blank", rel: "noopener", class: expect.any(String) },
       { href: "/out/counted", target: "_blank", rel: "noopener", class: expect.any(String) },
-      // ...and of the one only its sharer sees, straight to the original.
+      // ...and of the uncounted one, straight to the original.
       {
-        href: "https://example.com",
+        href: "https://maps.app.goo.gl/mock",
         target: "_blank",
         rel: "noopener noreferrer nofollow",
         class: expect.any(String),
       },
       {
-        href: "https://example.com",
+        href: "https://maps.app.goo.gl/mock",
         target: "_blank",
         rel: "noopener noreferrer nofollow",
         class: expect.any(String),
@@ -94,6 +99,7 @@ describe("the visits Noren sent, on the sharer's own page", () => {
     noteLang: "ja",
     status: "live",
     shownToEveryone: true,
+    countsVisits: true,
     visits: 12,
     recentVisits: 4,
     ...fields,
@@ -109,10 +115,23 @@ describe("the visits Noren sent, on the sharer's own page", () => {
       const m = creatorMessages[locale];
       const html = render(locale, [
         post({}),
-        post({ sourceId: "one", platform: "web", visits: 1, recentVisits: 1, note: undefined }),
-        post({ sourceId: "private", shownToEveryone: false, visits: 0, recentVisits: 0 }),
-        post({ sourceId: "gone", status: "gone", shownToEveryone: false }),
-        post({ sourceId: "hidden", status: "hidden", shownToEveryone: false }),
+        post({ sourceId: "one", visits: 1, recentVisits: 1, note: undefined }),
+        post({
+          sourceId: "page",
+          platform: "web",
+          countsVisits: false,
+          visits: 0,
+          recentVisits: 0,
+        }),
+        post({
+          sourceId: "private",
+          shownToEveryone: false,
+          countsVisits: false,
+          visits: 0,
+          recentVisits: 0,
+        }),
+        post({ sourceId: "gone", status: "gone", shownToEveryone: false, countsVisits: false }),
+        post({ sourceId: "hidden", status: "hidden", shownToEveryone: false, countsVisits: false }),
       ]);
       expect(html).toMatch(new RegExp(`<h2 id="shared-posts"[^>]*>${m.sharedPosts}</h2>`));
       expect(html).toContain(m.visitsNote);
@@ -120,9 +139,9 @@ describe("the visits Noren sent, on the sharer's own page", () => {
         format(m.visits, { n: 12 }),
         format(m.recentVisits, { n: 4 }),
         m.visitsOne,
-        format(m.visits, { n: 0 }),
         "Instagram",
         m.linkedPage,
+        m.notCounted,
         m.notShown,
         m.originalGone,
         m.removedPost,
@@ -133,8 +152,12 @@ describe("the visits Noren sent, on the sharer's own page", () => {
       expect(html).toContain(locale === "ja" ? "猫のカフェ" : "Cat cafe");
       // English says "1 visit"; Japanese has one form for every count.
       if (locale === "en") expect(html).not.toContain(format(m.visits, { n: 1 }));
-      // A live post everyone may see has no state label.
-      expect(html.match(/rounded-full bg-kamenozoki/g)).toHaveLength(3);
+      // A post that was never counted shows no totals, rather than none sent; one counted before
+      // it was removed or its original went keeps them.
+      expect(html).not.toContain(format(m.visits, { n: 0 }));
+      expect(html.split(format(m.visits, { n: 12 }))).toHaveLength(4);
+      // A counted post everyone may see has no state label.
+      expect(html.match(/rounded-full bg-kamenozoki/g)).toHaveLength(4);
     },
   );
 
