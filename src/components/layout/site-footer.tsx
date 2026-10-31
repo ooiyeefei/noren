@@ -34,6 +34,12 @@ export function SiteFooter({
         >
           <Link
             className="flex min-h-11 items-center underline underline-offset-4 hover:text-ai"
+            href={localePath(locale, "/about")}
+          >
+            {m.whatIsNoren}
+          </Link>
+          <Link
+            className="flex min-h-11 items-center underline underline-offset-4 hover:text-ai"
             href={localePath(locale, "/notice")}
           >
             {m.aboutData}
