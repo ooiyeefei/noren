@@ -3,7 +3,12 @@ import { composeDeterministic, DETERMINISTIC_COMPOSER } from "../src/lib/claims/
 import { createGroundingChecker, verbatimEntailment } from "../src/lib/claims/grounding";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
-import { canManagePlace, isPubliclyReadablePlace, isPublicSafeClaim } from "./lib/access";
+import {
+  canManagePlace,
+  isPubliclyReadablePlace,
+  isPublicSafeClaim,
+  publicStoriesAllowed,
+} from "./lib/access";
 import { writeAudit } from "./lib/audit";
 import { currentPerson, requireRole } from "./lib/auth";
 import { transitionClaim } from "./lib/claimEffects";
@@ -200,6 +205,8 @@ export const getPublished = query({
     const viewer = await currentPerson(ctx);
     const place = await ctx.db.get("place", placeId);
     if (place === null || !(await canReadPlace(ctx, viewer, place))) return null;
+    const canManage = await canManagePlace(ctx, viewer, place);
+    if (!publicStoriesAllowed(place) && !canManage) return null;
     const version = await ctx.db
       .query("pageVersion")
       .withIndex("by_placeId_and_status_and_version", (q) =>
@@ -208,8 +215,7 @@ export const getPublished = query({
       .order("desc")
       .first();
     if (version === null) return null;
-    const publicOnly =
-      isPubliclyReadablePlace(place) && !(await canManagePlace(ctx, viewer, place));
+    const publicOnly = isPubliclyReadablePlace(place) && !canManage;
     const candidates = (
       await Promise.all(
         regionConfig(place.regionId).locales.map((lang) =>

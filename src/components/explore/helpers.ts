@@ -3,6 +3,15 @@ import type { Locale } from "@/lib/i18n";
 
 export type Position = { lat: number; lng: number };
 export type SheetHeight = "peek" | "half" | "full";
+/** The part of the explore map a person can see (not under the sheet or the search bar). */
+export type MapView = {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+  center: Position;
+  zoom: number;
+};
 export const GUIDE_STORAGE_KEY = "noren.guide.v1";
 
 export function normaliseSearch(value: string): string {
@@ -34,14 +43,25 @@ export function exploreItems(
     category: string;
     locale: Locale;
     position?: Position | null;
+    view?: MapView | null;
   },
 ): PlaceListItem[] {
   const query = normaliseSearch(options.search);
+  const view = options.view;
+  const origin = options.position ?? view?.center;
   return items
     .filter(
       (item) =>
         (options.category === "" ||
           (options.category === "demo" ? item.isMock : item.category === options.category)) &&
+        (query !== "" ||
+          !view ||
+          (item.pin != null &&
+            item.pin.lat >= view.south &&
+            item.pin.lat <= view.north &&
+            (view.west <= view.east
+              ? item.pin.lng >= view.west && item.pin.lng <= view.east
+              : item.pin.lng >= view.west || item.pin.lng <= view.east))) &&
         (item.names ?? [item.name, item.secondaryName ?? ""]).some((name) =>
           normaliseSearch(name).includes(query),
         ),
@@ -51,10 +71,12 @@ export function exploreItems(
       distance: options.position && item.pin ? haversine(options.position, item.pin) : undefined,
     }))
     .sort((a, b) => {
-      const distance = options.position ? (a.distance ?? Infinity) - (b.distance ?? Infinity) : 0;
+      if (Boolean(a.hasStory) !== Boolean(b.hasStory)) return a.hasStory ? -1 : 1;
+      const distance = origin
+        ? (a.pin ? haversine(origin, a.pin) : Infinity) -
+          (b.pin ? haversine(origin, b.pin) : Infinity)
+        : 0;
       if (distance && !Number.isNaN(distance)) return distance;
-      if (!options.position && Boolean(a.hasStory) !== Boolean(b.hasStory))
-        return a.hasStory ? -1 : 1;
       return a.name.localeCompare(b.name, options.locale);
     });
 }

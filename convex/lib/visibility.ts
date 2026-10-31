@@ -54,13 +54,26 @@ export async function readablePlaces(
       .take(limit);
 
   const found = new Map<Doc<"place">["_id"], Doc<"place">>();
+  const ownerships =
+    viewer?.role === "business_owner"
+      ? await ctx.db
+          .query("placeOwner")
+          .withIndex("by_personId", (q) => q.eq("personId", viewer._id))
+          .take(limit)
+      : [];
+  const owned = new Set(ownerships.map(({ placeId }) => placeId));
   const add = (places: Doc<"place">[]) => {
     for (const place of places) found.set(place._id, place);
   };
 
   for (const visibility of ["public", "demo_public"] as const) {
     for (const place of await inRegion(visibility)) {
-      if (await canReadPlace(ctx, viewer, place)) found.set(place._id, place);
+      if (
+        isPubliclyReadablePlace(place) ||
+        (viewer !== null &&
+          (viewer.role === "steward" || place.createdBy === viewer._id || owned.has(place._id)))
+      )
+        found.set(place._id, place);
     }
   }
   if (viewer === null) return [...found.values()];
@@ -85,10 +98,6 @@ export async function readablePlaces(
     ).filter(isOwnDraft),
   );
   if (viewer.role === "business_owner") {
-    const ownerships = await ctx.db
-      .query("placeOwner")
-      .withIndex("by_personId", (q) => q.eq("personId", viewer._id))
-      .take(limit);
     for (const { placeId } of ownerships) {
       const place = await ctx.db.get("place", placeId);
       if (place !== null && isOwnDraft(place)) found.set(place._id, place);

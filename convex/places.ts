@@ -4,9 +4,11 @@ import { query, type QueryCtx } from "./_generated/server";
 import {
   canEditPlace,
   canManagePlace,
+  isOpenListing,
   isVerifiedOwner,
   placeHasOwner,
   placeKind,
+  publicStoriesAllowed,
   requireEditablePlace,
   type Viewer,
 } from "./lib/access";
@@ -123,7 +125,7 @@ async function namesFor(ctx: QueryCtx, placeId: Id<"place">) {
   return await ctx.db
     .query("placeName")
     .withIndex("by_placeId_and_lang", (q) => q.eq("placeId", placeId))
-    .take(20);
+    .take(12);
 }
 
 async function summary(ctx: QueryCtx, place: Doc<"place">): Promise<Infer<typeof placeSummary>> {
@@ -167,23 +169,32 @@ async function detail(ctx: QueryCtx, viewer: Viewer, place: Doc<"place"> | null)
   };
 }
 
+const MAP_PLACE_LIMIT = 1200;
+
 export const listForMap = query({
   args: { regionId: v.string(), category: v.optional(v.string()) },
   returns: v.array(mapPlace),
   handler: async (ctx, { regionId, category }) => {
-    const places = await readablePlaces(ctx, await currentPerson(ctx), { regionId, limit: 200 });
-    // readablePlaces limits each visibility separately; the map's contract caps the total.
+    const viewer = await currentPerson(ctx);
+    // A query may run at most 4,096 index ranges. Each place costs up to three (names, pin, and the
+    // published page or the owner check behind the story tab), so 1,200 places and the visibility
+    // queries fit. readablePlaces limits each visibility separately; the map's contract caps the total.
+    const places = await readablePlaces(ctx, viewer, { regionId, limit: MAP_PLACE_LIMIT });
     return await Promise.all(
       places
         .filter((place) => category === undefined || place.category === category)
-        .slice(0, 200)
+        .slice(0, MAP_PLACE_LIMIT)
         .map(async (place) => {
-          const page = await ctx.db
-            .query("pageVersion")
-            .withIndex("by_placeId_and_status_and_version", (q) =>
-              q.eq("placeId", place._id).eq("status", "published"),
-            )
-            .first();
+          const canSeeStory =
+            publicStoriesAllowed(place) || (await canManagePlace(ctx, viewer, place));
+          const page = canSeeStory
+            ? await ctx.db
+                .query("pageVersion")
+                .withIndex("by_placeId_and_status_and_version", (q) =>
+                  q.eq("placeId", place._id).eq("status", "published"),
+                )
+                .first()
+            : null;
           return { ...(await summary(ctx, place)), hasStory: page !== null };
         }),
     );
@@ -418,7 +429,10 @@ export const setVisibility = mutation({
         .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
         .unique();
       if (pin === null) throw appError("conflict", "a pin is required before a place goes public");
-      if (regionPolicy(place.regionId).realBusinessesDraftOnly) {
+      if (
+        regionPolicy(place.regionId).realBusinessesDraftOnly &&
+        !(await isOpenListing(ctx, placeId))
+      ) {
         throw appError(
           "conflict",
           "complete the launch pack (operator and takedown contact) before a place goes public",

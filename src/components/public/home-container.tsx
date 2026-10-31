@@ -1,6 +1,13 @@
 "use client";
 
-import { Component, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  Component,
+  useCallback,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { ErrorMessage } from "@/components/layout/error-message";
@@ -11,6 +18,7 @@ import {
   locateInBrowser,
   exploreItems,
   guideIsVisible,
+  type MapView,
   type Position,
   type SheetHeight,
 } from "@/components/explore/helpers";
@@ -62,6 +70,12 @@ export function HomeContainer(props: { locale: Locale; region: PublicRegionProps
 function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionProps }) {
   const [category, setCategory] = useState("");
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<MapView | null>(null);
+  const [rowLimit, setRowLimit] = useState(50);
+  const onViewChange = useCallback((next: MapView) => {
+    setView(next);
+    setRowLimit(50);
+  }, []);
   const [position, setPosition] = useState<Position | null>(null);
   const [locationOff, setLocationOff] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -74,11 +88,15 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
   const places = useQuery(api.places.listForMap, { regionId: region.regionId });
   const all = useMemo(() => toHomeModel(places ?? [], locale, region), [places, locale, region]);
   const items = useMemo(
+    () => exploreItems(all.items, { category, search, locale, position, view }),
+    [all.items, category, search, locale, position, view],
+  );
+  const mapItems = useMemo(
     () => exploreItems(all.items, { category, search, locale, position }),
     [all.items, category, search, locale, position],
   );
   const model = useMemo(() => {
-    const visible = new Map(items.map((item) => [item.id, item]));
+    const visible = new Map(mapItems.map((item) => [item.id, item]));
     return {
       ...all,
       items,
@@ -92,7 +110,7 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
           };
         }),
     };
-  }, [all, items]);
+  }, [all, items, mapItems]);
   if (places === undefined) return <PublicLoading locale={locale} />;
   const select = (id: string) => {
     setSelectedId(id);
@@ -115,9 +133,19 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
       region={region}
       model={model}
       category={category}
-      onCategoryChange={setCategory}
+      onCategoryChange={(next) => {
+        setCategory(next);
+        setRowLimit(50);
+      }}
       search={search}
-      onSearchChange={setSearch}
+      onSearchChange={(next) => {
+        setSearch(next);
+        setRowLimit(50);
+      }}
+      view={view}
+      onViewChange={onViewChange}
+      rowLimit={rowLimit}
+      onShowMore={() => setRowLimit((limit) => limit + 50)}
       totalCount={all.items.length}
       hasDemo={all.items.some((item) => item.isMock)}
       position={position}

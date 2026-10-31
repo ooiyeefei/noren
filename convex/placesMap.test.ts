@@ -1,10 +1,16 @@
 /// <reference types="vite/client" />
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { api } from "./_generated/api";
 import { addPage, addPerson, addPlace, newBackend } from "../tests/convex/fixtures";
+import * as region from "./lib/region";
 
 const modules = import.meta.glob("./**/*.ts");
+afterEach(() => vi.restoreAllMocks());
 it("only published pages mark readable map places as having a story", async () => {
+  vi.spyOn(region, "regionPolicy").mockReturnValue({
+    ...region.regionPolicy("nagasaki"),
+    realBusinessesDraftOnly: false,
+  });
   const b = newBackend(modules);
   const creator = await addPerson(b, "map-creator", "creator");
   const published = await addPlace(b, {
