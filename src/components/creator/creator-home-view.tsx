@@ -30,6 +30,8 @@ export type SharedPostLike = {
   noteLang?: string;
   status: string;
   shownToEveryone: boolean;
+  /** Whether its link goes through Noren's counter; a web page is linked to directly. */
+  countsVisits: boolean;
   visits: number;
   recentVisits: number;
 };
@@ -169,9 +171,11 @@ export function CreatorHomeView({
                   ? m.originalGone
                   : post.status === "hidden"
                     ? m.removedPost
-                    : post.shownToEveryone
-                      ? undefined
-                      : m.notShown;
+                    : !post.shownToEveryone
+                      ? m.notShown
+                      : post.countsVisits
+                        ? undefined
+                        : m.notCounted;
               return (
                 <li
                   key={post.sourceId}
@@ -196,12 +200,16 @@ export function CreatorHomeView({
                     )}
                   </div>
                   <div className="space-y-1 text-right">
-                    <p className="font-bold">
-                      {post.visits === 1 ? m.visitsOne : format(m.visits, { n: post.visits })}
-                    </p>
-                    <p className="text-[13px] text-muted-foreground">
-                      {format(m.recentVisits, { n: post.recentVisits })}
-                    </p>
+                    {(post.countsVisits || post.visits > 0) && (
+                      <>
+                        <p className="font-bold">
+                          {post.visits === 1 ? m.visitsOne : format(m.visits, { n: post.visits })}
+                        </p>
+                        <p className="text-[13px] text-muted-foreground">
+                          {format(m.recentVisits, { n: post.recentVisits })}
+                        </p>
+                      </>
+                    )}
                     {state && (
                       <p className="rounded-full bg-kamenozoki px-3 py-1 text-[13px] text-kon">
                         {state}
