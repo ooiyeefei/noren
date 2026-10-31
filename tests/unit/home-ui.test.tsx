@@ -248,9 +248,8 @@ it("category chips preserve focus order even if region input is reversed", () =>
       model={toHomeModel([], "en", region)}
     />,
   );
-  expect(html.indexOf('data-category="cafe"')).toBeLessThan(
-    html.indexOf('data-category="attraction"'),
-  );
+  expect(html.indexOf('data-category="other"')).toBeGreaterThan(0);
+  expect(html.indexOf('data-category="cafe"')).toBeLessThan(html.indexOf('data-category="other"'));
 });
 
 for (const locale of ["en", "ja"] as const) {

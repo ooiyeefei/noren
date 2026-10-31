@@ -11,6 +11,7 @@ import { NorenTab } from "@/components/explore/noren-tab";
 import {
   draggedSheet,
   normaliseSearch,
+  type MapFit,
   type MapView,
   type Position,
   type SheetHeight,
@@ -50,6 +51,7 @@ export function HomeView({
   onCategoryChange,
   onSearchChange,
   onViewChange,
+  fitTo,
   onShowMore,
   onSelect,
   onLocate,
@@ -73,6 +75,7 @@ export function HomeView({
   onCategoryChange?(category: string): void;
   onSearchChange?(search: string): void;
   onViewChange?(view: MapView): void;
+  fitTo?: MapFit | null;
   onShowMore?(): void;
   onSelect?(id: string): void;
   onLocate?(): void;
@@ -288,7 +291,16 @@ export function HomeView({
           center={region.center}
           bounds={region.bounds}
           markers={model.markers}
-          explore={{ selectedId, onSelect, position, onLocate, sheet, topOverlay, onViewChange }}
+          explore={{
+            selectedId,
+            onSelect,
+            position,
+            onLocate,
+            sheet,
+            topOverlay,
+            onViewChange,
+            fitTo,
+          }}
         />
       </div>
     </div>

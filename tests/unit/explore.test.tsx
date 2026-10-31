@@ -5,6 +5,7 @@ import {
   draggedSheet,
   exploreItems,
   explorePadding,
+  fitForFilter,
   GUIDE_STORAGE_KEY,
   guideIsVisible,
   locateInBrowser,
@@ -276,4 +277,43 @@ it("pads the phone map for search and each sheet height", () => {
   expect(explorePadding("peek", 300)).toEqual({ top: 132, bottom: 168, left: 0, right: 0 });
   expect(explorePadding("half", 800, 120).top).toBe(120);
   expect(explorePadding("full", 800, 120).bottom).toBe(668);
+});
+
+it("a category with no place in view moves the map to its nearest five matches, else stays put", () => {
+  // Named so that sorting by name lists the farthest bath first.
+  const baths = Array.from({ length: 7 }, (_, i) => ({
+    ...place,
+    _id: `bath-${i}`,
+    category: "bath",
+    pin: { lat: 0, lng: 10 + i },
+    names: [
+      {
+        lang: "en",
+        script: "latin" as const,
+        value: `Bath ${6 - i}`,
+        isPrimary: true,
+      },
+    ],
+  }));
+  const cafe = { ...place, _id: "cafe", category: "cafe", pin: { lat: 0, lng: 0.5 } };
+  const all = toHomeModel([...baths, cafe], "en", region).items;
+  const view: MapView = {
+    west: 0,
+    south: -1,
+    east: 1,
+    north: 1,
+    center: { lat: 0, lng: 0.5 },
+    zoom: 14,
+  };
+  const options = { search: "", locale: "en" as const, view };
+  expect(fitForFilter(all, { ...options, category: "bath" })).toEqual({
+    points: [10, 11, 12, 13, 14].map((lng) => ({ lat: 0, lng })),
+  });
+  // Nearest to the person, when the browser shared where they are.
+  expect(
+    fitForFilter(all, { ...options, category: "bath", position: { lat: 0, lng: 16 } })?.points[0],
+  ).toEqual({ lat: 0, lng: 16 });
+  expect(fitForFilter(all, { ...options, category: "cafe" })).toBeNull();
+  expect(fitForFilter(all, { ...options, category: "museum" })).toBeNull();
+  expect(fitForFilter(all, { ...options, category: "bath", view: null })).toBeNull();
 });

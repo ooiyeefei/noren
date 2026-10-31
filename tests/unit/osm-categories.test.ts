@@ -36,10 +36,10 @@ describe("OSM categories and tags", () => {
       ["shop", "records", "music_shop"],
       ["shop", "art", "gallery"],
       ["tourism", "gallery", "gallery"],
+      ["tourism", "museum", "museum"],
       ["shop", "synthetic_unknown", "shop"],
       ["craft", "synthetic_unknown", "shop"],
       ["tourism", "attraction", "attraction"],
-      ["tourism", "museum", "attraction"],
       ["tourism", "viewpoint", "attraction"],
       ["tourism", "artwork", "attraction"],
       ["historic", "synthetic_unknown", "attraction"],
@@ -62,6 +62,10 @@ describe("OSM categories and tags", () => {
   it("a ryokan that also opens its bath is a place to stay", () => {
     expect(categoryForTags({ tourism: "hotel", amenity: "public_bath" })).toBe("stay");
     expect(categoryForTags({ tourism: "guest_house", amenity: "public_bath" })).toBe("stay");
+  });
+  it("a museum with a gift shop is a museum, and a library stays out of the map", () => {
+    expect(categoryForTags({ tourism: "museum", shop: "gift" })).toBe("museum");
+    expect(categoryForTags({ amenity: "library" })).toBe("other");
   });
   it("a musical instrument shop is a music_shop", () => {
     expect(categoryForTags({ shop: "musical_instrument" })).toBe("music_shop");

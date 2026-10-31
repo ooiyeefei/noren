@@ -3,6 +3,7 @@ import type { DataModel } from "../../_generated/dataModel";
 import { registerClaimRules } from "./claims";
 import { registerCommunityRules } from "./community";
 import { registerInterviewRules } from "./interviews";
+import { registerMapCopyRules } from "./mapCopies";
 import { registerPageRules } from "./pages";
 import { registerPlaceRules } from "./places";
 
@@ -13,4 +14,5 @@ export function registerRules(triggers: Triggers<DataModel>) {
   registerClaimRules(triggers);
   registerPageRules(triggers);
   registerCommunityRules(triggers);
+  registerMapCopyRules(triggers);
 }

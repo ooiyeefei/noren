@@ -743,8 +743,10 @@ describe("categories and open-data credit", () => {
 it("listForMap makes a bounded number of reads (does not scan)", async () => {
   const b = newBackend(modules, { transactionLimits: { documentsRead: 20, databaseQueries: 20 } });
   const creator = await addPerson(b, "creator", "creator");
-  const real = await addPlace(b, { createdBy: creator, visibility: "public" });
-  const mock = await addPlace(b, { createdBy: creator, visibility: "demo_public" });
+  // Without names and pins: copying them onto the place row would read past this tiny budget.
+  const bare = { createdBy: creator, withNames: false, withPin: false };
+  const real = await addPlace(b, { ...bare, visibility: "public" });
+  const mock = await addPlace(b, { ...bare, visibility: "demo_public" });
   await b.t.run(async (ctx) => {
     for (let i = 0; i < 600; i++)
       await ctx.db.insert("place", {
@@ -760,53 +762,47 @@ it("listForMap makes a bounded number of reads (does not scan)", async () => {
   ).toEqual([real, mock].sort());
 });
 
-it("listForMap returns more than 200 places to a signed-out visitor and caps the combined result at 1200", async () => {
+it("listForMap returns more than 1200 places to a signed-out visitor and caps the combined result at 4000", async () => {
   const b = newBackend(modules, { transactionLimits: { databaseQueries: 4096 } });
   const creator = await addPerson(b, "creator", "creator");
   await b.t.run(async (ctx) => {
-    for (let i = 0; i < 1201; i++)
+    for (let i = 0; i < 4001; i++)
       await ctx.db.insert("place", {
         regionId: "nagasaki",
         slug: `fixture-${i}`,
         visibility: "public",
         createdBy: creator,
         isMock: false,
+        mapNames: [],
+        mapPin: null,
+        hasPublishedPage: false,
       });
   });
-  expect(await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).toHaveLength(1200);
+  expect(await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).toHaveLength(4000);
 });
 
-it("a steward's map of 1200 named, pinned places stays within Convex's 4,096 index ranges", async () => {
-  // The steward is the worst case: every place also checks for a published page (the story tab).
+it("a steward's map of 4000 named, pinned places stays within Convex's 4,096 index ranges", async () => {
+  // The steward is the worst case: every place may show the story tab. The place rows carry copies
+  // of their names, pin and published page, so no place costs a lookup.
   const b = newBackend(modules, { transactionLimits: { databaseQueries: 4096 } });
   const steward = await addPerson(b, "steward", "steward");
   await b.t.run(async (ctx) => {
-    for (let i = 0; i < 1201; i++) {
-      const placeId = await ctx.db.insert("place", {
+    for (let i = 0; i < 4001; i++)
+      await ctx.db.insert("place", {
         regionId: "nagasaki",
         slug: `fixture-${i}`,
         visibility: "public",
         createdBy: steward,
         isMock: false,
+        mapNames: [{ lang: "ja", script: "kanji", value: `試験店${i}`, isPrimary: true }],
+        mapPin: { lat: 32.75, lng: 129.87 },
+        hasPublishedPage: i % 2 === 0,
       });
-      await ctx.db.insert("placeName", {
-        placeId,
-        lang: "ja",
-        script: "kanji",
-        value: `試験店${i}`,
-        isPrimary: true,
-        confirmedBy: steward,
-      });
-      await ctx.db.insert("pin", {
-        placeId,
-        lat: 32.75,
-        lng: 129.87,
-        placedBy: steward,
-        placedAt: 0,
-      });
-    }
   });
-  expect(await b.as("steward").query(api.places.listForMap, { regionId: "nagasaki" })).toHaveLength(
-    1200,
-  );
+  const places = await b.as("steward").query(api.places.listForMap, { regionId: "nagasaki" });
+  expect(places).toHaveLength(4000);
+  expect(places[0]).toMatchObject({
+    names: [expect.any(Object)],
+    pin: { lat: 32.75, lng: 129.87 },
+  });
 });
