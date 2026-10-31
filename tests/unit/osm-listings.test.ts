@@ -114,6 +114,20 @@ describe("listing names", () => {
       ),
     ).toEqual([{ lang: "ja", script: "kanji", value: "架空", isPrimary: true }]);
   });
+  it("shows a name OSM lists as several values (place;bath) as one name, keeping every part", () => {
+    expect(
+      listingNames({ name: "架空温泉;かくうの湯", "name:en": "Synthetic Spa ; Mock Bath" }, [
+        "ja",
+        "en",
+      ]),
+    ).toEqual([
+      { lang: "ja", script: "kanji", value: "架空温泉 かくうの湯", isPrimary: true },
+      { lang: "en", script: "latin", value: "Synthetic Spa Mock Bath", isPrimary: true },
+    ]);
+    expect(listingNames({ name: "架空温泉;" }, ["ja"])).toEqual([
+      { lang: "ja", script: "kanji", value: "架空温泉", isPrimary: true },
+    ]);
+  });
 });
 
 describe("publication CLI with an offline runner", () => {

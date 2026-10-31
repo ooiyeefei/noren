@@ -26,6 +26,11 @@ describe("OSM categories and tags", () => {
       ["amenity", "biergarten", "bar"],
       ["amenity", "nightclub", "bar"],
       ["cuisine", "izakaya", "bar"],
+      ["tourism", "hotel", "stay"],
+      ["tourism", "guest_house", "stay"],
+      ["tourism", "hostel", "stay"],
+      ["tourism", "motel", "stay"],
+      ["amenity", "public_bath", "bath"],
       ["shop", "musical_instrument", "music_shop"],
       ["shop", "music", "music_shop"],
       ["shop", "records", "music_shop"],
@@ -40,6 +45,10 @@ describe("OSM categories and tags", () => {
       ["historic", "synthetic_unknown", "attraction"],
       ["unknown", "unknown", "other"],
       ["amenity", "unknown", "other"],
+      // The owner left pharmacies out; campsites and public cabins are not local businesses.
+      ["amenity", "pharmacy", "other"],
+      ["tourism", "camp_site", "other"],
+      ["tourism", "chalet", "other"],
     ];
     for (const [key, value, expected] of rows)
       expect(categoryForTags({ [key!]: value! }), `${key}=${value}`).toBe(expected);
@@ -49,6 +58,10 @@ describe("OSM categories and tags", () => {
   it("an izakaya restaurant is a bar", () => {
     expect(categoryForTags({ amenity: "restaurant", cuisine: "izakaya" })).toBe("bar");
     expect(categoryForTags({ amenity: "restaurant", cuisine: "japanese; izakaya" })).toBe("bar");
+  });
+  it("a ryokan that also opens its bath is a place to stay", () => {
+    expect(categoryForTags({ tourism: "hotel", amenity: "public_bath" })).toBe("stay");
+    expect(categoryForTags({ tourism: "guest_house", amenity: "public_bath" })).toBe("stay");
   });
   it("a musical instrument shop is a music_shop", () => {
     expect(categoryForTags({ shop: "musical_instrument" })).toBe("music_shop");
