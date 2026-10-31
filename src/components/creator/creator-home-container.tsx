@@ -128,10 +128,12 @@ export function CreatorHomeContainer({
       changeStep(errors.pin ? 1 : 2);
       return;
     }
+    if (!draft.category) return;
     setPending(true);
     setError(undefined);
     try {
-      const result = await create(toCreateArgs(draft, region.id));
+      // A demo account's place stays a draft; the server refuses to put it on the map.
+      const result = await create({ ...toCreateArgs(draft, region.id), onMap: !person?.isMock });
       router.push(`/${locale}/creator/places/${result.placeId}`);
     } catch (error) {
       setError(errorText(error, locale));
@@ -146,7 +148,13 @@ export function CreatorHomeContainer({
       </PageContainer>
     );
   return (
-    <CreatorHomeView locale={locale} region={region} places={places} adding={adding}>
+    <CreatorHomeView
+      locale={locale}
+      region={region}
+      places={places}
+      adding={adding}
+      canInterview={person.role === "creator" || person.role === "steward"}
+    >
       <NewPlaceView
         locale={locale}
         region={region}

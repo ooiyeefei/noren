@@ -22,13 +22,23 @@ export async function currentPersonOnServer(): Promise<ServerPerson | null> {
   return token === null ? null : await fetchQuery(api.people.current, {}, { token });
 }
 
-export async function requireRoleOnServer(
-  roles: readonly Exclude<Role, "business_owner">[],
-): Promise<{ ok: true; person: ServerPerson } | { ok: false; response: Response }> {
+type ServerAuthorization = { ok: true; person: ServerPerson } | { ok: false; response: Response };
+
+/** Any signed-in member, whatever their role. */
+export async function requirePersonOnServer(): Promise<ServerAuthorization> {
   const person = await currentPersonOnServer();
   if (person === null) {
     return { ok: false, response: jsonError("unauthenticated", "sign in to continue") };
   }
+  return { ok: true, person };
+}
+
+export async function requireRoleOnServer(
+  roles: readonly Exclude<Role, "business_owner">[],
+): Promise<ServerAuthorization> {
+  const signedIn = await requirePersonOnServer();
+  if (!signedIn.ok) return signedIn;
+  const { person } = signedIn;
   const allowed = new Set<Role>(roles);
   if (allowed.has("creator")) allowed.add("steward");
   if (!allowed.has(person.role)) {

@@ -97,11 +97,9 @@ export function AccountMenuView({
             </div>
           )}
         </DropdownMenuLabel>
-        {(state.role === "creator" || state.role === "steward") && (
-          <DropdownMenuItem asChild>
-            <Link href={localePath(locale, "/creator")}>{m.creatorPages}</Link>
-          </DropdownMenuItem>
-        )}
+        <DropdownMenuItem asChild>
+          <Link href={localePath(locale, "/creator")}>{m.creatorPages}</Link>
+        </DropdownMenuItem>
         {state.role === "business_owner" && (
           <DropdownMenuItem asChild>
             <Link href={localePath(locale, "/owner")}>{m.ownerPages}</Link>

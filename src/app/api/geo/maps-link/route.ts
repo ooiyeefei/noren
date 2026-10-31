@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { requireRoleOnServer } from "@/lib/convex/server";
+import { requirePersonOnServer } from "@/lib/convex/server";
 import { isAllowedMapsHost, parseMapsUrl, resolveMapsLink } from "@/lib/geo/maps-link";
 import { jsonError } from "@/lib/http/handler";
 
@@ -8,7 +8,8 @@ const lastCalls = new Map<string, number>();
 
 export async function GET(request: Request): Promise<Response> {
   try {
-    const authorization = await requireRoleOnServer(["creator"]);
+    // Any signed-in member may add a missing place from a Maps link (FR-032).
+    const authorization = await requirePersonOnServer();
     if (!authorization.ok) return authorization.response;
     const url = new URL(request.url).searchParams.get("url");
     if (!url || url.length > 500 || !isAllowedMapsHost(url)) {

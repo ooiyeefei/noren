@@ -108,6 +108,7 @@ type Row = {
   denied?: Partial<Record<CallerName, ErrorCode>>;
 };
 const editors: CallerName[] = ["creatorA", "steward"];
+const members = callers.filter((caller) => caller !== "signedOut");
 const unreadable = {
   user: "not_found",
   creatorB: "not_found",
@@ -118,9 +119,15 @@ const creatorGuard = { creatorB: "not_found" } as const;
 const rows: Record<string, Row[]> = {
   places: [
     {
+      // Any signed-in member may add a missing place, and put it on the map (FR-032).
       fn: "places.create business",
       call: (as) => as.mutation(api.places.create, input),
-      allowed: ["creatorA", "creatorB", "steward"],
+      allowed: members,
+    },
+    {
+      fn: "places.create on the map",
+      call: (as) => as.mutation(api.places.create, { ...input, category: "cafe", onMap: true }),
+      allowed: members,
     },
     {
       fn: "places.create landmark",
@@ -182,8 +189,9 @@ const rows: Record<string, Row[]> = {
           url: "https://example.com/matrix-new",
           title: "Fictional test link",
         }),
-      allowed: editors,
-      denied: creatorGuard,
+      // Any member who can read the place may link a post (FR-032); P is a draft.
+      allowed: ["creatorA", "ownerP", "steward"],
+      denied: unreadable,
     },
     {
       fn: "sources.remove",

@@ -177,6 +177,8 @@ describe("public mapping", () => {
       cautionVocabulary: config.cautionVocabulary,
       scriptOrigins: [],
       frameOrigins: ["https://www.youtube-nocookie.com"],
+      sourceAdapters: ["youtube", "link_card"],
+      locales: config.locales,
     });
     expect(region.scriptOrigins).toEqual(scriptHostsFor(config.enabledSourceAdapters));
     expect(region.frameOrigins).toEqual(frameHostsFor(config.enabledSourceAdapters));
