@@ -17,7 +17,9 @@ import {
   distanceLabel,
   locateInBrowser,
   exploreItems,
+  fitForFilter,
   guideIsVisible,
+  type MapFit,
   type MapView,
   type Position,
   type SheetHeight,
@@ -71,6 +73,7 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
   const [category, setCategory] = useState("");
   const [search, setSearch] = useState("");
   const [view, setView] = useState<MapView | null>(null);
+  const [fitTo, setFitTo] = useState<MapFit | null>(null);
   const [rowLimit, setRowLimit] = useState(50);
   const onViewChange = useCallback((next: MapView) => {
     setView(next);
@@ -136,6 +139,7 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
       onCategoryChange={(next) => {
         setCategory(next);
         setRowLimit(50);
+        setFitTo(fitForFilter(all.items, { category: next, search, locale, position, view }));
       }}
       search={search}
       onSearchChange={(next) => {
@@ -144,6 +148,7 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
       }}
       view={view}
       onViewChange={onViewChange}
+      fitTo={fitTo}
       rowLimit={rowLimit}
       onShowMore={() => setRowLimit((limit) => limit + 50)}
       totalCount={all.items.length}

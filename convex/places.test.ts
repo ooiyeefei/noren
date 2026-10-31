@@ -442,23 +442,27 @@ describe("places reads", () => {
     ).toBe("forbidden");
   });
 
-  it("listForMap caps the total across visibilities at 1200", async () => {
+  it("listForMap caps the total across visibilities at 4000", async () => {
     const b = await setup();
-    await b.run(async (ctx) => {
-      for (let i = 0; i < 1201; i++)
+    // Straight to the table: 4,001 rows through every rule would outlast the test timeout.
+    await b.t.run(async (ctx) => {
+      for (let i = 0; i < 4001; i++)
         await ctx.db.insert("place", {
           regionId: "nagasaki",
           slug: `mock-${i}`,
-          visibility: i < 800 ? "demo_public" : "pilot",
-          demoPublicBasis: i < 800 ? "fictional" : undefined,
+          visibility: i < 2500 ? "demo_public" : "pilot",
+          demoPublicBasis: i < 2500 ? "fictional" : undefined,
           kind: "landmark",
           createdBy: b.creator,
           isMock: true,
+          mapNames: [],
+          mapPin: null,
+          hasPublishedPage: false,
         });
     });
     expect(
       await b.as("steward").query(api.places.listForMap, { regionId: "nagasaki" }),
-    ).toHaveLength(1200);
+    ).toHaveLength(4000);
   });
 });
 

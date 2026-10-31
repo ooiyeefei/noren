@@ -17,8 +17,8 @@ export const VISIBILITIES = ["draft", "demo_public", "pilot", "public"] as const
 export const SCRIPTS = ["kanji", "kana", "romaji", "latin"] as const;
 
 /**
- * Noren is about local businesses (owner's rule 2026-10-30, research D20). `landmark` is a legacy label that
- * grants nothing: it never makes a place public, and a place is a business unless a steward says otherwise.
+ * `landmark` is a legacy label that grants nothing: it never makes a place public, and a place is a business
+ * unless a steward says otherwise. Museums and sights are map categories instead (research D20, amended).
  */
 export const PLACE_KINDS = ["business", "landmark"] as const;
 

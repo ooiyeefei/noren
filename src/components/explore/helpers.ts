@@ -81,6 +81,29 @@ export function exploreItems(
     });
 }
 
+/** A request to move the map so these points are in view; a new object is a new request. */
+export type MapFit = { points: Position[] };
+
+const FIT_NEAREST = 5;
+
+/**
+ * Where to move the map after the category filter changes: to the nearest matches when none of
+ * them is in view (13 baths and none near the city centre), or null to leave the map alone.
+ */
+export function fitForFilter(
+  items: readonly PlaceListItem[],
+  options: Parameters<typeof exploreItems>[1],
+): MapFit | null {
+  const view = options.view;
+  if (!view || exploreItems(items, options).length > 0) return null;
+  const origin = options.position ?? view.center;
+  const points = exploreItems(items, { ...options, view: null })
+    .flatMap((item) => (item.pin ? [{ lat: item.pin.lat, lng: item.pin.lng }] : []))
+    .sort((a, b) => haversine(origin, a) - haversine(origin, b))
+    .slice(0, FIT_NEAREST);
+  return points.length > 0 ? { points } : null;
+}
+
 // Pass a getter so even browsers that throw while accessing localStorage are safe.
 export function guideIsVisible(storage: () => Pick<Storage, "getItem">): boolean {
   try {
