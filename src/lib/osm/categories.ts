@@ -1,7 +1,17 @@
 export type OsmCategory =
-  "restaurant" | "cafe" | "bar" | "shop" | "music_shop" | "gallery" | "attraction" | "other";
+  | "restaurant"
+  | "cafe"
+  | "bar"
+  | "stay"
+  | "bath"
+  | "shop"
+  | "music_shop"
+  | "gallery"
+  | "attraction"
+  | "other";
 
-// First matching OSM tag row wins. Cuisine precedes amenity so an izakaya restaurant is a bar.
+// First matching OSM tag row wins. Cuisine precedes amenity so an izakaya restaurant is a bar, and
+// a stay precedes a bath so a ryokan that also opens its bath to visitors stays a ryokan.
 export const CATEGORY_ROWS: readonly {
   key: string;
   values?: readonly string[];
@@ -15,6 +25,9 @@ export const CATEGORY_ROWS: readonly {
   },
   { key: "amenity", values: ["cafe"], category: "cafe" },
   { key: "amenity", values: ["bar", "pub", "biergarten", "nightclub"], category: "bar" },
+  // Hotels, ryokan, minshuku and guesthouses; campsites and public cabins are not local businesses.
+  { key: "tourism", values: ["hotel", "guest_house", "hostel", "motel"], category: "stay" },
+  { key: "amenity", values: ["public_bath"], category: "bath" },
   { key: "shop", values: ["musical_instrument", "music", "records"], category: "music_shop" },
   { key: "shop", values: ["art"], category: "gallery" },
   { key: "tourism", values: ["gallery"], category: "gallery" },

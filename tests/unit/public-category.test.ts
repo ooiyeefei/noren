@@ -8,18 +8,14 @@ import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 const region = getRegionConfig("nagasaki")!;
 it("the category filter lists focus categories first, in the viewer's language", () => {
   const shuffled = { ...region, categories: [...region.categories!].reverse() };
+  const focus = region.categories!.map((entry) => entry.focus);
+  expect(focus).toContain(true);
+  expect(focus).toContain(false);
   for (const locale of ["ja", "en"] as const) {
     const options = categoryOptions(shuffled, locale);
-    expect(options.map((entry) => entry.focus)).toEqual([
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      false,
-      false,
-    ]);
+    expect(options.map((entry) => entry.focus)).toEqual(
+      [...focus].sort((a, b) => Number(b) - Number(a)),
+    );
     for (const option of options) {
       const source = region.categories!.find((entry) => entry.key === option.key)!;
       expect(option.label).toBe(source.labels[locale]);
