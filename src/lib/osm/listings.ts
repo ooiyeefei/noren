@@ -20,10 +20,16 @@ export function listingNames(tags: Record<string, string>, locales: readonly str
   const { ja, en } = namesFromTags(tags);
   // A Latin-only `name` (e.g. a shop signed "TSUTAYA") is what people call it here, not a translation.
   const local = ja ?? tags.name?.trim();
-  for (const [lang, value] of [
+  for (const [lang, raw] of [
     ["ja", local],
     ["en", en],
   ] as const) {
+    // OSM separates several values with ";" (e.g. a hot spring and its bath); keep every part.
+    const value = raw
+      ?.split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(" ");
     if (value && locales.includes(lang))
       names.push({ lang, script: detectScript(value), value, isPrimary: true });
   }
