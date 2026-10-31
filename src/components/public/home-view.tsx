@@ -9,6 +9,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { ExploreGuide } from "@/components/explore/guide";
 import { NorenTab } from "@/components/explore/noren-tab";
 import {
+  STORIES_FILTER,
   draggedSheet,
   normaliseSearch,
   type MapFit,
@@ -19,7 +20,8 @@ import {
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { publicMessages } from "@/lib/i18n/messages/public";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
-import type { PublicRegionProps, toHomeModel } from "./mapping";
+import { LatestStories } from "./latest-stories";
+import type { LatestStoryLike, PublicRegionProps, toHomeModel } from "./mapping";
 
 export function PublicLoading({ locale }: { locale: Locale }) {
   const m = messagesFor(publicMessages, locale);
@@ -43,6 +45,7 @@ export function HomeView({
   rowLimit = 50,
   totalCount,
   hasDemo,
+  latest,
   position,
   locationOff = false,
   selectedId,
@@ -67,6 +70,8 @@ export function HomeView({
   rowLimit?: number;
   totalCount?: number;
   hasDemo?: boolean;
+  /** The newest stories people shared in the region; undefined while loading. */
+  latest?: readonly LatestStoryLike[];
   position?: Position | null;
   locationOff?: boolean;
   selectedId?: string | null;
@@ -92,6 +97,7 @@ export function HomeView({
   const categories = categoryOptions(region, locale);
   const chips = [
     { key: "", label: m.all },
+    { key: STORIES_FILTER, label: m.storiesChip },
     ...categories,
     ...((hasDemo ?? model.items.some((item) => item.isMock))
       ? [{ key: "demo", label: m.demoChip }]
@@ -233,6 +239,9 @@ export function HomeView({
               <div className="mx-4 mb-3 lg:mt-4">
                 <ExploreGuide locale={locale} onDismiss={onDismissGuide} />
               </div>
+            )}
+            {!searching && latest && latest.length > 0 && (
+              <LatestStories locale={locale} region={region} entries={latest} />
             )}
             <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 px-4">
               <p role="status" className="text-[15px] font-bold">

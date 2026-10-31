@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { describe, expect, it } from "vitest";
-import { addPerson, addPlace, errorCode, newBackend } from "../tests/convex/fixtures";
+import { addPerson, addPlace, addSource, errorCode, newBackend } from "../tests/convex/fixtures";
 import { api } from "./_generated/api";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -134,5 +134,96 @@ describe("stories written in Noren", () => {
     for (let i = 0; i < 50; i++) await write("user");
     expect(await errorCode(write("user"))).toBe("rate_limited");
     for (let i = 0; i < 51; i++) await write("steward");
+  });
+});
+
+describe("the newest stories on the home page", () => {
+  it("shows written stories and shared posts from real places, newest first, with names and the member's own line", async () => {
+    const { b, steward, editor, placeId } = await world();
+    const hiddenPlace = await addPlace(b, { createdBy: editor, visibility: "public" });
+    const draft = await addPlace(b, { createdBy: editor });
+    const demo = await addPlace(b, { createdBy: steward, visibility: "demo_public", isMock: true });
+    await b.as("user").mutation(api.stories.add, { placeId, body: "最初の話。", lang: "ja" });
+    await b.as("other").mutation(api.sources.add, {
+      placeId,
+      url: "https://www.youtube.com/watch?v=abcdefghijk",
+      note: "The tram stop story, on video.",
+      noteLang: "en",
+    });
+    await b.as("user").mutation(api.stories.add, { placeId, body: "Newest story.", lang: "en" });
+    // None of these may reach the home page.
+    await b.as("mock").mutation(api.stories.add, { placeId, body: "架空の話。", lang: "ja" });
+    await b
+      .as("editor")
+      .mutation(api.stories.add, { placeId: draft, body: "下書き。", lang: "ja" });
+    await b.as("user").mutation(api.stories.add, { placeId: demo, body: "デモ。", lang: "ja" });
+    await b.as("mock").mutation(api.stories.add, { placeId: demo, body: "デモの話。", lang: "ja" });
+    await b.as("mock").mutation(api.sources.add, {
+      placeId,
+      url: "https://www.youtube.com/watch?v=bcdefghijkl",
+      note: "架空の投稿。",
+      noteLang: "ja",
+    });
+    await b.as("user").mutation(api.stories.add, {
+      placeId: hiddenPlace,
+      body: "隠れた場所。",
+      lang: "ja",
+    });
+    await b.run((ctx) =>
+      ctx.db.patch("place", hiddenPlace, { hiddenReason: "not_for_visitors", visibility: "draft" }),
+    );
+    await addSource(b, { placeId, addedBy: steward });
+    const latest = await b.t.query(api.stories.latest, { regionId: "nagasaki" });
+    expect(
+      latest.map(({ kind, text, lang, platform, sharedBy }) => ({
+        kind,
+        text,
+        lang,
+        platform,
+        sharedBy,
+      })),
+    ).toEqual([
+      {
+        kind: "written",
+        text: "Newest story.",
+        lang: "en",
+        platform: undefined,
+        sharedBy: "Test Person (user)",
+      },
+      {
+        kind: "post",
+        text: "The tram stop story, on video.",
+        lang: "en",
+        platform: "youtube",
+        sharedBy: "Test Person (other)",
+      },
+      {
+        kind: "written",
+        text: "最初の話。",
+        lang: "ja",
+        platform: undefined,
+        sharedBy: "Test Person (user)",
+      },
+    ]);
+    const place = await b.t.run((ctx) => ctx.db.get("place", placeId));
+    expect(latest.every((entry) => entry.placeSlug === place?.slug)).toBe(true);
+    expect(latest[0]?.placeNames.length).toBeGreaterThan(0);
+    expect(await b.t.query(api.stories.latest, { regionId: "elsewhere" })).toEqual([]);
+    // The place's editor can read both places, but the home page keeps to what everyone may read.
+    const editorView = (
+      await b.as("editor").query(api.stories.latest, { regionId: "nagasaki" })
+    ).map((entry) => entry.text);
+    expect(editorView).not.toContain("下書き。");
+    expect(editorView).not.toContain("隠れた場所。");
+  });
+
+  it("shows at most eight", async () => {
+    const { b, placeId } = await world();
+    for (let n = 0; n < 10; n++)
+      await b.as("user").mutation(api.stories.add, { placeId, body: `話 ${n}`, lang: "ja" });
+    const latest = await b.t.query(api.stories.latest, { regionId: "nagasaki" });
+    expect(latest.map((entry) => entry.text)).toEqual(
+      Array.from({ length: 8 }, (_, n) => `話 ${9 - n}`),
+    );
   });
 });

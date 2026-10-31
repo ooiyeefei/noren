@@ -226,6 +226,12 @@ const rows: Record<string, Row[]> = {
       allowed: [...callers],
     },
     {
+      fn: "stories.latest",
+      call: (as) => as.query(api.stories.latest, { regionId: "nagasaki" }),
+      // The home page's newest stories: only what everyone may read, the same for every caller.
+      allowed: [...callers],
+    },
+    {
       fn: "stories.remove",
       call: (as, w) => as.mutation(api.stories.remove, { storyId: w.story }),
       allowed: editors,

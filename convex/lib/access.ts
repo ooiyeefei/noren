@@ -116,6 +116,30 @@ export async function requireEditablePlace(
   return { person, place };
 }
 
+/**
+ * A post is already public where it was posted; it shows to everyone once the member who linked it
+ * agreed to show it with their name, or a steward recorded the author's agreement for the demo
+ * (FR-033). A demo account's post on a real place shows only to its adder.
+ */
+export function isSharedPublicly(
+  place: Pick<Doc<"place">, "isMock">,
+  source: Pick<Doc<"source">, "status" | "sharedAt" | "demoConsentAt" | "isMock">,
+): boolean {
+  return (
+    source.status === "live" &&
+    ((source.sharedAt !== undefined && source.isMock === place.isMock) ||
+      source.demoConsentAt !== undefined)
+  );
+}
+
+/** A story a member wrote shows to everyone; a demo account's, on a real place, only to its writer. */
+export function isStoryShown(
+  place: Pick<Doc<"place">, "isMock">,
+  story: Pick<Doc<"story">, "status" | "isMock">,
+): boolean {
+  return story.status === "live" && story.isMock === place.isMock;
+}
+
 /** The caller has already checked canReadPlace. */
 export async function canSeeSource(
   ctx: QueryCtx,
@@ -124,13 +148,9 @@ export async function canSeeSource(
   source: Doc<"source">,
 ): Promise<boolean> {
   if (source.placeId !== place._id || source.status !== "live") return false;
-  // A post is already public where it was posted; it shows once the member who linked it agreed to
-  // show it with their name, or a steward recorded the author's agreement for the demo (FR-033). A
-  // demo account's post on a real place shows only to its adder, like a demo account's story.
   return (
     ((isPubliclyReadablePlace(place) || place.visibility === "pilot") &&
-      ((source.sharedAt !== undefined && source.isMock === place.isMock) ||
-        source.demoConsentAt !== undefined)) ||
+      isSharedPublicly(place, source)) ||
     (viewer !== null && source.addedBy === viewer._id) ||
     (await canManagePlace(ctx, viewer, place))
   );

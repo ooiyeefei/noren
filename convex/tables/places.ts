@@ -72,6 +72,8 @@ export const placeTables = {
     ),
     mapPin: v.optional(v.union(v.object({ lat: v.number(), lng: v.number() }), v.null())),
     hasPublishedPage: v.optional(v.boolean()),
+    /** Whether anyone may read a story a member wrote or a post a member shared here (FR-033). */
+    hasPeopleStories: v.optional(v.boolean()),
     /**
      * When a person last confirmed the place in person: they placed its pin, or said "Still here"
      * (FR-030). Unset means "Not yet confirmed", as for a listing from open data no one has checked.
@@ -206,7 +208,8 @@ export const placeTables = {
   /**
    * A reference to a public post or page. Stores no captions, images or post content (FR-006).
    * `demoConsent*` record a steward noting that the post's author agreed to appear in the public
-   * demo; a source without them is never shown to the public (FR-029).
+   * demo (FR-029); `sharedAt` records the member who linked it agreeing to show it (FR-033). A source
+   * with neither is never shown to the public.
    */
   source: defineTable({
     placeId: v.id("place"),
@@ -235,5 +238,6 @@ export const placeTables = {
   })
     .index("by_placeId_and_status", ["placeId", "status"])
     .index("by_placeId_and_canonicalUrl", ["placeId", "canonicalUrl"])
-    .index("by_status_and_lastCheckedAt", ["status", "lastCheckedAt"]),
+    .index("by_status_and_lastCheckedAt", ["status", "lastCheckedAt"])
+    .index("by_status_and_sharedAt", ["status", "sharedAt"]),
 };

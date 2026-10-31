@@ -1,7 +1,10 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { isSharedPublicly, isStoryShown } from "./access";
 
-export type MapCopies = Required<Pick<Doc<"place">, "mapNames" | "mapPin" | "hasPublishedPage">>;
+export type MapCopies = Required<
+  Pick<Doc<"place">, "mapNames" | "mapPin" | "hasPublishedPage" | "hasPeopleStories">
+>;
 
 export async function readMapNames(ctx: QueryCtx, placeId: Id<"place">) {
   const names = await ctx.db
@@ -27,6 +30,22 @@ export async function readHasPublishedPage(ctx: QueryCtx, placeId: Id<"place">) 
     )
     .first();
   return page !== null;
+}
+
+/** Whether a story a member wrote, or a post a member shared, shows to everyone here (FR-033). */
+export async function readHasPeopleStories(ctx: QueryCtx, placeId: Id<"place">) {
+  const place = await ctx.db.get("place", placeId);
+  if (place === null) return false;
+  const stories = await ctx.db
+    .query("story")
+    .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId).eq("status", "live"))
+    .take(50);
+  if (stories.some((story) => isStoryShown(place, story))) return true;
+  const sources = await ctx.db
+    .query("source")
+    .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId).eq("status", "live"))
+    .take(50);
+  return sources.some((source) => isSharedPublicly(place, source));
 }
 
 /**
@@ -55,5 +74,6 @@ export async function refreshMapCopies(ctx: MutationCtx, placeId: Id<"place">): 
     mapNames: await readMapNames(ctx, placeId),
     mapPin: await readMapPin(ctx, placeId),
     hasPublishedPage: await readHasPublishedPage(ctx, placeId),
+    hasPeopleStories: await readHasPeopleStories(ctx, placeId),
   });
 }
