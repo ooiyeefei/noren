@@ -239,5 +239,6 @@ export const placeTables = {
     .index("by_placeId_and_status", ["placeId", "status"])
     .index("by_placeId_and_canonicalUrl", ["placeId", "canonicalUrl"])
     .index("by_status_and_lastCheckedAt", ["status", "lastCheckedAt"])
-    .index("by_status_and_sharedAt", ["status", "sharedAt"]),
+    .index("by_status_and_sharedAt", ["status", "sharedAt"])
+    .index("by_addedBy", ["addedBy"]),
 };

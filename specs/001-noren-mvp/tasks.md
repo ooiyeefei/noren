@@ -224,11 +224,11 @@ Single Next.js project at the repository root, as in plan.md: `src/`, `convex/`,
 
 **Independent Test**: Follow three source links as a test visitor; the creator sees a total of three, mock activity excluded (quickstart scenario 10).
 
-- [ ] T101 [P] [US6] Tests: bot and prefetch filtering, the per-day counter, mock exclusion and "no cookie, no stored address" in tests/unit/link-count.test.ts
-- [ ] T102 [P] [US6] Tests: end-to-end three link follows yield a total of three in tests/e2e/us6-links.spec.ts
-- [ ] T103 [US6] Implement `GET /out/:sourceId` (atomic daily increment, skip bots and prefetches, tag mock sources, temporary redirect, no cookie) in src/app/out/[sourceId]/route.ts
-- [ ] T104 [US6] Route every outbound source link through /out in src/components/embeds/EmbedView.tsx and src/lib/adapters/link-card.ts
-- [ ] T105 [US6] Build the totals-only traffic view for creators and owners in src/components/stats/LinkCounts.tsx
+- [X] T101 [P] [US6] Tests: bot and prefetch filtering, the per-day counter, mock exclusion and "no cookie, no stored address" in tests/unit/link-count.test.ts Done 2026-10-31 in tests/unit/outbound-route.test.ts (filtering, headers, no cookie) and convex/links.test.ts (per-day counter, mock tag, the stored row holds only source, day, count and tag).
+- [ ] T102 [P] [US6] Tests: end-to-end three link follows yield a total of three in tests/e2e/us6-links.spec.ts Note 2026-10-31: three follows giving a total of three is covered by convex/links.test.ts; there is no browser test yet.
+- [X] T103 [US6] Implement `GET /out/:sourceId` (atomic daily increment, skip bots and prefetches, tag mock sources, temporary redirect, no cookie) in src/app/out/[sourceId]/route.ts Done 2026-10-31: the route calls the Convex mutation links.follow, or the uncounted query links.peek for a crawler or prefetch.
+- [X] T104 [US6] Route every outbound source link through /out in src/components/embeds/EmbedView.tsx and src/lib/adapters/link-card.ts Done 2026-10-31 for every post everyone may see, through toStoryFeed in src/components/public/mapping.ts; a post only its sharer or the place's editor can see links straight to its original, because /out sends on only public posts.
+- [ ] T105 [US6] Build the totals-only traffic view for creators and owners in src/components/stats/LinkCounts.tsx Note 2026-10-31: the member who linked a post sees its totals under "Posts you shared" on My places (src/components/creator/creator-home-view.tsx); the owners' view is still to build.
 
 ---
 

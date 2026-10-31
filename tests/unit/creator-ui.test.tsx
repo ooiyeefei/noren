@@ -712,6 +712,7 @@ describe("adding a place from the wizard", () => {
         case "people:current":
           return { _id: "mock-person", displayName: "Mock person", ...person };
         case "places:listMine":
+        case "links:mine":
           return [];
         default:
           throw new Error(`Unexpected query ${getFunctionName(args[0])}`);
@@ -796,6 +797,49 @@ describe("adding a place from the wizard", () => {
   it("keeps a demo account's place off the map", async () => {
     expect(await addPlace({ role: "user", isMock: true })).toMatchObject({ onMap: false });
   });
+});
+
+it("hands the posts a member shared to their page, and asks for them only once signed in", () => {
+  const shared = [{ sourceId: "mock-post", visits: 3 }];
+  const mount = (person: unknown) => {
+    vi.mocked(useQuery)
+      .mockClear()
+      .mockImplementation((...args: Parameters<typeof useQuery>) => {
+        switch (getFunctionName(args[0])) {
+          case "people:current":
+            return person;
+          case "places:listMine":
+            return [];
+          case "links:mine":
+            return args[1] === "skip" ? undefined : shared;
+          default:
+            throw new Error(`Unexpected query ${getFunctionName(args[0])}`);
+        }
+      });
+    vi.mocked(useMutation).mockImplementation(() =>
+      Object.assign(vi.fn(), { withOptimisticUpdate: vi.fn() }),
+    );
+    const node = mountView(
+      () =>
+        CreatorHomeContainer({
+          params: Object.assign(Promise.resolve({ lang: "en" }), {
+            status: "fulfilled",
+            value: { lang: "en" },
+          }),
+          locale: "en",
+          region,
+        }),
+      {},
+    )();
+    const asked = vi
+      .mocked(useQuery)
+      .mock.calls.filter(([reference]) => getFunctionName(reference) === "links:mine");
+    return { node, asked: asked.map(([, args]) => args) };
+  };
+  const member = mount({ _id: "mock-person", displayName: "Mock", role: "user", isMock: false });
+  expect(element<{ shared?: unknown }>(member.node, CreatorHomeView).props.shared).toBe(shared);
+  expect(member.asked).toEqual([{}]);
+  expect(mount(null).asked).toEqual(["skip"]);
 });
 
 it("a member's guide leaves out the owner interview", () => {

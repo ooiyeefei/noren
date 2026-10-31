@@ -37,6 +37,7 @@ import type * as lib_rules_shared from "../lib/rules/shared.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_visibility from "../lib/visibility.js";
+import type * as links from "../links.js";
 import type * as mapCopies from "../mapCopies.js";
 import type * as openText from "../openText.js";
 import type * as osmSeed from "../osmSeed.js";
@@ -89,6 +90,7 @@ declare const fullApi: ApiFromModules<{
   "lib/slug": typeof lib_slug;
   "lib/validators": typeof lib_validators;
   "lib/visibility": typeof lib_visibility;
+  links: typeof links;
   mapCopies: typeof mapCopies;
   openText: typeof openText;
   osmSeed: typeof osmSeed;

@@ -1,18 +1,8 @@
+import { platformName } from "@/components/embeds/platform-name";
 import { NorenTab } from "@/components/explore/noren-tab";
 import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { publicMessages } from "@/lib/i18n/messages/public";
 import { placeHeading, type LatestStoryLike, type PublicRegionProps } from "./mapping";
-
-/** Platform names are the same in every language; a plain web page has none. */
-const PLATFORMS: Record<string, string> = {
-  instagram: "Instagram",
-  facebook: "Facebook",
-  threads: "Threads",
-  youtube: "YouTube",
-  tiktok: "TikTok",
-  x: "X",
-  google_maps: "Google Maps",
-};
 
 /** FR-033: the newest stories people shared, each a way into the place it is about. */
 export function LatestStories({
@@ -33,7 +23,7 @@ export function LatestStories({
       <ul className="flex gap-3 overflow-x-auto px-4 pb-1">
         {entries.map((entry) => {
           const name = placeHeading(entry.placeNames, locale, region).primary;
-          const platform = entry.platform ? PLATFORMS[entry.platform] : undefined;
+          const platform = platformName(entry.platform);
           const credit =
             entry.kind === "written"
               ? format(m.writtenBy, { name: entry.sharedBy })

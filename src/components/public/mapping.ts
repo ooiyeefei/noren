@@ -7,6 +7,7 @@ import { frameHostsFor, scriptHostsFor } from "@/lib/adapters";
 import { DETERMINISTIC_COMPOSER } from "@/lib/claims/compose";
 import type { PlaceKind, Visibility } from "@/lib/domain/constants";
 import { createOpenFreeMapStyle } from "@/lib/geo";
+import { outboundPath } from "@/lib/http/outbound";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { publicMessages } from "@/lib/i18n/messages/public";
 import { pickPlaceName, type PlaceNameLike } from "@/lib/region/names";
@@ -63,6 +64,8 @@ export type SourceViewLike = Omit<EmbedSourceView, "id"> & {
   sharedBy?: string;
   addedAt?: number;
   addedByMe?: boolean;
+  /** Whether everyone may see it; then a visit to the original is counted through /out. */
+  shownToEveryone?: boolean;
 };
 export type WrittenStoryLike = {
   _id: string;
@@ -88,7 +91,7 @@ export type LatestStoryLike = {
 };
 export type StoryFeedEntry = { id: string; addedAt: number; canRemove: boolean } & (
   | { kind: "written"; story: WrittenStoryLike }
-  | { kind: "post"; sharedBy?: string; source: EmbedSourceView }
+  | { kind: "post"; sharedBy?: string; source: EmbedSourceView; outboundHref?: string }
 );
 type NameRegion = Pick<PublicRegionProps, "nameFallback" | "defaultLocale">;
 
@@ -222,6 +225,7 @@ export function toStoryFeed(
     canRemove: source.addedByMe === true || canEdit,
     sharedBy: source.sharedBy,
     source: toEmbedSource(source),
+    ...(source.shownToEveryone ? { outboundHref: outboundPath(source._id) } : {}),
   }));
   return [...written, ...posts].sort((a, b) => b.addedAt - a.addedAt);
 }

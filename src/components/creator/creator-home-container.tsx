@@ -102,6 +102,7 @@ export function CreatorHomeContainer({
   use(params);
   const person = useQuery(api.people.current, {});
   const places = useQuery(api.places.listMine, { regionId: region.id });
+  const shared = useQuery(api.links.mine, person ? {} : "skip");
   const create = useMutation(api.places.create);
   const router = useRouter();
   const query = useSearchParams();
@@ -154,6 +155,7 @@ export function CreatorHomeContainer({
       locale={locale}
       region={region}
       places={places}
+      shared={shared}
       adding={adding}
       canInterview={person.role === "creator" || person.role === "steward"}
     >
