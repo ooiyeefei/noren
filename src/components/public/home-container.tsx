@@ -89,6 +89,7 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
     () => true,
   );
   const places = useQuery(api.places.listForMap, { regionId: region.regionId });
+  const latest = useQuery(api.stories.latest, { regionId: region.regionId });
   const all = useMemo(() => toHomeModel(places ?? [], locale, region), [places, locale, region]);
   const items = useMemo(
     () => exploreItems(all.items, { category, search, locale, position, view }),
@@ -153,6 +154,7 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
       onShowMore={() => setRowLimit((limit) => limit + 50)}
       totalCount={all.items.length}
       hasDemo={all.items.some((item) => item.isMock)}
+      latest={latest}
       position={position}
       locationOff={locationOff}
       selectedId={selectedId}

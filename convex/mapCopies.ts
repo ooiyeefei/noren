@@ -4,8 +4,8 @@ import { internalMutation } from "./lib/gate";
 import { refreshMapCopies } from "./lib/mapCopies";
 
 /**
- * Copies every place's names, pin and published page onto its row (lib/mapCopies.ts), one page of
- * places at a time. Run once after deploying the copies:
+ * Copies every place's names, pin, published page and people's stories onto its row
+ * (lib/mapCopies.ts), one page of places at a time. Run once after deploying the copies:
  * `npx convex run mapCopies:backfill '{"cursor":null}'`. Safe to run again.
  */
 export const backfill = internalMutation({

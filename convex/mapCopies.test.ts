@@ -2,7 +2,14 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { addPage, addPerson, newBackend, type Backend } from "../tests/convex/fixtures";
+import {
+  addPage,
+  addPerson,
+  addPlace,
+  addSource,
+  newBackend,
+  type Backend,
+} from "../tests/convex/fixtures";
 import * as region from "./lib/region";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -116,4 +123,67 @@ it("a place row without copies shows the same on the map, and the backfill copie
   const after = await b.t.query(api.places.listForMap, { regionId: "nagasaki" });
   expect(after).toEqual(before);
   expect(after[0]).toMatchObject({ hasStory: true, pin: { lat: 32.9, lng: 129.7 } });
+});
+
+it("a place is storied on the map while anyone may read a story or post people shared there", async () => {
+  const b = newBackend(modules);
+  const steward = await addPerson(b, "story-steward", "steward");
+  await addPerson(b, "story-member", "user");
+  await addPerson(b, "story-demo", "user", { isMock: true });
+  const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
+  const stored = async () =>
+    (await b.t.run((ctx) => ctx.db.get("place", placeId)))?.hasPeopleStories;
+  const onMap = async () =>
+    (await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).find(
+      (place) => place._id === placeId,
+    )?.hasStory;
+  expect(await onMap()).toBe(false);
+
+  // A demo account's story on a real place is for its writer only.
+  await b.as("story-demo").mutation(api.stories.add, { placeId, body: "架空の話。", lang: "ja" });
+  expect(await stored()).toBe(false);
+  const storyId = await b
+    .as("story-member")
+    .mutation(api.stories.add, { placeId, body: "架空の話。", lang: "ja" });
+  expect(await stored()).toBe(true);
+  expect(await onMap()).toBe(true);
+  await b.as("story-member").mutation(api.stories.remove, { storyId });
+  expect(await stored()).toBe(false);
+  expect(await onMap()).toBe(false);
+
+  // A post nobody agreed to show does not count; a shared one does, until its original goes.
+  const unshared = await addSource(b, { placeId, addedBy: steward });
+  expect(await stored()).toBe(false);
+  await b.run((ctx) => ctx.db.patch("source", unshared, { sharedAt: Date.now() }));
+  expect(await stored()).toBe(true);
+  await b.run((ctx) => ctx.db.patch("source", unshared, { status: "gone" }));
+  expect(await stored()).toBe(false);
+  await addSource(b, { placeId, addedBy: steward, demoConsentBy: steward });
+  expect(await onMap()).toBe(true);
+});
+
+it("the backfill marks a place storied when a post shared before the copy existed shows there", async () => {
+  const b = newBackend(modules);
+  const steward = await addPerson(b, "legacy-steward", "steward");
+  const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
+  // Written around the triggers, as rows were before the copy existed.
+  await b.t.run(async (ctx) => {
+    const url = "https://example.com/legacy-post";
+    await ctx.db.insert("source", {
+      placeId,
+      addedBy: steward,
+      platform: "web",
+      adapter: "link_card",
+      url,
+      canonicalUrl: url,
+      status: "live",
+      sharedAt: 1,
+      isMock: false,
+    });
+  });
+  const stored = async () =>
+    (await b.t.run((ctx) => ctx.db.get("place", placeId)))?.hasPeopleStories;
+  expect(await stored()).toBeUndefined();
+  await b.t.mutation(internal.mapCopies.backfill, { cursor: null });
+  expect(await stored()).toBe(true);
 });

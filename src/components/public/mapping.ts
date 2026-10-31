@@ -73,6 +73,19 @@ export type WrittenStoryLike = {
   isMock: boolean;
   canRemove: boolean;
 };
+/** One of the newest stories in the region, for the home page (FR-033). */
+export type LatestStoryLike = {
+  kind: "written" | "post";
+  id: string;
+  placeSlug: string;
+  placeNames: NameLike[];
+  /** A written story, or the member's own line about a post they shared. */
+  text?: string;
+  lang?: string;
+  platform?: string;
+  sharedBy: string;
+  addedAt: number;
+};
 export type StoryFeedEntry = { id: string; addedAt: number; canRemove: boolean } & (
   | { kind: "written"; story: WrittenStoryLike }
   | { kind: "post"; sharedBy?: string; source: EmbedSourceView }

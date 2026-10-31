@@ -34,6 +34,7 @@ export const communityTables = {
     isMock: v.boolean(),
   })
     .index("by_placeId_and_status", ["placeId", "status"])
+    .index("by_status", ["status"])
     .index("by_authorPersonId", ["authorPersonId"]),
 
   noteTranslation: defineTable({
