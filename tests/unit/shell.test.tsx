@@ -331,16 +331,23 @@ it("the logo is a decorative 24px indigo curtain without text", () => {
   expect(html).not.toContain("<text");
 });
 
-it("the footer has the three ordered destinations and review notice in both locales", () => {
+it("the footer has the four ordered destinations and review notice in both locales", () => {
   for (const locale of SUPPORTED_LOCALES) {
     for (const compact of [false, true]) {
       const html = render(<SiteFooter locale={locale} compact={compact} />);
       expect(Array.from(html.matchAll(/href="([^"]+)"/g), (match) => match[1])).toEqual([
+        `/${locale}/about`,
         `/${locale}/notice`,
         `/${locale}/takedown`,
         "https://www.openstreetmap.org/copyright",
       ]);
-      for (const key of ["aboutData", "askRemoval", "mapCredit", "japaneseReview"] as const)
+      for (const key of [
+        "whatIsNoren",
+        "aboutData",
+        "askRemoval",
+        "mapCredit",
+        "japaneseReview",
+      ] as const)
         expect(html).toContain(shellMessages[locale][key]);
       expect(html.includes("mt-8")).toBe(!compact);
       expect(html).toContain("border-line");
