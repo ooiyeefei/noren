@@ -50,7 +50,7 @@ it("isRegionLocale and isCautionKey follow the config", () => {
   expect(isRegionLocale(region, "unknown")).toBe(false);
   expect(isCautionKey(region, "unknown")).toBe(false);
 });
-it("regionPolicy keeps real businesses draft-only while launchPackComplete is false", () => {
+it("regionPolicy keeps launch restrictions, with open listings handled as the draft-only exception", () => {
   expect(regionConfig("nagasaki").legal.launchPackComplete).toBe(false);
   expect(regionPolicy("nagasaki")).toEqual({
     realBusinessesDraftOnly: true,

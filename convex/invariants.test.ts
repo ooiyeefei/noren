@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import nagasaki from "../regions/nagasaki.json";
 import {
   addClaim,
@@ -18,6 +18,7 @@ import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { isPubliclyReadablePlace, isPublicSafeClaim } from "./lib/access";
+import * as region from "./lib/region";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -199,7 +200,13 @@ async function openWorld() {
 }
 
 describe("database invariants", () => {
+  afterEach(() => vi.restoreAllMocks());
   it("a public real place shows its owner's published story and withdrawal hides it", async () => {
+    // Before launch a real place's story stays private (publicPlaces.test.ts); this is the launched rule.
+    vi.spyOn(region, "regionPolicy").mockReturnValue({
+      ...region.regionPolicy("nagasaki"),
+      realBusinessesDraftOnly: false,
+    });
     const b = newBackend(modules);
     const creator = await addPerson(b, "creator", "creator");
     const steward = await addPerson(b, "steward", "steward");

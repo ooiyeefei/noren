@@ -1,3 +1,5 @@
+import type { Script } from "../domain/constants";
+
 export const CATEGORY_KEYS = ["amenity", "shop", "craft", "tourism", "historic"] as const;
 
 export const ALLOWED_TAG_KEYS = [
@@ -29,6 +31,13 @@ export function pickTags(tags: unknown): Record<string, string> {
     if (typeof value === "string" && value.trim()) result[key] = value.trim().slice(0, 200);
   }
   return result;
+}
+
+export function detectScript(value: string): Script {
+  // A mixed Japanese name follows its most specific script, even with Latin brand text.
+  if (/\p{Script=Han}/u.test(value)) return "kanji";
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(value)) return "kana";
+  return "latin";
 }
 
 export function namesFromTags(tags: Record<string, string>): {

@@ -164,13 +164,14 @@ export type RegionPolicy = {
   inviteOnly: boolean;
   noindex: boolean;
   allowPilotVisibility: boolean;
-  /** Real businesses stay in `draft` until the launch pack is complete. */
+  /** Before launch, real businesses stay in `draft` except openly licensed OSM listings. */
   realBusinessesDraftOnly: boolean;
 };
 
 /**
  * `launchPackComplete: false` forces invite-only accounts, noindex on every page, no `pilot`
- * visibility and real businesses in `draft` only (constitution, Privacy and Legal Constraints).
+ * visibility and real businesses in `draft` except openly licensed OSM listings (constitution,
+ * Privacy and Legal Constraints). The listing exception never exposes real people's stories.
  */
 export function deriveRegionPolicy(region: RegionConfig): RegionPolicy {
   const open = region.legal.launchPackComplete;

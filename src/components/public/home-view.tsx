@@ -8,7 +8,13 @@ import { PlaceMap } from "@/components/map/place-map";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { ExploreGuide } from "@/components/explore/guide";
 import { NorenTab } from "@/components/explore/noren-tab";
-import { draggedSheet, type Position, type SheetHeight } from "@/components/explore/helpers";
+import {
+  draggedSheet,
+  normaliseSearch,
+  type MapView,
+  type Position,
+  type SheetHeight,
+} from "@/components/explore/helpers";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { publicMessages } from "@/lib/i18n/messages/public";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
@@ -32,6 +38,8 @@ export function HomeView({
   model,
   category = "",
   search = "",
+  view,
+  rowLimit = 50,
   totalCount,
   hasDemo,
   position,
@@ -41,6 +49,8 @@ export function HomeView({
   guideVisible = true,
   onCategoryChange,
   onSearchChange,
+  onViewChange,
+  onShowMore,
   onSelect,
   onLocate,
   onSheetChange,
@@ -51,6 +61,8 @@ export function HomeView({
   model: ReturnType<typeof toHomeModel>;
   category?: string;
   search?: string;
+  view?: MapView | null;
+  rowLimit?: number;
   totalCount?: number;
   hasDemo?: boolean;
   position?: Position | null;
@@ -60,6 +72,8 @@ export function HomeView({
   guideVisible?: boolean;
   onCategoryChange?(category: string): void;
   onSearchChange?(search: string): void;
+  onViewChange?(view: MapView): void;
+  onShowMore?(): void;
   onSelect?(id: string): void;
   onLocate?(): void;
   onSheetChange?(height: SheetHeight): void;
@@ -81,8 +95,22 @@ export function HomeView({
       : []),
   ];
   const selectedChip = chips.find((chip) => chip.key === category)?.label ?? m.allPlaces;
-  const emptyText =
-    (totalCount ?? model.items.length) === 0
+  const searching = normaliseSearch(search) !== "";
+  const followingView = !searching && Boolean(view);
+  const countText = searching
+    ? model.items.length === 1
+      ? m.matchCountOne
+      : m.matchCount
+    : followingView
+      ? model.items.length === 1
+        ? m.areaCountOne
+        : m.areaCount
+      : model.items.length === 1
+        ? m.countOne
+        : m.count;
+  const emptyText = followingView
+    ? m.noPlacesInArea
+    : (totalCount ?? model.items.length) === 0
       ? m.noPlaces
       : category === "cafe"
         ? m.noCafeMatches
@@ -205,7 +233,7 @@ export function HomeView({
             )}
             <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 px-4">
               <p role="status" className="text-[15px] font-bold">
-                {format(model.items.length === 1 ? m.countOne : m.count, { n: model.items.length })}
+                {format(countText, { n: model.items.length })}
               </p>
               <p className="text-[13px]">{position ? m.nearest : m.storiesFirst}</p>
             </div>
@@ -230,11 +258,20 @@ export function HomeView({
             <PlaceList
               showUnreviewed={false}
               locale={locale}
-              items={model.items}
+              items={model.items.slice(0, rowLimit)}
               emptyText={emptyText}
               selectedId={selectedId}
               onSelect={onSelect}
             />
+            {model.items.length > rowLimit && (
+              <button
+                type="button"
+                onClick={onShowMore}
+                className="mx-4 my-3 min-h-11 rounded-[10px] border border-input px-4 text-[15px] text-ai hover:bg-kamenozoki"
+              >
+                {m.showMorePlaces}
+              </button>
+            )}
             <p className="px-4 py-3 text-[13px] text-muted-foreground">
               {region.attribution.join(" | ")}
             </p>
@@ -251,7 +288,7 @@ export function HomeView({
           center={region.center}
           bounds={region.bounds}
           markers={model.markers}
-          explore={{ selectedId, onSelect, position, onLocate, sheet, topOverlay }}
+          explore={{ selectedId, onSelect, position, onLocate, sheet, topOverlay, onViewChange }}
         />
       </div>
     </div>
