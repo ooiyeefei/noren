@@ -6,7 +6,7 @@ import { internalQuery, query, type QueryCtx } from "./_generated/server";
 import {
   canEditPlace,
   canSeeSource,
-  isSourceShownToEveryone,
+  countsVisits,
   loadReadablePlace,
   type Viewer,
 } from "./lib/access";
@@ -47,8 +47,8 @@ const sourceViewValidator = v.object({
   /** The name of the member who linked it, once they agreed to show it (FR-033). */
   sharedBy: v.optional(v.string()),
   addedAt: v.number(),
-  /** Whether everyone may see it, so a visit to the original is counted through /out (FR-024). */
-  shownToEveryone: v.boolean(),
+  /** Whether a visit to the original goes through /out and is counted (FR-024). */
+  countsVisits: v.boolean(),
 });
 export type SourceView = Infer<typeof sourceViewValidator>;
 
@@ -83,7 +83,7 @@ async function sourceView(
         ? undefined
         : (await ctx.db.get("person", source.addedBy))?.displayName,
     addedAt: source._creationTime,
-    shownToEveryone: isSourceShownToEveryone(place, source),
+    countsVisits: countsVisits(place, source),
   };
 }
 

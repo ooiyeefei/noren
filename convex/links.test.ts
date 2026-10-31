@@ -28,7 +28,7 @@ async function world() {
 
 describe("visits Noren sends to a shared post", () => {
   it("three visitors following the link give its sharer a total of three, and nothing about them", async () => {
-    const { b, share, counts } = await world();
+    const { b, placeId, share, counts } = await world();
     const sourceId = await share();
     for (let n = 0; n < 3; n++)
       expect(await b.t.mutation(api.links.follow, { sourceId })).toBe(
@@ -54,8 +54,13 @@ describe("visits Noren sends to a shared post", () => {
         visits: 3,
         recentVisits: 3,
         shownToEveryone: true,
+        countsVisits: true,
       },
     ]);
+    // The place page links this post through Noren's counter.
+    expect(
+      (await b.t.query(api.sources.listForPlace, { placeId })).map((post) => post.countsVisits),
+    ).toEqual([true]);
     expect(await b.as("other").query(api.links.mine, {})).toEqual([]);
     expect(await errorCode(b.t.query(api.links.mine, {}))).toBe("unauthenticated");
   });
@@ -67,29 +72,61 @@ describe("visits Noren sends to a shared post", () => {
     expect(await counts()).toEqual([]);
   });
 
-  it("counts and sends on only for a post everyone may see", async () => {
+  it("counts and sends on only for a platform post everyone may see", async () => {
     const { b, steward, placeId, share, counts } = await world();
     const draft = await addPlace(b, { createdBy: steward });
+    const pilot = await addPlace(b, { createdBy: steward, visibility: "pilot" });
+    const elsewhere = await addPlace(b, { createdBy: steward, visibility: "public" });
     const refused = [
       await addSource(b, { placeId, addedBy: steward }),
       await share("demo"),
       await share("steward", draft),
       await addSource(b, { placeId, addedBy: steward, status: "gone", demoConsentBy: steward }),
+      // Its stored address has left YouTube, so Noren will not forward anyone to it.
+      await addSource(b, {
+        placeId: elsewhere,
+        addedBy: steward,
+        adapter: "youtube",
+        url: "https://evil.example/watch?v=abcdefghijk",
+        demoConsentBy: steward,
+      }),
     ];
+    // Only signed-in people may read a pilot place, and /out never knows who is following.
+    const pilotPost = await share("sharer", pilot, "https://www.youtube.com/watch?v=cdefghijklm");
+    // A web page a member typed in is linked to directly, never through Noren's address.
+    const page = (
+      await b.as("sharer").mutation(api.sources.add, {
+        placeId,
+        url: "https://blog.example/nagasaki-cats",
+        title: "Cats of Nagasaki",
+        note: "猫。",
+        noteLang: "ja",
+      })
+    ).sourceId;
     const hidden = await share("sharer", placeId, "https://www.youtube.com/watch?v=bcdefghijkl");
     await b.as("sharer").mutation(api.sources.remove, { sourceId: hidden });
-    for (const sourceId of [...refused, hidden, "not-an-id", placeId]) {
+    for (const sourceId of [...refused, pilotPost, page, hidden, "not-an-id", placeId]) {
       expect(await b.t.mutation(api.links.follow, { sourceId })).toBeNull();
       expect(await b.t.query(api.links.peek, { sourceId })).toBeNull();
     }
     expect(await counts()).toEqual([]);
+    // On the place page, the web page links straight out.
+    expect(
+      (await b.t.query(api.sources.listForPlace, { placeId })).map((post) => [
+        post.adapter,
+        post.countsVisits,
+      ]),
+    ).toEqual([["link_card", false]]);
     // The sharer still sees why a post of theirs is not counted.
     expect(
-      (await b.as("sharer").query(api.links.mine, {})).map(({ status, shownToEveryone }) => ({
-        status,
-        shownToEveryone,
-      })),
-    ).toEqual([{ status: "hidden", shownToEveryone: false }]);
+      (await b.as("sharer").query(api.links.mine, {})).map(
+        ({ status, shownToEveryone, countsVisits }) => ({ status, shownToEveryone, countsVisits }),
+      ),
+    ).toEqual([
+      { status: "hidden", shownToEveryone: false, countsVisits: false },
+      { status: "live", shownToEveryone: true, countsVisits: false },
+      { status: "live", shownToEveryone: false, countsVisits: false },
+    ]);
   });
 
   it("keeps a demo post's count tagged as demo", async () => {

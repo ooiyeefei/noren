@@ -64,8 +64,8 @@ export type SourceViewLike = Omit<EmbedSourceView, "id"> & {
   sharedBy?: string;
   addedAt?: number;
   addedByMe?: boolean;
-  /** Whether everyone may see it; then a visit to the original is counted through /out. */
-  shownToEveryone?: boolean;
+  /** Whether a visit to the original goes through /out and is counted (FR-024). */
+  countsVisits?: boolean;
 };
 export type WrittenStoryLike = {
   _id: string;
@@ -225,7 +225,7 @@ export function toStoryFeed(
     canRemove: source.addedByMe === true || canEdit,
     sharedBy: source.sharedBy,
     source: toEmbedSource(source),
-    ...(source.shownToEveryone ? { outboundHref: outboundPath(source._id) } : {}),
+    ...(source.countsVisits ? { outboundHref: outboundPath(source._id) } : {}),
   }));
   return [...written, ...posts].sort((a, b) => b.addedAt - a.addedAt);
 }

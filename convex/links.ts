@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { SHARED_POSTS_LISTED } from "../src/lib/domain/constants";
 import type { Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
-import { isSourceShownToEveryone } from "./lib/access";
+import { countsVisits, isSourceShownToEveryone } from "./lib/access";
 import { requirePerson } from "./lib/auth";
 import { mutation } from "./lib/gate";
 import { readMapNames } from "./lib/mapCopies";
@@ -21,14 +21,17 @@ export function countDay(now: number): string {
   return new Date(now).toISOString().slice(0, 10);
 }
 
-/** Where a link out of Noren goes, for a post everyone may see; otherwise nowhere. */
+/**
+ * Where a link out of Noren goes: the original of a platform post everyone may see; otherwise
+ * nowhere. The caller is never known, so nothing a signed-in member alone may see is sent on.
+ */
 async function destination(ctx: QueryCtx, sourceId: string) {
   const id = ctx.db.normalizeId("source", sourceId);
   if (id === null) return null;
   const source = await ctx.db.get("source", id);
   if (source === null) return null;
   const place = await ctx.db.get("place", source.placeId);
-  if (place === null || !isSourceShownToEveryone(place, source)) return null;
+  if (place === null || !countsVisits(place, source)) return null;
   return source;
 }
 
@@ -84,6 +87,8 @@ const sharedPost = v.object({
   title: v.optional(v.string()),
   status: v.string(),
   shownToEveryone: v.boolean(),
+  /** Whether its link goes through /out; a web page is linked to directly and never counted. */
+  countsVisits: v.boolean(),
   /** Visits Noren sent to the original in the past year and in the last 30 days. Totals only. */
   visits: v.number(),
   recentVisits: v.number(),
@@ -136,6 +141,7 @@ export const mine = query({
         title: source.title,
         status: source.status,
         shownToEveryone: isSourceShownToEveryone(place, source),
+        countsVisits: countsVisits(place, source),
         ...(await visitsTo(ctx, source._id, now)),
         addedAt: source._creationTime,
       });
