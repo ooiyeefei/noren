@@ -124,17 +124,24 @@ export function markerPresentation(marker: MapMarker, demo: string, selected = f
     stroke: marker.hasStory ? "#23305c" : "#ffffff",
     strokeWidth: marker.hasStory ? "2" : "1",
     className: selected
-      ? "h-8 w-7 scale-[1.2] ring-2 ring-ai ring-offset-2 focus-visible:outline-2"
+      ? `h-8 w-7 ${SELECTED_CLASSES.join(" ")} focus-visible:outline-2`
       : "h-8 w-7 focus-visible:outline-2 focus-visible:outline-offset-2",
   };
 }
+
+/**
+ * MapLibre places a marker with an inline transform on this element, and the CSS scale, rotate
+ * and translate properties compose with it, so a scale here would scale the position too and the
+ * marker would drift from its place. The selected noren grows only inside the element.
+ */
+const SELECTED_CLASSES = ["[&>svg]:scale-[1.2]", "ring-2", "ring-ai", "ring-offset-4"];
 
 export function setMarkerSelection(
   element: Pick<HTMLElement, "classList" | "setAttribute">,
   selected: boolean,
 ): void {
   // MapLibre owns positioning classes on this element; preserve them when selecting.
-  for (const name of ["scale-[1.2]", "ring-2", "ring-ai", "ring-offset-2"]) {
+  for (const name of SELECTED_CLASSES) {
     element.classList.toggle(name, selected);
   }
   element.setAttribute("aria-pressed", String(selected));
