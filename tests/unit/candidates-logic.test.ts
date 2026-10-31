@@ -126,18 +126,14 @@ describe("candidate logic", () => {
   it("category options put focus categories first", () => {
     const region = getRegionConfig("nagasaki")!;
     const input = { categories: [...region.categories!].reverse() };
+    const focus = region.categories!.map((category) => category.focus);
+    expect(focus).toContain(true);
+    expect(focus).toContain(false);
     for (const locale of ["ja", "en"] as const) {
       const options = categoryOptions(input, locale);
-      expect(options.map((option) => option.focus)).toEqual([
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        false,
-        false,
-      ]);
+      expect(options.map((option) => option.focus)).toEqual(
+        [...focus].sort((a, b) => Number(b) - Number(a)),
+      );
       expect(options.find((option) => option.key === "cafe")?.label).toBe(
         region.categories!.find((category) => category.key === "cafe")!.labels[locale],
       );

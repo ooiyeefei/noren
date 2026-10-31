@@ -185,6 +185,24 @@
       "focus": true
     },
     {
+      "key": "stay",
+      "labels": {
+        "ja": "宿・ホテル・旅館",
+        "en": "Place to stay"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "bath",
+      "labels": {
+        "ja": "銭湯・温泉",
+        "en": "Public bath or hot spring"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
       "key": "attraction",
       "labels": {
         "ja": "名所・観光スポット",

@@ -630,6 +630,38 @@ describe("synthetic open listing batch APIs", () => {
     ]);
   });
 
+  it("a re-import files a ryokan and a bath under their new categories, and both publish", async () => {
+    const b = await listingSetup();
+    // As stored by an import that ran before places to stay and baths were categories.
+    await b.run((ctx) =>
+      ctx.db.patch("seedOsmCandidate", b.id, {
+        category: "other",
+        tags: { name: "架空旅館", tourism: "hotel" },
+      }),
+    );
+    await b.t.mutation(
+      f.importCandidates,
+      importArgs([
+        { ...candidate(), tags: { name: "架空旅館", tourism: "hotel" } },
+        { ...candidate(2), tags: { name: "架空温泉;かくうの湯", amenity: "public_bath" } },
+      ]),
+    );
+    const candidates = await rows(b);
+    expect(candidates.map((row) => row.category).sort()).toEqual(["bath", "stay"]);
+    const result = await b.t.mutation(f.publishListings, {
+      ...b.args,
+      candidateIds: candidates.map((row) => row._id),
+    });
+    expect(result.skipped).toEqual([]);
+    const places = await b.run((ctx) => ctx.db.query("place").take(5));
+    expect(places.map((place) => [place.category, place.visibility]).sort()).toEqual([
+      ["bath", "public"],
+      ["stay", "public"],
+    ]);
+    const values = (await b.run((ctx) => ctx.db.query("placeName").take(5))).map((n) => n.value);
+    expect(values.sort()).toEqual(["架空旅館", "架空温泉 かくうの湯"]);
+  });
+
   it("skips a candidate whose OSM ref is already used", async () => {
     const b = await listingSetup();
     const placeId = await addPlace(b, { createdBy: b.steward });
