@@ -23,6 +23,8 @@ export const publicMessages = defineMessages({
     order: "表示順",
     legendStory: "話あり",
     storiesChip: "話あり",
+    noStoriesYet:
+      "まだ誰も話を共有していません。行ったことのある場所を開いて、最初の話を共有してください。",
     latestStories: "新しい話",
     writtenBy: "書いた人：{name}",
     postSharedBy: "{platform}の投稿を共有：{name}",
@@ -99,6 +101,8 @@ export const publicMessages = defineMessages({
     order: "List order",
     legendStory: "With stories",
     storiesChip: "With stories",
+    noStoriesYet:
+      "No one has shared a story yet. Open a place you have been to and share the first one.",
     latestStories: "Latest stories",
     writtenBy: "By {name}",
     postSharedBy: "{platform} post shared by {name}",

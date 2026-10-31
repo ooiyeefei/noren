@@ -154,6 +154,7 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
       onShowMore={() => setRowLimit((limit) => limit + 50)}
       totalCount={all.items.length}
       hasDemo={all.items.some((item) => item.isMock)}
+      hasStories={all.items.some((item) => item.hasStory)}
       latest={latest}
       position={position}
       locationOff={locationOff}

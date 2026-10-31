@@ -45,6 +45,7 @@ export function HomeView({
   rowLimit = 50,
   totalCount,
   hasDemo,
+  hasStories,
   latest,
   position,
   locationOff = false,
@@ -70,6 +71,8 @@ export function HomeView({
   rowLimit?: number;
   totalCount?: number;
   hasDemo?: boolean;
+  /** Whether any place in the region has a story, wherever the map is. */
+  hasStories?: boolean;
   /** The newest stories people shared in the region; undefined while loading. */
   latest?: readonly LatestStoryLike[];
   position?: Position | null;
@@ -117,15 +120,18 @@ export function HomeView({
       : model.items.length === 1
         ? m.countOne
         : m.count;
-  const emptyText = followingView
-    ? m.noPlacesInArea
-    : (totalCount ?? model.items.length) === 0
-      ? m.noPlaces
-      : category === "cafe"
-        ? m.noCafeMatches
-        : format(m.noMatches, {
-            category: category ? selectedChip.toLocaleLowerCase(locale) : m.allPlaces,
-          });
+  const emptyText =
+    category === STORIES_FILTER && hasStories === false
+      ? m.noStoriesYet
+      : followingView
+        ? m.noPlacesInArea
+        : (totalCount ?? model.items.length) === 0
+          ? m.noPlaces
+          : category === "cafe"
+            ? m.noCafeMatches
+            : format(m.noMatches, {
+                category: category ? selectedChip.toLocaleLowerCase(locale) : m.allPlaces,
+              });
   const searchAndChips = (
     <>
       <div className="relative rounded-[10px] bg-white shadow-[var(--shadow-float)] lg:shadow-none">
