@@ -112,6 +112,7 @@ export function StoryFeed({
               <EmbedView
                 locale={locale}
                 source={entry.source}
+                outboundHref={entry.outboundHref}
                 scriptOrigins={scriptOrigins}
                 frameOrigins={frameOrigins}
               >

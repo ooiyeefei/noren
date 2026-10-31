@@ -140,6 +140,17 @@ export function isStoryShown(
   return story.status === "live" && story.isMock === place.isMock;
 }
 
+/** Whether anyone at all, signed in to the region or not, may see this post on its place. */
+export function isSourceShownToEveryone(
+  place: Pick<Doc<"place">, "visibility" | "demoPublicBasis" | "isMock">,
+  source: Pick<Doc<"source">, "status" | "sharedAt" | "demoConsentAt" | "isMock">,
+): boolean {
+  return (
+    (isPubliclyReadablePlace(place) || place.visibility === "pilot") &&
+    isSharedPublicly(place, source)
+  );
+}
+
 /** The caller has already checked canReadPlace. */
 export async function canSeeSource(
   ctx: QueryCtx,
@@ -149,8 +160,7 @@ export async function canSeeSource(
 ): Promise<boolean> {
   if (source.placeId !== place._id || source.status !== "live") return false;
   return (
-    ((isPubliclyReadablePlace(place) || place.visibility === "pilot") &&
-      isSharedPublicly(place, source)) ||
+    isSourceShownToEveryone(place, source) ||
     (viewer !== null && source.addedBy === viewer._id) ||
     (await canManagePlace(ctx, viewer, place))
   );

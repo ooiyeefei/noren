@@ -4,8 +4,9 @@ import { DemoBadge } from "@/components/badges";
 import { PageContainer } from "@/components/layout/page-container";
 import { StepsPanel } from "@/components/layout/steps-panel";
 import { Button } from "@/components/ui/button";
-import type { Visibility } from "@/lib/domain/constants";
-import { messagesFor, type Locale } from "@/lib/i18n";
+import { platformName } from "@/components/embeds/platform-name";
+import { SHARED_POSTS_LISTED, type Visibility } from "@/lib/domain/constants";
+import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { creatorMessages } from "@/lib/i18n/messages/creator";
 import type { RegionConfig } from "@/lib/region";
 import { pickPlaceName } from "@/lib/region/names";
@@ -19,10 +20,25 @@ export type CreatorPlace = {
   visibility: Visibility;
   isMock: boolean;
 };
+/** A post the member linked, with the visits Noren sent to its original (FR-024). */
+export type SharedPostLike = {
+  sourceId: string;
+  placeSlug: string;
+  placeNames: NameDraft[];
+  platform: string;
+  note?: string;
+  noteLang?: string;
+  status: string;
+  shownToEveryone: boolean;
+  visits: number;
+  recentVisits: number;
+};
+
 export function CreatorHomeView({
   locale,
   region,
   places,
+  shared = [],
   children,
   adding = !!children,
   canInterview = true,
@@ -30,6 +46,8 @@ export function CreatorHomeView({
   locale: Locale;
   region: RegionConfig;
   places: CreatorPlace[];
+  /** The posts the member linked; only they see these totals (Principle I). */
+  shared?: readonly SharedPostLike[];
   children?: ReactNode;
   adding?: boolean;
   canInterview?: boolean;
@@ -132,6 +150,68 @@ export function CreatorHomeView({
               })}
             </ul>
           )}
+        </section>
+      )}
+      {!adding && shared.length > 0 && (
+        <section className="space-y-4" aria-labelledby="shared-posts">
+          <h2 id="shared-posts" className="text-[22px] font-bold">
+            {m.sharedPosts}
+          </h2>
+          <p className="max-w-prose text-[15px] text-muted-foreground">{m.visitsNote}</p>
+          {shared.length >= SHARED_POSTS_LISTED && (
+            <p className="text-[15px]">{format(m.newestPosts, { n: SHARED_POSTS_LISTED })}</p>
+          )}
+          <ul>
+            {shared.map((post) => {
+              const { primary } = pickPlaceName(post.placeNames, locale, region);
+              const state =
+                post.status === "gone"
+                  ? m.originalGone
+                  : post.status === "hidden"
+                    ? m.removedPost
+                    : post.shownToEveryone
+                      ? undefined
+                      : m.notShown;
+              return (
+                <li
+                  key={post.sourceId}
+                  className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-line py-3"
+                >
+                  <div className="min-w-0 flex-1 basis-48 space-y-1">
+                    <Link
+                      href={`/${locale}/places/${post.placeSlug}`}
+                      className="inline-flex min-h-11 items-center font-bold break-words text-kon underline-offset-4 hover:underline"
+                      lang={primary?.lang}
+                    >
+                      {primary?.value ?? post.placeSlug}
+                    </Link>
+                    <p className="text-[15px]">{platformName(post.platform) ?? m.linkedPage}</p>
+                    {post.note && (
+                      <p
+                        lang={post.noteLang}
+                        className="line-clamp-2 text-[15px] text-muted-foreground"
+                      >
+                        {post.note}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <p className="font-bold">
+                      {post.visits === 1 ? m.visitsOne : format(m.visits, { n: post.visits })}
+                    </p>
+                    <p className="text-[13px] text-muted-foreground">
+                      {format(m.recentVisits, { n: post.recentVisits })}
+                    </p>
+                    {state && (
+                      <p className="rounded-full bg-kamenozoki px-3 py-1 text-[13px] text-kon">
+                        {state}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
     </PageContainer>

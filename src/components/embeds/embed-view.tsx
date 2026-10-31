@@ -59,6 +59,9 @@ function Post({
   }, [scriptUrl, scriptOrigins]);
   const href = outboundHref ?? source.canonicalUrl;
   const external = { target: "_blank", rel: "noopener noreferrer nofollow" };
+  // Through /out the visit is counted and the original learns it came from Noren: the referral a
+  // creator gets for sharing (FR-024). /out passes on only Noren's origin, never the page.
+  const toOriginal = outboundHref ? { target: "_blank", rel: "noopener" } : external;
   const frameAllowed = plan.kind !== "iframe" || isAllowedOrigin(plan.src, frameOrigins);
   return (
     <article lang={locale} className="space-y-3 rounded-lg border p-4">
@@ -88,7 +91,7 @@ function Post({
         )}
       </header>
       {plan.kind === "link" && (
-        <a href={href} {...external} className="block rounded border p-4 underline">
+        <a href={href} {...toOriginal} className="block rounded border p-4 underline">
           {source.title || new URL(plan.url).hostname}
         </a>
       )}
@@ -141,7 +144,7 @@ function Post({
           {source.creatorNote}
         </p>
       )}
-      <a href={href} {...external} className="underline underline-offset-4">
+      <a href={href} {...toOriginal} className="underline underline-offset-4">
         {messages.viewOriginal}
       </a>
       {children}
