@@ -130,6 +130,31 @@ describe("CSP", () => {
     ]);
   });
 
+  it("aerial photo tiles add their origin to img-src and connect-src only", () => {
+    const withPhotos = cspDirectives({
+      ...input,
+      aerialTilesUrl: "https://photos.mock.example/xyz/{z}/{x}/{y}.jpg",
+    });
+    for (const directive of CSP_DIRECTIVES) {
+      expect(withPhotos[directive]).toEqual(
+        ["img-src", "connect-src"].includes(directive)
+          ? [...cspDirectives(input)[directive], "https://photos.mock.example"]
+          : cspDirectives(input)[directive],
+      );
+    }
+    for (const aerialTilesUrl of ["http://photos.mock.example/{z}/{x}/{y}.jpg", "not a url"])
+      expect(() => cspDirectives({ ...input, aerialTilesUrl })).toThrow(CspConfigError);
+  });
+
+  it("the active region's aerial photos come from GSI tiles", () => {
+    expect(region.geo.aerialPhoto?.tiles).toBe(
+      "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+    );
+    expect(cspHeaderFromEnv(env, { enforce: true, region }).value).toMatch(
+      /connect-src [^;]*https:\/\/cyberjapandata\.gsi\.go\.jp[ ;]/,
+    );
+  });
+
   it("media-src allows blob and the Convex origin", () => {
     expect(cspDirectives(input)["media-src"]).toEqual([
       "'self'",
@@ -251,7 +276,7 @@ describe("CSP", () => {
     for (const enforce of [false, true]) {
       expect(cspHeaderFromEnv(env, { enforce, region })).toEqual({
         key: enforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only",
-        value: buildCsp(input, { enforce }),
+        value: buildCsp({ ...input, aerialTilesUrl: region.geo.aerialPhoto?.tiles }, { enforce }),
       });
     }
   });

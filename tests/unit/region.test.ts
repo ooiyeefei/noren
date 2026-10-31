@@ -48,6 +48,17 @@ describe("region loader", () => {
     );
   });
 
+  it("takes aerial photos only from an HTTPS tile template, and they are optional", () => {
+    expect(parse((r) => delete r.geo.aerialPhoto).ok).toBe(true);
+    for (const tiles of [
+      "http://photos.mock.example/{z}/{x}/{y}.jpg",
+      "https://photos.mock.example/photo.jpg",
+      "https://photos.mock.example/{x}/{y}/{z}.jpg",
+    ])
+      expect(problemOf(parse((r) => (r.geo.aerialPhoto!.tiles = tiles)))).toContain("tiles");
+    expect(problemOf(parse((r) => (r.geo.aerialPhoto!.credit = "")))).toContain("credit");
+  });
+
   it("rejects unknown keys so typos do not pass silently", () => {
     expect(problemOf(parse((r) => Object.assign(r, { minimumAges: 16 })))).toContain("minimumAges");
   });

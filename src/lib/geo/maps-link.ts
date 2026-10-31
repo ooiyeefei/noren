@@ -1,6 +1,10 @@
 import { geoUserAgent } from ".";
 
-export type MapsSuggestion = { name?: string; lat: number; lng: number };
+/**
+ * `exact` is true when the point is the place's own pin or a dropped pin, and false when the link
+ * only gives the centre of the map view, which can be hundreds of metres from the place.
+ */
+export type MapsSuggestion = { name?: string; lat: number; lng: number; exact?: boolean };
 
 export function isAllowedMapsHost(input: string | URL): boolean {
   try {
@@ -24,7 +28,12 @@ function coordinates(latText: string, lngText: string) {
     : {};
 }
 
-export function parseMapsUrl(finalUrl: string): { name?: string; lat?: number; lng?: number } {
+export function parseMapsUrl(finalUrl: string): {
+  name?: string;
+  lat?: number;
+  lng?: number;
+  exact?: boolean;
+} {
   try {
     const url = new URL(finalUrl);
     const decode = (text: string) => decodeURIComponent(text.replaceAll("+", " ")).trim();
@@ -37,8 +46,10 @@ export function parseMapsUrl(finalUrl: string): { name?: string; lat?: number; l
     const pin = finalUrl.match(new RegExp(`!3d${number}!4d${number}(?=[!&#/?]|$)`));
     const viewport = url.pathname.match(new RegExp(`@${number},${number}(?=[,/]|$)`));
     const q = query?.match(new RegExp(`^${number}\\s*,\\s*${number}$`));
-    const point = pin ?? viewport ?? q;
-    return { ...result, ...(point ? coordinates(point[1]!, point[2]!) : {}) };
+    // The view's centre is the last resort: Google shifts it to make room for its side panel.
+    const point = pin ?? q ?? viewport;
+    const spot = point ? coordinates(point[1]!, point[2]!) : {};
+    return { ...result, ...spot, ...("lat" in spot ? { exact: point !== viewport } : {}) };
   } catch {
     return {};
   }

@@ -23,7 +23,14 @@
     },
     "search": ["nominatim"],
     "countrycodes": ["jp"],
-    "attribution": ["© OpenStreetMap contributors", "OpenFreeMap © OpenMapTiles"]
+    "attribution": ["© OpenStreetMap contributors", "OpenFreeMap © OpenMapTiles"],
+    "aerialPhoto": {
+      "tiles": "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+      "minZoom": 14,
+      "maxZoom": 18,
+      "credit": "地理院タイル",
+      "creditUrl": "https://maps.gsi.go.jp/development/ichiran.html"
+    }
   },
   "enabledSourceAdapters": [
     "link_card",

@@ -259,6 +259,7 @@ export function CandidatesView(props: CandidatesProps) {
                         }}
                         bounds={region.bbox}
                         markers={[]}
+                        aerial={region.geo.aerialPhoto}
                         picker={{
                           value: pin?.ok ? pin.value : null,
                           onChange: (pin) => {

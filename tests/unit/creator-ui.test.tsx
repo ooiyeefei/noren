@@ -10,6 +10,7 @@ import {
   type NewPlaceViewProps,
 } from "@/components/creator/new-place-view";
 import { PlaceMap } from "@/components/map/place-map";
+import type { MapsSuggestion } from "@/lib/geo/maps-link";
 import { CreatorHomeView } from "@/components/creator/creator-home-view";
 import { PlaceEditorView, type PlaceEditorViewProps } from "@/components/creator/place-editor-view";
 import { loadRegions } from "@/lib/region";
@@ -342,12 +343,12 @@ it("puts the pin on the Maps link's spot only when the person taps for it", asyn
   });
   vi.stubGlobal("fetch", async () => ({
     ok: true,
-    json: async () => ({ suggestion: { lat: 32.7412345678, lng: 129.8712345678 } }),
+    json: async () => ({ suggestion: { lat: 32.7412345678, lng: 129.8712345678, exact: true } }),
   }));
   await click(render(), "Fill from link");
   const feedback = () =>
     element<Parameters<typeof MapsLinkFeedback>[0]>(render(), MapsLinkFeedback).props;
-  expect(feedback()).toMatchObject({ suggested: true, pinned: false });
+  expect(feedback()).toMatchObject({ suggested: true, area: false, pinned: false });
   // Reading the link moves the map but leaves the pin alone.
   for (const [draft] of onChange.mock.calls) expect(draft.pin).toBeNull();
   feedback().onPin!();
@@ -367,6 +368,82 @@ it("puts the pin on the Maps link's spot only when the person taps for it", asyn
   vi.stubGlobal("fetch", async () => ({ ok: false, json: async () => ({}) }));
   await click(render(), "Fill from link");
   expect(feedback()).toMatchObject({ error: creatorMessages.en.mapsLinkFailure, suggested: false });
+});
+
+it("a link with only an area says so and offers no one-tap pin", async () => {
+  const props = { ...newProps, locale: "en" as const, onChange: vi.fn(), prefillNames: true };
+  const field = elements(mountView(PlacePinSearch, props)()).find((item) => "onPin" in item.props)!;
+  const render = mountView(field.type as (props: typeof field.props) => ReactNode, {
+    ...field.props,
+  });
+  const input = elements(render()).find((item) => item.props.type === "url")!;
+  (input.props.onChange as (event: { target: { value: string } }) => void)({
+    target: { value: "https://maps.app.goo.gl/mock" },
+  });
+  const feedback = () =>
+    element<Parameters<typeof MapsLinkFeedback>[0]>(render(), MapsLinkFeedback).props;
+  // Only a clear yes counts as the shop's own pin.
+  for (const exact of [false, undefined, "true", 1]) {
+    vi.stubGlobal("fetch", async () => ({
+      ok: true,
+      json: async () => ({ suggestion: { lat: 32.74, lng: 129.87, exact } }),
+    }));
+    await click(render(), "Fill from link");
+    expect(feedback()).toMatchObject({ suggested: true, area: true, onPin: undefined });
+  }
+  vi.stubGlobal("fetch", async () => ({
+    ok: true,
+    json: async () => ({ suggestion: { lat: 32.74, lng: 129.87, exact: true } }),
+  }));
+  await click(render(), "Fill from link");
+  expect(feedback()).toMatchObject({ suggested: true, area: false });
+  expect(feedback().onPin).toBeInstanceOf(Function);
+  for (const locale of ["ja", "en"] as const) {
+    const m = creatorMessages[locale];
+    const html = renderToStaticMarkup(
+      <MapsLinkFeedback locale={locale} suggested area onPin={vi.fn()} />,
+    );
+    expect(html).toContain(`${m.linkArea} ${m.checkMapsSuggestion}`);
+    expect(html).not.toContain(m.linkFound);
+    expect(html).not.toContain(m.pinAtLink);
+  }
+});
+
+it("the map under an area link asks the person to find the shop", () => {
+  const point = { lat: 32.75, lng: 129.87 };
+  const render = mountView(PlacePinSearch, { ...newProps, locale: "en" as const });
+  const mapsLink = elements(render()).find((item) => "onSuggestion" in item.props)!;
+  const suggest = mapsLink.props.onSuggestion as (suggestion: MapsSuggestion) => void;
+  suggest({ ...point, exact: false });
+  const picker = element<Parameters<typeof PinPicker>[0]>(render(), PinPicker);
+  expect(picker.props.center).toEqual({ ...point, area: true });
+  const pinRender = mountView(PinPicker, picker.props);
+  // The map gets only the point; the area note stays in the form.
+  expect(element<Parameters<typeof PlaceMap>[0]>(pinRender(), PlaceMap).props.center).toEqual({
+    ...point,
+    zoom: 17,
+  });
+  const html = renderToStaticMarkup(pinRender());
+  expect(html).toContain(creatorMessages.en.areaHint);
+  expect(html).not.toContain("The + marks the spot.");
+  suggest({ ...point, exact: true });
+  expect(element<Parameters<typeof PinPicker>[0]>(render(), PinPicker).props.center).toEqual(point);
+});
+
+it("the pin map offers the region's aerial photos and says where to find them", () => {
+  const aerial = region.geo.aerialPhoto!;
+  for (const locale of ["ja", "en"] as const) {
+    const m = creatorMessages[locale];
+    const render = mountView(PinPicker, { ...newProps, locale, onChange: vi.fn() });
+    expect(element<Parameters<typeof PlaceMap>[0]>(render(), PlaceMap).props.aerial).toBe(aerial);
+    expect(renderToStaticMarkup(render())).toContain(`${m.pinHint} ${m.photoHint}`);
+    const plain = { ...region, geo: { ...region.geo, aerialPhoto: undefined } };
+    const without = mountView(PinPicker, { ...newProps, locale, region: plain, onChange: vi.fn() });
+    expect(element<Parameters<typeof PlaceMap>[0]>(without(), PlaceMap).props.aerial).toBe(
+      undefined,
+    );
+    expect(renderToStaticMarkup(without())).not.toContain(m.photoHint);
+  }
 });
 
 it("puts space between every field's label and its control", () => {
@@ -582,7 +659,10 @@ it.each(["suggestion", "location", "maps link"])(
       await click(tree, "Use my location");
     } else {
       const mapsLink = elements(tree).find((item) => "onSuggestion" in item.props)!;
-      (mapsLink.props.onSuggestion as (suggestion: typeof point) => void)(point);
+      (mapsLink.props.onSuggestion as (suggestion: MapsSuggestion) => void)({
+        ...point,
+        exact: true,
+      });
     }
     const picker = element<Parameters<typeof PinPicker>[0]>(render(), PinPicker);
     expect(picker.props.center).toEqual(point);

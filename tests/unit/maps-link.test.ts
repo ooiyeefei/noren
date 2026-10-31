@@ -12,16 +12,25 @@ describe("Maps URL parser", () => {
   it.each([
     [
       "https://www.google.com/maps/place/%E4%B8%89%E5%85%AB%E3%83%A9%E3%83%BC%E3%83%A1%E3%83%B3+%E5%A4%A7%E6%B5%A6%E6%94%AF%E5%BA%97/@32.7360863,129.8711773,17z/data=!3m1!4b1!4m6!3m5!1s0x0:0x0!8m2!3d32.7360863!4d129.8711773",
-      { name: "三八ラーメン 大浦支店", lat: 32.7360863, lng: 129.8711773 },
+      { name: "三八ラーメン 大浦支店", lat: 32.7360863, lng: 129.8711773, exact: true },
     ],
     [
       "https://google.com/maps/place/Mock+shop/@30,120,17z/data=!3d32.7!4d129.8",
-      { name: "Mock shop", lat: 32.7, lng: 129.8 },
+      { name: "Mock shop", lat: 32.7, lng: 129.8, exact: true },
     ],
-    ["https://google.com/maps/@32.7,129.8,17z", { lat: 32.7, lng: 129.8 }],
-    ["https://google.com/maps?q=32.7,129.8", { lat: 32.7, lng: 129.8 }],
+    // A shared place: the view is shifted for the side panel, so only the place's own pin is right.
+    [
+      "https://www.google.com/maps/place/Mock+cafe/@32.7375117,129.8688211,17z/data=!3m1!4b1!4m6!3m5!1s0x0:0x0!8m2!3d32.7375117!4d129.871396!16s%2Fg%2Fmock?entry=tts",
+      { name: "Mock cafe", lat: 32.7375117, lng: 129.871396, exact: true },
+    ],
+    ["https://google.com/maps/@32.7,129.8,17z", { lat: 32.7, lng: 129.8, exact: false }],
+    ["https://google.com/maps?q=32.7,129.8", { lat: 32.7, lng: 129.8, exact: true }],
+    // A dropped pin is exact, so it wins over the view's centre.
+    ["https://google.com/maps/@30,120,17z?q=32.7,129.8", { lat: 32.7, lng: 129.8, exact: true }],
     ["https://google.com/maps?q=Mock+shop", { name: "Mock shop" }],
-    ["https://google.com/maps/place/12345/@32,129,17z", { lat: 32, lng: 129 }],
+    ["https://google.com/maps/place/12345/@32,129,17z", { lat: 32, lng: 129, exact: false }],
+    // A pin out of range is not replaced by the view's centre.
+    ["https://google.com/maps/place/Mock/@32,129,17z/data=!3d95!4d129", { name: "Mock" }],
     ["https://google.com/maps/place/32.7,129.8", {}],
     ["garbage", {}],
     ["https://google.com/maps?q=91,129", {}],

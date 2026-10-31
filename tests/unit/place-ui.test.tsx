@@ -18,6 +18,7 @@ import type { EmbedDescriptor } from "@/lib/ports";
 
 const mapState = vi.hoisted(() => ({
   failed: false,
+  view: "map" as "map" | "photo",
   capture: false,
   effects: [] as Array<() => void | (() => void)>,
   options: null as Record<string, unknown> | null,
@@ -43,7 +44,13 @@ vi.mock("react", async (importOriginal) => {
     },
     useState: (initial: unknown) =>
       actual.useState(
-        initial === false ? mapState.failed : initial === null ? mapState.runtime : initial,
+        initial === false
+          ? mapState.failed
+          : initial === null
+            ? mapState.runtime
+            : initial === "map"
+              ? mapState.view
+              : initial,
       ),
   };
 });
@@ -489,6 +496,149 @@ describe("place UI", () => {
     expect(explore).toContain("Noren does not save your location.");
     expect(explore).toContain("aria-describedby=");
     expect(explore).not.toMatch(/<canvas|<script/);
+  });
+
+  it("a map with aerial photos has a Map and Aerial photo switch, and credits the photos while shown", () => {
+    const aerial = {
+      tiles: "https://photos.mock.example/{z}/{x}/{y}.jpg",
+      minZoom: 14,
+      maxZoom: 18,
+      credit: "Mock photo credit",
+      creditUrl: "https://photos.mock.example/credit",
+    };
+    const props = {
+      label: "Mock map",
+      styleUrl: "mock.json",
+      attribution: ["Mock credit"],
+      center: { lat: 32, lng: 129, zoom: 17 },
+      markers: [],
+      picker: { value: null, onChange: () => {} },
+      aerial,
+    };
+    const credit = (html: string) => html.match(/<div data-map-credit[\s\S]*?<\/div>/)?.[0] ?? "";
+    try {
+      for (const locale of ["ja", "en"] as const) {
+        const m = placeUiMessages[locale];
+        const map = renderToStaticMarkup(<PlaceMap {...props} locale={locale} />);
+        expect(map).toContain(`role="group" aria-label="${m.mapViews}"`);
+        expect(map).toMatch(new RegExp(`aria-pressed="true"[^>]*>${m.mapLayer}</button>`));
+        expect(map).toMatch(new RegExp(`aria-pressed="false"[^>]*>${m.photoLayer}</button>`));
+        expect(credit(map)).not.toContain("Mock photo credit");
+        mapState.view = "photo";
+        const photo = renderToStaticMarkup(<PlaceMap {...props} locale={locale} />);
+        mapState.view = "map";
+        expect(photo).toMatch(new RegExp(`aria-pressed="true"[^>]*>${m.photoLayer}</button>`));
+        expect(credit(photo)).toContain(
+          '<a href="https://photos.mock.example/credit" class="underline">Mock photo credit</a>',
+        );
+        expect(credit(photo).split(" | ")).toHaveLength(4);
+      }
+      expect(
+        renderToStaticMarkup(<PlaceMap {...props} aerial={undefined} locale="en" />),
+      ).not.toContain('role="group"');
+      mapState.failed = true;
+      expect(renderToStaticMarkup(<PlaceMap {...props} locale="en" />)).not.toContain(
+        'role="group"',
+      );
+    } finally {
+      mapState.failed = false;
+      mapState.view = "map";
+    }
+  });
+
+  it("adds the aerial photos under the labels only once switched on and the style has loaded", () => {
+    const aerial = {
+      tiles: "https://photos.mock.example/{z}/{x}/{y}.jpg",
+      minZoom: 14,
+      maxZoom: 18,
+      credit: "Mock photo credit",
+      creditUrl: "https://photos.mock.example/credit",
+    };
+    let loaded = false;
+    let active = true;
+    let source: unknown;
+    const map = {
+      isStyleLoaded: vi.fn(() => loaded),
+      once: vi.fn(),
+      off: vi.fn(),
+      getSource: vi.fn(() => source),
+      addSource: vi.fn((_id: string, spec: unknown) => {
+        source = spec;
+      }),
+      addLayer: vi.fn(),
+      getStyle: () => ({
+        layers: [
+          { id: "water", type: "fill" },
+          { id: "road-label", type: "symbol" },
+          { id: "place-label", type: "symbol" },
+        ],
+      }),
+      setLayoutProperty: vi.fn(),
+    };
+    const run = (view: "map" | "photo") => {
+      mapState.capture = true;
+      mapState.effects = [];
+      mapState.refIndex = 0;
+      mapState.refs = [];
+      mapState.runtime = { map, lib: {}, isActive: () => active };
+      mapState.view = view;
+      try {
+        renderToStaticMarkup(
+          <PlaceMap
+            locale="en"
+            label="Mock map"
+            styleUrl="mock.json"
+            attribution={["Mock credit"]}
+            center={{ lat: 32, lng: 129, zoom: 17 }}
+            markers={[]}
+            aerial={aerial}
+          />,
+        );
+      } finally {
+        mapState.capture = false;
+        mapState.runtime = null;
+        mapState.view = "map";
+      }
+      return mapState.effects.at(-1)!();
+    };
+    // The map view asks for no photos at all.
+    loaded = true;
+    run("map");
+    expect(map.addSource).not.toHaveBeenCalled();
+    expect(map.setLayoutProperty).not.toHaveBeenCalled();
+    // Switched on before the style is ready, the photos wait for the map to settle.
+    loaded = false;
+    const cleanup = run("photo");
+    expect(map.addSource).not.toHaveBeenCalled();
+    const [event, apply] = map.once.mock.lastCall! as [string, () => void];
+    expect(event).toBe("idle");
+    active = false;
+    apply();
+    expect(map.addSource).not.toHaveBeenCalled();
+    active = true;
+    apply();
+    expect(map.addSource).toHaveBeenCalledWith("aerial-photo", {
+      type: "raster",
+      tiles: [aerial.tiles],
+      tileSize: 256,
+      minzoom: 14,
+      maxzoom: 18,
+    });
+    expect(map.addLayer).toHaveBeenCalledWith(
+      { id: "aerial-photo", type: "raster", source: "aerial-photo", minzoom: 14 },
+      "road-label",
+    );
+    expect(map.setLayoutProperty).toHaveBeenLastCalledWith("aerial-photo", "visibility", "visible");
+    (cleanup as () => void)();
+    expect(map.off).toHaveBeenCalledWith("idle", apply);
+    // Back to the map: the photos are hidden, not added again.
+    loaded = true;
+    run("map");
+    expect(map.addSource).toHaveBeenCalledOnce();
+    expect(map.setLayoutProperty).toHaveBeenLastCalledWith("aerial-photo", "visibility", "none");
+    run("photo");
+    expect(map.addLayer).toHaveBeenCalledOnce();
+    expect(map.setLayoutProperty).toHaveBeenLastCalledWith("aerial-photo", "visibility", "visible");
   });
 
   it("keeps worker configuration out of server-rendered map markup", () => {

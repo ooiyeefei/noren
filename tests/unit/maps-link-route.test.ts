@@ -53,7 +53,7 @@ describe("Maps link route", () => {
   });
   it("any signed-in member succeeds", async () => {
     expect(await (await check(request(), 200)).json()).toEqual({
-      suggestion: { name: "Mock", lat: 32, lng: 129 },
+      suggestion: { name: "Mock", lat: 32, lng: 129, exact: false },
       source: "the link you pasted",
     });
     expect(authorize).toHaveBeenCalledWith();

@@ -24,6 +24,8 @@ export type CspInput = {
   clerkFrontendApi: string;
   convexUrl: string;
   mapStyleUrl: string;
+  /** The region's aerial photo tile template, if it has one. */
+  aerialTilesUrl?: string;
   adapterIds: readonly SourceAdapterId[];
   extra?: Partial<Record<CspDirective, readonly string[]>>;
 };
@@ -60,6 +62,10 @@ export function cspDirectives(input: CspInput): Record<CspDirective, string[]> {
   const clerk = httpsUrl(input.clerkFrontendApi, "clerkFrontendApi").origin;
   const convex = convexOrigin(input.convexUrl, "convexUrl");
   const map = httpsUrl(input.mapStyleUrl, "mapStyleUrl").origin;
+  const aerial =
+    input.aerialTilesUrl === undefined
+      ? []
+      : [httpsUrl(input.aerialTilesUrl, "aerialTilesUrl").origin];
   let scripts: string[];
   let frames: string[];
   try {
@@ -81,7 +87,7 @@ export function cspDirectives(input: CspInput): Record<CspDirective, string[]> {
       ...scripts,
     ],
     "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", "blob:", "https://img.clerk.com"],
+    "img-src": ["'self'", "data:", "blob:", "https://img.clerk.com", ...aerial],
     "font-src": ["'self'"],
     "connect-src": [
       "'self'",
@@ -91,6 +97,7 @@ export function cspDirectives(input: CspInput): Record<CspDirective, string[]> {
       convex,
       convex.replace(/^https:/, "wss:"),
       map,
+      ...aerial,
     ],
     "media-src": ["'self'", "blob:", convex],
     "frame-src": ["https://challenges.cloudflare.com", ...frames, ...scripts],
@@ -166,6 +173,7 @@ export function cspHeaderFromEnv(
         clerkFrontendApi: clerk,
         convexUrl: convex,
         mapStyleUrl: options.region.geo.mapStyle.url,
+        aerialTilesUrl: options.region.geo.aerialPhoto?.tiles,
         adapterIds: options.region.enabledSourceAdapters,
       },
       options,
