@@ -48,6 +48,15 @@ async function setup(options: { isMock?: boolean } = {}) {
 
 afterEach(() => vi.restoreAllMocks());
 
+/** The region after its launch pack is complete, when real places may be public. */
+function openRegion() {
+  vi.spyOn(region, "regionPolicy").mockReturnValue({
+    ...region.regionPolicy("nagasaki"),
+    realBusinessesDraftOnly: false,
+  });
+}
+const { regionPolicy } = region;
+
 describe("places.create", () => {
   it("a creator cannot create a landmark", async () => {
     const b = await setup();
@@ -161,7 +170,20 @@ describe("places.create", () => {
     ]);
   });
 
+  it("before launch no one can put a real place on the map by adding it", async () => {
+    const b = await setup();
+    expect(regionPolicy("nagasaki").realBusinessesDraftOnly).toBe(true);
+    for (const caller of ["user", "creator", "steward"] as const)
+      expect(
+        await errorCode(
+          b.as(caller).mutation(api.places.create, { ...input, category: "cafe", onMap: true }),
+        ),
+      ).toBe("conflict");
+    expect(await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).toEqual([]);
+  });
+
   it("any member may add a place, on the map only when asked and with a category; signed-out callers are refused", async () => {
+    openRegion();
     const b = await setup();
     const asUser = b.as("user");
     const draft = await asUser.mutation(api.places.create, input);
@@ -190,6 +212,7 @@ describe("places.create", () => {
   });
 
   it("a mock account cannot put a place on the map", async () => {
+    openRegion();
     const b = await setup({ isMock: true });
     expect(
       await errorCode(
