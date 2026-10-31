@@ -2,7 +2,7 @@ import { paginationOptsValidator, paginationResultValidator } from "convex/serve
 import { v, type Infer } from "convex/values";
 import { categoryForTags, isForVisitors } from "../src/lib/osm/categories";
 import { listingNames, selectListings } from "../src/lib/osm/listings";
-import { namesFromTags, pickTags } from "../src/lib/osm/tags";
+import { branchOf, chainNames, namesFromTags, pickTags } from "../src/lib/osm/tags";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { writeAudit } from "./lib/audit";
@@ -415,6 +415,53 @@ export const publishListings = internalMutation({
       published.push({ candidateId, ...result });
     }
     return { published, skipped };
+  },
+});
+
+/**
+ * Marks listings named as branches of a branded chain (chainBranches) as chains, since OSM often tags
+ * the brand on only some branches. Each pair is checked again here; a re-import resets the flag on an
+ * unpublished listing, and the publish run marks it again before it selects anything.
+ */
+export const markChainBranches = internalMutation({
+  args: {
+    regionId: v.string(),
+    stewardPersonId: v.id("person"),
+    pairs: v.array(v.object({ branch: v.id("seedOsmCandidate"), chain: v.id("seedOsmCandidate") })),
+  },
+  returns: v.object({ marked: v.number(), skipped: v.number() }),
+  handler: async (ctx, { regionId, stewardPersonId, pairs }) => {
+    const steward = await listingSteward(ctx, stewardPersonId);
+    if (pairs.length > 100) throw appError("invalid_input", "mark at most 100 branches");
+    regionConfig(regionId);
+    const result = { marked: 0, skipped: 0 };
+    for (const pair of pairs) {
+      const branch = await ctx.db.get("seedOsmCandidate", pair.branch);
+      const chain = await ctx.db.get("seedOsmCandidate", pair.chain);
+      if (
+        !branch ||
+        !chain ||
+        branch.regionId !== regionId ||
+        chain.regionId !== regionId ||
+        branch.isChain === true ||
+        chain.isChain !== true ||
+        branchOf(branch.tags, chainNames(chain.tags)) === undefined
+      ) {
+        result.skipped++;
+        continue;
+      }
+      await ctx.db.patch("seedOsmCandidate", branch._id, { isChain: true });
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: steward._id,
+        action: "osm_candidate.mark_chain",
+        targetType: "seedOsmCandidate",
+        targetId: branch._id,
+        diff: { isChain: { from: false, to: true }, sameChainAs: chain._id },
+      });
+      result.marked++;
+    }
+    return result;
   },
 });
 

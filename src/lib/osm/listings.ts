@@ -1,6 +1,6 @@
 import type { Script } from "../domain/constants";
 import { categoryForTags, isForVisitors } from "./categories";
-import { detectScript, namesFromTags } from "./tags";
+import { branchOf, chainNames, detectScript, namesFromTags } from "./tags";
 
 export type ListingCandidate = {
   _id: string;
@@ -34,6 +34,23 @@ export function listingNames(tags: Record<string, string>, locales: readonly str
       names.push({ lang, script: detectScript(value), value, isPrimary: true });
   }
   return names;
+}
+
+/** Untagged listings named as branches of a chain that another listing carries a brand tag for. */
+export function chainBranches<T extends ListingCandidate>(
+  candidates: readonly T[],
+): { branch: T; chain: T }[] {
+  const chains = new Map<string, T>();
+  for (const candidate of candidates)
+    if (candidate.isChain)
+      for (const name of chainNames(candidate.tags))
+        if (!chains.has(name)) chains.set(name, candidate);
+  const pairs: { branch: T; chain: T }[] = [];
+  for (const candidate of candidates) {
+    const name = candidate.isChain ? undefined : branchOf(candidate.tags, chains.keys());
+    if (name !== undefined) pairs.push({ branch: candidate, chain: chains.get(name)! });
+  }
+  return pairs;
 }
 
 function normalizedName(candidate: ListingCandidate): string {

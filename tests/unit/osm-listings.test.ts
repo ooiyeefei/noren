@@ -201,6 +201,8 @@ describe("publication CLI with an offline runner", () => {
       { fn: "osmSeed:publishListings", size: 2 },
     ]);
     expect(log.mock.calls[1]?.[0]).toEqual({
+      marked: 0,
+      markSkipped: 0,
       hidden: 0,
       hideSkipped: 0,
       dismissed: 101,
@@ -209,6 +211,54 @@ describe("publication CLI with an offline runner", () => {
       publishSkipped: {},
     });
     expect(log.mock.calls.at(-1)?.[0]).toContain("© OpenStreetMap contributors — ODbL-1.0");
+  });
+
+  it("marks untagged branches as chains before anything else, so they are hidden and not published", async () => {
+    const chain = candidate(1, {
+      category: "restaurant",
+      tags: { name: "架空亭 本町店", amenity: "restaurant" },
+      isChain: true,
+    });
+    const published = candidate(2, {
+      category: "restaurant",
+      tags: { name: "架空亭長崎駅前店", amenity: "restaurant" },
+      confirmedPlaceId: "place-2",
+    });
+    const unpublished = candidate(3, {
+      category: "restaurant",
+      tags: { name: "架空亭 港店", amenity: "restaurant" },
+    });
+    const local = candidate(4, {
+      category: "restaurant",
+      tags: { name: "架空亭サン", amenity: "restaurant" },
+    });
+    const calls: { fn: string; args: unknown }[] = [];
+    const run: ConvexRunner = async (fn, args) => {
+      if (fn === "osmSeed:listingCandidates")
+        return {
+          page: [chain, published, unpublished, local],
+          isDone: true,
+          continueCursor: "done",
+        };
+      calls.push({ fn, args });
+      if (fn === "osmSeed:markChainBranches") return { marked: 2, skipped: 0 };
+      if (fn === "osmSeed:hideListings") return { hidden: 1, skipped: 0 };
+      return { published: (args as { candidateIds: unknown[] }).candidateIds, skipped: [] };
+    };
+    const log = vi.fn();
+    await runPublish(["--region", "nagasaki", "--steward", "synthetic"], { cwd: ".", run, log });
+    expect(calls.map(({ fn }) => fn)).toEqual([
+      "osmSeed:markChainBranches",
+      "osmSeed:hideListings",
+      "osmSeed:publishListings",
+    ]);
+    expect((calls[0]!.args as { pairs: unknown }).pairs).toEqual([
+      { branch: "synthetic-2", chain: "synthetic-1" },
+      { branch: "synthetic-3", chain: "synthetic-1" },
+    ]);
+    expect((calls[1]!.args as { candidateIds: unknown }).candidateIds).toEqual(["synthetic-2"]);
+    expect((calls[2]!.args as { candidateIds: unknown }).candidateIds).toEqual(["synthetic-4"]);
+    expect(log.mock.calls[0]?.[0]).toMatchObject({ chainBranches: 2, publishedErrands: 1 });
   });
 
   it("takes 101 published errands off the map in 100/1 batches and leaves published places to visit", async () => {
