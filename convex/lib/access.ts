@@ -125,10 +125,12 @@ export async function canSeeSource(
 ): Promise<boolean> {
   if (source.placeId !== place._id || source.status !== "live") return false;
   // A post is already public where it was posted; it shows once the member who linked it agreed to
-  // show it with their name, or a steward recorded the author's agreement for the demo (FR-033).
+  // show it with their name, or a steward recorded the author's agreement for the demo (FR-033). A
+  // demo account's post on a real place shows only to its adder, like a demo account's story.
   return (
     ((isPubliclyReadablePlace(place) || place.visibility === "pilot") &&
-      (source.sharedAt !== undefined || source.demoConsentAt !== undefined)) ||
+      ((source.sharedAt !== undefined && source.isMock === place.isMock) ||
+        source.demoConsentAt !== undefined)) ||
     (viewer !== null && source.addedBy === viewer._id) ||
     (await canManagePlace(ctx, viewer, place))
   );
