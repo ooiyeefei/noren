@@ -265,6 +265,20 @@ describe("add sources", () => {
     );
   });
 
+  it("a demo account's post shows on a real place only to its adder, and publicly on a demo place", async () => {
+    const { b, steward } = await world();
+    const real = await addPlace(b, { createdBy: steward, visibility: "public" });
+    const demo = await addPlace(b, { createdBy: steward, visibility: "demo_public", isMock: true });
+    for (const placeId of [real, demo])
+      await b
+        .as("mock")
+        .mutation(api.sources.add, { placeId, url: video, note: "架空のメモ", noteLang: "ja" });
+    expect(await b.t.query(api.sources.listForPlace, { placeId: real })).toEqual([]);
+    expect(await b.as("user").query(api.sources.listForPlace, { placeId: real })).toEqual([]);
+    expect(await b.as("mock").query(api.sources.listForPlace, { placeId: real })).toHaveLength(1);
+    expect(await b.t.query(api.sources.listForPlace, { placeId: demo })).toHaveLength(1);
+  });
+
   it("a mock creator's source is mock", async () => {
     const { b, placeId, row } = await world();
     const { sourceId } = await b.as("mock").mutation(api.sources.add, { placeId, url: video });
