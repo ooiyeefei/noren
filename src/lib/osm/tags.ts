@@ -23,6 +23,43 @@ export function isChainFromTags(tags: unknown): boolean {
   });
 }
 
+const CHAIN_NAME_KEYS = ["name", "name:ja", "name:en"] as const;
+const comparable = (value: string) =>
+  value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
+
+/** The names a chain goes by, read from one branded listing: each name without a trailing branch
+ * name, so "ほっともっと 文教町店" gives "ほっともっと". */
+export function chainNames(tags: Record<string, string>): string[] {
+  const names = new Set<string>();
+  for (const key of CHAIN_NAME_KEYS) {
+    const value = tags[key] ? comparable(tags[key]) : "";
+    const name = /^(.+?) \S*店$/u.exec(value)?.[1] ?? value;
+    if ([...name].length >= 2) names.add(name);
+  }
+  return [...names];
+}
+
+/**
+ * The chain a listing is named as a branch of, when OSM tags the brand on only some branches: the
+ * chain's name alone, then a space and a branch ("ほっともっと 久留里店"), or straight away a branch
+ * name ending in 店 ("リンガーハット長崎稲佐橋店"). "ジョイフルサン 木鉢店" is another chain, not
+ * a branch of "ジョイフル".
+ */
+export function branchOf(
+  tags: Record<string, string>,
+  chains: Iterable<string>,
+): string | undefined {
+  const names = CHAIN_NAME_KEYS.flatMap((key) => (tags[key] ? [comparable(tags[key])] : []));
+  for (const chain of chains)
+    for (const name of names) {
+      if (!name.startsWith(chain)) continue;
+      const rest = name.slice(chain.length);
+      if (rest === "" || rest.startsWith(" ") || (rest.endsWith("店") && !rest.includes(" ")))
+        return chain;
+    }
+  return undefined;
+}
+
 export function pickTags(tags: unknown): Record<string, string> {
   if (!tags || typeof tags !== "object" || Array.isArray(tags)) return {};
   const result: Record<string, string> = {};
