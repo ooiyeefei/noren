@@ -105,7 +105,7 @@ export function PlaceEditorView(props: PlaceEditorViewProps) {
     </option>
   ));
   const sourceField = (field: Exclude<keyof SourceDraft, "noteLang">, limit?: number) => (
-    <div>
+    <div className="space-y-2">
       <Label htmlFor={`${id}-${field}`}>{m[field]}</Label>
       <Input
         className="min-h-11 rounded-[10px]"
@@ -190,7 +190,7 @@ export function PlaceEditorView(props: PlaceEditorViewProps) {
           </ul>
           {place.canEdit && (
             <fieldset disabled={!!pending} className="flex flex-wrap items-end gap-3">
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor={`${id}-interview`}>{m.interviewLanguage}</Label>
                 <select
                   id={`${id}-interview`}
@@ -353,7 +353,7 @@ export function PlaceEditorView(props: PlaceEditorViewProps) {
             )}
             {sourceField("title", 200)}
             {sourceField("note", 1000)}
-            <div>
+            <div className="space-y-2">
               <Label htmlFor={`${id}-noteLang`}>{m.noteLang}</Label>
               <select
                 id={`${id}-noteLang`}

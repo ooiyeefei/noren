@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { categoryOptions } from "@/components/public/category";
+import { normalisePoint } from "@/components/map/map-helpers";
 import { PlaceMap } from "@/components/map/place-map";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -59,7 +60,7 @@ export function GeoSearchView({
         }}
         className="flex flex-wrap items-end gap-3"
       >
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 space-y-2">
           <Label htmlFor={id}>{m.query}</Label>
           <Input
             className="min-h-11 rounded-[10px]"
@@ -119,40 +120,68 @@ export function MapsLinkFeedback({
   locale,
   error,
   suggested,
+  pinned,
+  onPin,
 }: {
   locale: Locale;
   error?: string;
   suggested?: boolean;
+  /** Whether the pin is already on the spot from the link. */
+  pinned?: boolean;
+  /**
+   * Puts the pin on the link's spot, for someone who cannot tell the shop on the map. The tap is
+   * theirs, so the pin is still person-placed (FR-001, FR-003).
+   */
+  onPin?(): void;
 }) {
   const m = messagesFor(creatorMessages, locale);
   return (
     <>
       {error && <Alert>{error}</Alert>}
-      {suggested && <p role="status">{m.checkMapsSuggestion}</p>}
+      {suggested && (
+        <div className="space-y-3">
+          <p role="status">
+            {pinned ? m.pinnedAtLink : m.linkFound} {m.checkMapsSuggestion}
+          </p>
+          {!pinned && onPin && (
+            <Button
+              className="min-h-11 rounded-[10px] px-4 whitespace-normal"
+              type="button"
+              onClick={onPin}
+            >
+              {m.pinAtLink}
+            </Button>
+          )}
+        </div>
+      )}
     </>
   );
 }
 
 function MapsLinkField({
   locale,
+  pin,
   onSuggestion,
+  onPin,
 }: {
   locale: Locale;
+  pin: PlaceDraft["pin"];
   onSuggestion(suggestion: MapsSuggestion): void;
+  onPin(pin: NonNullable<PlaceDraft["pin"]>): void;
 }) {
   const m = messagesFor(creatorMessages, locale);
   const id = useId();
   const [url, setUrl] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
-  const [suggested, setSuggested] = useState(false);
+  const [spot, setSpot] = useState<NonNullable<PlaceDraft["pin"]>>();
   const inFlight = useRef(false);
   async function fill() {
     if (inFlight.current) return;
     inFlight.current = true;
     setPending(true);
     setError(undefined);
-    setSuggested(false);
+    setSpot(undefined);
     try {
       const response = await fetch(`/api/geo/maps-link?${new URLSearchParams({ url })}`, {
         cache: "no-store",
@@ -179,7 +208,7 @@ function MapsLinkField({
         return;
       }
       onSuggestion(suggestion);
-      setSuggested(true);
+      setSpot(normalisePoint(suggestion));
     } catch {
       setError(m.mapsLinkFailure);
     } finally {
@@ -207,7 +236,13 @@ function MapsLinkField({
       >
         {pending ? m.fillingFromLink : m.fillFromLink}
       </Button>
-      <MapsLinkFeedback locale={locale} error={error} suggested={suggested} />
+      <MapsLinkFeedback
+        locale={locale}
+        error={error}
+        suggested={!!spot}
+        pinned={!!spot && pin?.lat === spot.lat && pin.lng === spot.lng}
+        onPin={spot && (() => onPin(spot))}
+      />
     </section>
   );
 }
@@ -236,7 +271,7 @@ export function NameRows({
       {errors.names && <p role="alert">{m[errors.names]}</p>}
       {names.map((name, i) => (
         <div key={i} className="grid gap-3 border-b border-line py-4 sm:grid-cols-2">
-          <div>
+          <div className="space-y-2">
             <Label htmlFor={`${id}-${i}-lang`}>{m.language}</Label>
             <select
               id={`${id}-${i}-lang`}
@@ -251,7 +286,7 @@ export function NameRows({
               ))}
             </select>
           </div>
-          <div>
+          <div className="space-y-2">
             <Label htmlFor={`${id}-${i}-script`}>{m.script}</Label>
             <select
               id={`${id}-${i}-script`}
@@ -266,7 +301,7 @@ export function NameRows({
               ))}
             </select>
           </div>
-          <div className="sm:col-span-2">
+          <div className="space-y-2 sm:col-span-2">
             <Label htmlFor={`${id}-${i}-value`}>{m.value}</Label>
             <Input
               className="min-h-11 rounded-[10px]"
@@ -408,7 +443,7 @@ export function PinPicker({
   const [initialPin] = useState(draft.pin);
   return (
     <section className="space-y-3">
-      {center && <p role="status">{m.entranceHint}</p>}
+      {center && !draft.pin && <p role="status">{m.entranceHint}</p>}
       <p className="text-sm">{m.pinHint}</p>
       <PlaceMap
         locale={locale}
@@ -464,11 +499,13 @@ export function PlacePinSearch({
     <div className="space-y-6">
       <MapsLinkField
         locale={locale}
+        pin={draft.pin}
         onSuggestion={(suggestion) => {
           if (prefillNames)
             latest.current.onChange(prefillMapsResult(latest.current.draft, suggestion));
           setCenter({ lat: suggestion.lat, lng: suggestion.lng });
         }}
+        onPin={(pin) => latest.current.onChange({ ...latest.current.draft, pin })}
       />
       <GeoSearchView
         locale={locale}

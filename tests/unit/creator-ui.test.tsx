@@ -315,10 +315,75 @@ it("failure shows a readable message", () => {
 });
 it("Maps suggestions ask the person to check the name and pin in both languages", () => {
   for (const locale of ["ja", "en"] as const) {
-    expect(renderToStaticMarkup(<MapsLinkFeedback locale={locale} suggested />)).toContain(
-      creatorMessages[locale].checkMapsSuggestion,
+    const m = creatorMessages[locale];
+    const found = renderToStaticMarkup(
+      <MapsLinkFeedback locale={locale} suggested onPin={vi.fn()} />,
     );
+    for (const text of [m.linkFound, m.checkMapsSuggestion, `>${m.pinAtLink}</button>`])
+      expect(found).toContain(text);
+    const pinned = renderToStaticMarkup(
+      <MapsLinkFeedback locale={locale} suggested pinned onPin={vi.fn()} />,
+    );
+    expect(pinned).toContain(m.pinnedAtLink);
+    expect(pinned).toContain(m.checkMapsSuggestion);
+    expect(pinned).not.toContain(m.pinAtLink);
   }
+});
+
+it("puts the pin on the Maps link's spot only when the person taps for it", async () => {
+  const onChange = vi.fn();
+  const props = { ...newProps, locale: "en" as const, onChange, prefillNames: true };
+  const field = elements(mountView(PlacePinSearch, props)()).find((item) => "onPin" in item.props)!;
+  const fieldProps = { ...field.props };
+  const render = mountView(field.type as (props: typeof fieldProps) => ReactNode, fieldProps);
+  const input = elements(render()).find((item) => item.props.type === "url")!;
+  (input.props.onChange as (event: { target: { value: string } }) => void)({
+    target: { value: "https://maps.app.goo.gl/mock" },
+  });
+  vi.stubGlobal("fetch", async () => ({
+    ok: true,
+    json: async () => ({ suggestion: { lat: 32.7412345678, lng: 129.8712345678 } }),
+  }));
+  await click(render(), "Fill from link");
+  const feedback = () =>
+    element<Parameters<typeof MapsLinkFeedback>[0]>(render(), MapsLinkFeedback).props;
+  expect(feedback()).toMatchObject({ suggested: true, pinned: false });
+  // Reading the link moves the map but leaves the pin alone.
+  for (const [draft] of onChange.mock.calls) expect(draft.pin).toBeNull();
+  feedback().onPin!();
+  const spot = { lat: 32.741235, lng: 129.871235 };
+  expect(onChange).toHaveBeenLastCalledWith({ ...newProps.draft, pin: spot });
+  fieldProps.pin = spot;
+  expect(feedback().pinned).toBe(true);
+  // Moved off the spot, the pin can go back to it.
+  for (const moved of [
+    { lat: spot.lat, lng: 129.87 },
+    { lat: 32.75, lng: spot.lng },
+  ]) {
+    fieldProps.pin = moved;
+    expect(feedback().pinned).toBe(false);
+  }
+  // A link that cannot be read leaves no spot from the one before.
+  vi.stubGlobal("fetch", async () => ({ ok: false, json: async () => ({}) }));
+  await click(render(), "Fill from link");
+  expect(feedback()).toMatchObject({ error: creatorMessages.en.mapsLinkFailure, suggested: false });
+});
+
+it("puts space between every field's label and its control", () => {
+  const editor = mountView(PlaceEditorView, editorProps);
+  click(editor(), "Add a post");
+  const html = [1, 2, 3]
+    .map((step) => renderToStaticMarkup(<NewPlaceView {...newProps} step={step as 1 | 2 | 3} />))
+    .concat(renderToStaticMarkup(editor()))
+    .join("");
+  // A label that opens its box needs the box to space it from the control below.
+  const boxes = [...html.matchAll(/<\w+([^>]*)><label\b[^>]*data-slot="label"/g)].map(
+    ([, attributes]) => attributes!,
+  );
+  expect(boxes.length).toBeGreaterThan(10);
+  expect(boxes.filter((attributes) => !/class="[^"]*\b(space-y|gap)-/.test(attributes))).toEqual(
+    [],
+  );
 });
 
 it("the home guides an empty creator and collapses the guide after their first place", () => {
@@ -528,8 +593,14 @@ it.each(["suggestion", "location", "maps link"])(
     for (const [draft] of onChange.mock.calls) expect(draft.pin).toBe(newProps.draft.pin);
     expect(props.searchActions.onConfirm).not.toHaveBeenCalled();
     expect(renderToStaticMarkup(pinRender())).toContain(
-      "Now tap the shop&#x27;s entrance on the map",
+      "The + marks the spot. If it is on the shop, tap Put the pin here under the map.",
     );
+    // Once the pin is down, the hint gives way to Pin placed.
+    const placed = renderToStaticMarkup(
+      mountView(PinPicker, { ...picker.props, draft: { ...newProps.draft, pin: point } })(),
+    );
+    expect(placed).not.toContain("The + marks the spot.");
+    expect(placed).toContain("Pin placed");
   },
 );
 
