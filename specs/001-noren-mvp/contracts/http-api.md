@@ -26,6 +26,7 @@ Conventions. All responses carry `X-Robots-Tag: noindex, nofollow`. Authenticati
 | `DELETE /api/sources/:id` | The member who linked it, the place's editor, S (FR-033) | none | Source hidden; audit entry when S removes someone else's |
 | `GET /api/places/:id/stories` | Anyone who can read the place | none | Live written stories, newest first, each `{body, lang, authorName, addedAt, canRemove}`; a demo account's story only to its writer on a real place (FR-033) |
 | `POST /api/places/:id/stories` | U and above, on a place they can read (FR-033) | `{body, lang}` | Story, public at once with the member's name; 400 for an empty body, over 1,000 characters or a language the region does not use; 429 above 50 a day except for S |
+| `GET /api/regions/:id/stories/latest` | Public | none | The newest eight written stories and shared posts on real, public places in the region, newest first, each `{kind, placeSlug, placeNames, text?, lang?, platform?, sharedBy, addedAt}`; `text` is the member's own words, never the post (FR-033) |
 | `DELETE /api/stories/:id` | The writer, the place's editor, S (FR-033) | none | Story hidden; audit entry when S removes someone else's |
 | `POST /api/interviews` | C | `{placeId, language}` | Interview in `consent_pending` |
 | `POST /api/interviews/:id/consent` | C or S (assisted) | `{scope{publish, aiProcessing, transferAbroad, voiceRetention}, textVersion, assisted}` | Consent row; 409 if any scope is missing (FR-008) |

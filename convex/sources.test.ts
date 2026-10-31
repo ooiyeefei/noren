@@ -12,6 +12,7 @@ import {
 } from "../tests/convex/fixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { isSharedPublicly, isStoryShown } from "./lib/access";
 import type { SourceView } from "./sources";
 
 vi.mock("../src/lib/adapters", async (importOriginal) => {
@@ -277,6 +278,15 @@ describe("add sources", () => {
     expect(await b.as("user").query(api.sources.listForPlace, { placeId: real })).toEqual([]);
     expect(await b.as("mock").query(api.sources.listForPlace, { placeId: real })).toHaveLength(1);
     expect(await b.t.query(api.sources.listForPlace, { placeId: demo })).toHaveLength(1);
+  });
+
+  it("a post shows publicly only while it is live", () => {
+    const place = { isMock: false };
+    const shared = { status: "live" as const, sharedAt: 1, isMock: false };
+    expect(isSharedPublicly(place, shared)).toBe(true);
+    for (const status of ["gone", "hidden"] as const)
+      expect(isSharedPublicly(place, { ...shared, status })).toBe(false);
+    expect(isStoryShown(place, { status: "hidden", isMock: false })).toBe(false);
   });
 
   it("a mock creator's source is mock", async () => {

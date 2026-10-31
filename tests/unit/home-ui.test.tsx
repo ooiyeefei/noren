@@ -1,7 +1,8 @@
 import { renderToStaticMarkup as render } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { HomeView, PublicLoading } from "@/components/public/home-view";
-import { toHomeModel } from "@/components/public/mapping";
+import { toHomeModel, type LatestStoryLike } from "@/components/public/mapping";
+import { format } from "@/lib/i18n";
 import { publicMessages } from "@/lib/i18n/messages/public";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { exploreItems, type MapView } from "@/components/explore/helpers";
@@ -70,6 +71,76 @@ for (const locale of ["ja", "en"] as const) {
       <HomeView locale={locale} region={region} model={toHomeModel([landmark], locale, region)} />,
     );
     expect(real).not.toContain('data-category="demo"');
+  });
+  it(`offers With stories right after All, and shows the newest stories above the list (${locale})`, () => {
+    const html = home();
+    expect(html).toContain('data-category="stories" aria-pressed="false"');
+    expect(html.indexOf('data-category=""')).toBeLessThan(html.indexOf('data-category="stories"'));
+    expect(html.indexOf('data-category="stories"')).toBeLessThan(
+      html.indexOf('data-category="cafe"'),
+    );
+    expect(html).toContain(`>${m.storiesChip}</button>`);
+    expect(html).not.toContain('id="latest-stories"');
+    const names = [
+      { lang: "ja", script: "kanji" as const, value: "猫のカフェ", isPrimary: true },
+      { lang: "en", script: "latin" as const, value: "Cat Cafe", isPrimary: true },
+    ];
+    const latest: LatestStoryLike[] = [
+      {
+        kind: "written",
+        id: "s1",
+        placeSlug: "cat-cafe",
+        placeNames: names,
+        text: "保護猫が新しい家族を待っています。",
+        lang: "ja",
+        sharedBy: "Fictional walker",
+        addedAt: 3,
+      },
+      {
+        kind: "post",
+        id: "p1",
+        placeSlug: "cat-cafe",
+        placeNames: names,
+        text: "A video of the cats.",
+        lang: "en",
+        platform: "youtube",
+        sharedBy: "Fictional sharer",
+        addedAt: 2,
+      },
+      {
+        kind: "post",
+        id: "p2",
+        placeSlug: "cat-cafe",
+        placeNames: names,
+        platform: "web",
+        sharedBy: "Fictional blogger",
+        addedAt: 1,
+      },
+    ];
+    const withLatest = render(
+      <HomeView locale={locale} region={region} model={model} latest={latest} />,
+    );
+    expect(withLatest).toContain(
+      `<h2 id="latest-stories" class="px-4 pb-2 text-[15px] font-bold">${m.latestStories}</h2>`,
+    );
+    expect(withLatest.match(new RegExp(`href="/${locale}/places/cat-cafe"`, "g"))).toHaveLength(3);
+    expect(withLatest).toContain(locale === "ja" ? ">猫のカフェ<" : ">Cat Cafe<");
+    expect(withLatest).toContain(
+      'lang="ja" class="line-clamp-3 text-[15px] leading-relaxed">保護猫が',
+    );
+    expect(withLatest).toContain(format(m.writtenBy, { name: "Fictional walker" }));
+    expect(withLatest).toContain(
+      format(m.postSharedBy, { platform: "YouTube", name: "Fictional sharer" }),
+    );
+    expect(withLatest).toContain(format(m.linkSharedBy, { name: "Fictional blogger" }));
+    expect(withLatest.indexOf('id="latest-stories"')).toBeLessThan(
+      withLatest.indexOf('role="status"'),
+    );
+    const searching = render(
+      <HomeView locale={locale} region={region} model={model} latest={latest} search="cat" />,
+    );
+    expect(searching).not.toContain('id="latest-stories"');
+    expect(m.legendStory).toBe(m.storiesChip);
   });
   it(`shows intentional empty states and the guide, and names the active chip when filtered (${locale})`, () => {
     const empty = render(

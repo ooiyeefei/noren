@@ -13,6 +13,8 @@ export type MapView = {
   zoom: number;
 };
 export const GUIDE_STORAGE_KEY = "noren.guide.v1";
+/** The filter chip for places someone has shared a story about; no region category uses this key. */
+export const STORIES_FILTER = "stories";
 
 export function normaliseSearch(value: string): string {
   return value
@@ -53,7 +55,11 @@ export function exploreItems(
     .filter(
       (item) =>
         (options.category === "" ||
-          (options.category === "demo" ? item.isMock : item.category === options.category)) &&
+          (options.category === "demo"
+            ? item.isMock
+            : options.category === STORIES_FILTER
+              ? Boolean(item.hasStory)
+              : item.category === options.category)) &&
         (query !== "" ||
           !view ||
           (item.pin != null &&
