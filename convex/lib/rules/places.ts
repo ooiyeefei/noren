@@ -167,6 +167,33 @@ export function registerPlaceRules(triggers: Triggers<DataModel>) {
       .take(2),
   );
 
+  // FR-030: a report says what is wrong; a confirmation says only that the place is there. Only a
+  // report gets a steward's outcome, and the outcome comes with who and when.
+  triggers.register("placeCheck", async (_ctx, change) => {
+    const check = change.newDoc;
+    if (check === null) return;
+    const isReport = check.verdict === "something_wrong";
+    if (isReport !== (check.problem !== undefined)) {
+      throw violation("place_check_problem", "a report names its problem; a confirmation has none");
+    }
+    if (!isReport && (check.note !== undefined || check.outcome !== undefined)) {
+      throw violation("place_check_confirmation_bare", "a confirmation has no note or outcome");
+    }
+    if (check.note !== undefined && (isBlank(check.note) || check.note.length > 500)) {
+      throw violation("place_check_note", "a report note is nonblank and at most 500 characters");
+    }
+    const review = [check.reviewedBy, check.reviewedAt, check.outcome];
+    if (
+      review.some((value) => value === undefined) &&
+      review.some((value) => value !== undefined)
+    ) {
+      throw violation(
+        "place_check_review_complete",
+        "reviewedBy, reviewedAt and outcome are set together or not at all",
+      );
+    }
+  });
+
   // FR-029: the steward's note that the author agreed is a time and a name, never one without
   // the other.
   triggers.register("source", async (_ctx, change) => {

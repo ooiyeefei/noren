@@ -1,6 +1,9 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
+  checkOutcomeValidator,
+  checkProblemValidator,
+  checkVerdictValidator,
   externalProviderValidator,
   licenceValidator,
   placeKindValidator,
@@ -69,10 +72,37 @@ export const placeTables = {
     ),
     mapPin: v.optional(v.union(v.object({ lat: v.number(), lng: v.number() }), v.null())),
     hasPublishedPage: v.optional(v.boolean()),
+    /**
+     * When a person last confirmed the place in person: they placed its pin, or said "Still here"
+     * (FR-030). Unset means "Not yet confirmed", as for a listing from open data no one has checked.
+     * An import never sets or clears it.
+     */
+    confirmedAt: v.optional(v.number()),
+    confirmedBy: v.optional(v.id("person")),
   })
     .index("by_regionId_and_slug", ["regionId", "slug"])
     .index("by_regionId_and_visibility", ["regionId", "visibility"])
     .index("by_createdBy", ["createdBy"]),
+
+  /**
+   * One person saying a place is still there, or reporting what is wrong with it (FR-030). A report
+   * changes nothing in public until a steward records an outcome: the place stays, or it is hidden.
+   * Never counted into a score (principle I).
+   */
+  placeCheck: defineTable({
+    placeId: v.id("place"),
+    regionId: v.string(),
+    personId: v.id("person"),
+    verdict: checkVerdictValidator,
+    problem: v.optional(checkProblemValidator),
+    note: v.optional(v.string()),
+    reviewedBy: v.optional(v.id("person")),
+    reviewedAt: v.optional(v.number()),
+    outcome: v.optional(checkOutcomeValidator),
+    isMock: v.boolean(),
+  })
+    .index("by_placeId_and_personId", ["placeId", "personId"])
+    .index("by_regionId_and_verdict_and_reviewedAt", ["regionId", "verdict", "reviewedAt"]),
 
   /** Links a business owner to a place they may confirm claims for. */
   placeOwner: defineTable({

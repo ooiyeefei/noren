@@ -1,6 +1,9 @@
 import { v, type VLiteral, type VUnion } from "convex/values";
 import {
   ACTOR_KINDS,
+  CHECK_OUTCOMES,
+  CHECK_PROBLEMS,
+  CHECK_VERDICTS,
   CLAIM_KINDS,
   CLAIM_ORIGINS,
   CLAIM_STATUSES,
@@ -34,6 +37,9 @@ export const visibilityValidator = literals(VISIBILITIES);
 export const placeKindValidator = literals(PLACE_KINDS);
 export const scriptValidator = literals(SCRIPTS);
 export const sourceStatusValidator = literals(SOURCE_STATUSES);
+export const checkVerdictValidator = literals(CHECK_VERDICTS);
+export const checkProblemValidator = literals(CHECK_PROBLEMS);
+export const checkOutcomeValidator = literals(CHECK_OUTCOMES);
 export const claimKindValidator = literals(CLAIM_KINDS);
 export const claimOriginValidator = literals(CLAIM_ORIGINS);
 export const claimStatusValidator = literals(CLAIM_STATUSES);

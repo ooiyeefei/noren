@@ -9,6 +9,7 @@ import { messagesFor, type Locale } from "@/lib/i18n";
 import { stewardMessages } from "@/lib/i18n/messages/steward";
 import { takedownsMessages } from "@/lib/i18n/messages/takedowns";
 import { candidateMessages } from "@/lib/i18n/messages/candidates";
+import { checkMessages } from "@/lib/i18n/messages/checks";
 import type { RegionConfig } from "@/lib/region/schema";
 import { visibilityArgs, visibilityChoices, type PlaceRow } from "./steward-logic";
 
@@ -38,7 +39,7 @@ export function StewardNav({
   current,
 }: {
   locale: Locale;
-  current: "home" | "open-text" | "people" | "candidates" | "takedowns" | "place-admin";
+  current: "home" | "open-text" | "people" | "candidates" | "reports" | "takedowns" | "place-admin";
 }) {
   const m = messagesFor(stewardMessages, locale);
   const links = [
@@ -50,6 +51,7 @@ export function StewardNav({
       path: "/candidates",
       label: messagesFor(candidateMessages, locale).title,
     },
+    { page: "reports", path: "/reports", label: messagesFor(checkMessages, locale).reportsTitle },
     { page: "takedowns", path: "/takedowns", label: messagesFor(takedownsMessages, locale).title },
   ];
   return (
