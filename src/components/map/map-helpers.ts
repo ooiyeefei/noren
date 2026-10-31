@@ -1,3 +1,5 @@
+import type { MapView } from "@/components/explore/helpers";
+
 export const MAPLIBRE_WORKER_PATH = "/maplibre/maplibre-gl-worker.mjs";
 
 export function isWorkerFailure(error: unknown): boolean {
@@ -22,6 +24,63 @@ export type MapMarker = {
   distanceLabel?: string;
 };
 export type LngLatBounds = [[number, number], [number, number]];
+
+export function markersToFeatures(
+  markers: readonly MapMarker[],
+  selectedId?: string | null,
+): {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    geometry: { type: "Point"; coordinates: [number, number] };
+    properties: { id: string; hasStory: boolean; isMock: boolean };
+  }>;
+} {
+  return {
+    type: "FeatureCollection",
+    features: markers
+      .filter((marker) => marker.id !== selectedId)
+      .map((marker) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [marker.lng, marker.lat] },
+        properties: {
+          id: marker.id,
+          hasStory: Boolean(marker.hasStory),
+          isMock: marker.isMock,
+        },
+      })),
+  };
+}
+
+export function visibleView(
+  map: {
+    getCanvas(): { clientWidth: number; clientHeight: number };
+    unproject(point: [number, number]): { lat: number; lng: number };
+    getZoom(): number;
+  },
+  padding: Partial<{ top: number; bottom: number; left: number; right: number }>,
+): MapView {
+  const { clientWidth: width, clientHeight: height } = map.getCanvas();
+  const left = Math.min(width, Math.max(0, padding.left ?? 0));
+  const right = Math.max(left, width - Math.max(0, padding.right ?? 0));
+  const top = Math.min(height, Math.max(0, padding.top ?? 0));
+  const bottom = Math.max(top, height - Math.max(0, padding.bottom ?? 0));
+  const corners = [
+    map.unproject([left, top]),
+    map.unproject([right, top]),
+    map.unproject([left, bottom]),
+    map.unproject([right, bottom]),
+  ];
+  const center = map.unproject([(left + right) / 2, (top + bottom) / 2]);
+  return {
+    west: Math.min(...corners.map((point) => point.lng)),
+    south: Math.min(...corners.map((point) => point.lat)),
+    east: Math.max(...corners.map((point) => point.lng)),
+    north: Math.max(...corners.map((point) => point.lat)),
+    center: { lat: center.lat, lng: center.lng },
+    zoom: map.getZoom(),
+  };
+}
 
 export function boundsFor(
   markers: readonly MapMarker[],

@@ -1,9 +1,19 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
-import type { Map as LibreMap, MapMouseEvent } from "maplibre-gl";
+import type {
+  GeoJSONSource,
+  Map as LibreMap,
+  MapLayerMouseEvent,
+  MapMouseEvent,
+} from "maplibre-gl";
 import { LocateFixed, Minus, Plus } from "lucide-react";
-import { explorePadding, type Position, type SheetHeight } from "@/components/explore/helpers";
+import {
+  explorePadding,
+  type MapView,
+  type Position,
+  type SheetHeight,
+} from "@/components/explore/helpers";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_IDEOGRAPH_FONT } from "@/lib/geo";
 import { messagesFor, type Locale } from "@/lib/i18n";
@@ -16,12 +26,40 @@ import {
   MAPLIBRE_WORKER_PATH,
   normalisePoint,
   markerPresentation,
-  setMarkerSelection,
+  markersToFeatures,
+  visibleView,
   NOREN_PATH,
   type MapMarker,
 } from "./map-helpers";
 
 let workerUrlConfigured = false;
+const PLACES_SOURCE = "explore-places";
+const CLUSTERS_LAYER = "explore-clusters";
+const COUNT_LAYER = "explore-cluster-count";
+const PLACES_LAYER = "explore-single-places";
+const STORY_ICON = "explore-noren-story";
+const PLAIN_ICON = "explore-noren-plain";
+
+function addNorenImages(map: LibreMap): void {
+  for (const [id, hasStory] of [
+    [STORY_ICON, true],
+    [PLAIN_ICON, false],
+  ] as const) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 56;
+    canvas.height = 64;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Cannot draw map icons");
+    context.scale(2, 2);
+    context.fillStyle = hasStory ? "#f2c14e" : "#23305c";
+    context.strokeStyle = hasStory ? "#23305c" : "#ffffff";
+    context.lineWidth = hasStory ? 2 : 1;
+    const path = new Path2D(NOREN_PATH);
+    context.fill(path);
+    context.stroke(path);
+    map.addImage(id, context.getImageData(0, 0, 56, 64), { pixelRatio: 2 });
+  }
+}
 
 export type PlaceMapProps = {
   locale: Locale;
@@ -38,6 +76,8 @@ export type PlaceMapProps = {
     onSelect?(id: string): void;
     position?: Position | null;
     onLocate?(): void;
+    /** Called once the map has loaded and again each time it stops moving. */
+    onViewChange?(view: MapView): void;
   };
   picker?: {
     value: { lat: number; lng: number } | null;
@@ -72,7 +112,6 @@ export function PlaceMap({
     callbacks.current = explore;
   }, [explore]);
   const isExplore = Boolean(explore);
-  const initiallyFitted = useRef<LibreMap | null>(null);
   const [runtime, setRuntime] = useState<{
     map: LibreMap;
     lib: typeof import("maplibre-gl");
@@ -82,6 +121,9 @@ export function PlaceMap({
   const messages = messagesFor(placeUiMessages, locale);
   const credit = attributionText(attribution);
   const { lat, lng, zoom } = center;
+  const selectedId = explore?.selectedId;
+  const selectedMarker = markers.find((marker) => marker.id === selectedId);
+  const layerData = useRef(markersToFeatures(markers, selectedId));
   useEffect(() => {
     let disposed = false;
     let map: LibreMap | undefined;
@@ -131,14 +173,23 @@ export function PlaceMap({
   useEffect(() => {
     if (!runtime || !runtime.isActive()) return;
     const { map, lib } = runtime;
-    const placed = markers.map((marker) => {
+    const domMarkers = isExplore ? (selectedMarker ? [selectedMarker] : []) : markers;
+    const placed = domMarkers.map((marker) => {
       const button = document.createElement("button");
       button.type = "button";
-      const presentation = markerPresentation(marker, messagesFor(badgeMessages, locale).demo);
+      const presentation = markerPresentation(
+        marker,
+        messagesFor(badgeMessages, locale).demo,
+        isExplore,
+      );
       button.className = presentation.className;
       button.setAttribute("aria-label", presentation.label);
       button.dataset.mock = String(marker.isMock);
       button.dataset.markerId = marker.id;
+      if (isExplore) {
+        button.setAttribute("aria-pressed", "true");
+        button.style.zIndex = "1";
+      }
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("viewBox", "0 0 28 32");
       svg.setAttribute("width", "28");
@@ -156,7 +207,12 @@ export function PlaceMap({
         if (callbacks.current) callbacks.current.onSelect?.(marker.id);
         else if (marker.href) window.location.assign(marker.href);
       });
-      return new lib.Marker({ element: button }).setLngLat([marker.lng, marker.lat]).addTo(map);
+      return new lib.Marker({
+        element: button,
+        ...(isExplore ? { anchor: "bottom" as const } : {}),
+      })
+        .setLngLat([marker.lng, marker.lat])
+        .addTo(map);
     });
     const singleMarker = markers.length === 1 ? markers[0] : undefined;
     if (!isExplore && singleMarker && !bounds) {
@@ -170,7 +226,111 @@ export function PlaceMap({
     return () => {
       placed.forEach((marker) => marker.remove());
     };
-  }, [runtime, markers, bounds, locale, lng, lat, zoom, isExplore]);
+  }, [runtime, markers, selectedMarker, bounds, locale, lng, lat, zoom, isExplore]);
+
+  useEffect(() => {
+    layerData.current = markersToFeatures(markers, selectedId);
+    if (!runtime?.isActive() || !isExplore) return;
+    const source = runtime.map.getSource<GeoJSONSource>(PLACES_SOURCE);
+    // Source work can finish after a filter change or the map has been removed.
+    if (source) void source.setData(layerData.current).catch(() => undefined);
+  }, [runtime, markers, selectedId, isExplore]);
+
+  useEffect(() => {
+    if (!runtime?.isActive() || !isExplore) return;
+    const { map } = runtime;
+    let active = true;
+    const select = (event: MapLayerMouseEvent) => {
+      const id = event.features?.[0]?.properties.id;
+      if (typeof id === "string") callbacks.current?.onSelect?.(id);
+    };
+    const expand = (event: MapLayerMouseEvent) => {
+      const feature = event.features?.[0];
+      if (feature?.geometry.type !== "Point") return;
+      const clusterId = feature.properties.cluster_id;
+      if (typeof clusterId !== "number") return;
+      const [lng, lat] = feature.geometry.coordinates;
+      const source = map.getSource<GeoJSONSource>(PLACES_SOURCE);
+      const data = layerData.current;
+      void source
+        ?.getClusterExpansionZoom(clusterId)
+        .then((zoom) => {
+          if (active && runtime.isActive() && layerData.current === data) {
+            map.easeTo({ center: [lng, lat], zoom });
+          }
+        })
+        .catch(() => undefined);
+    };
+    const enter = () => {
+      map.getCanvas().style.cursor = "pointer";
+    };
+    const leave = () => {
+      map.getCanvas().style.cursor = "";
+    };
+    const load = () => {
+      if (!active || !runtime.isActive() || map.getSource(PLACES_SOURCE)) return;
+      addNorenImages(map);
+      map.addSource(PLACES_SOURCE, {
+        type: "geojson",
+        data: layerData.current,
+        cluster: true,
+        clusterRadius: 40,
+        clusterMaxZoom: 15,
+      });
+      map.addLayer({
+        id: CLUSTERS_LAYER,
+        type: "circle",
+        source: PLACES_SOURCE,
+        filter: ["has", "point_count"],
+        paint: {
+          "circle-color": "#23305c",
+          "circle-radius": ["step", ["get", "point_count"], 18, 20, 23, 100, 29],
+        },
+      });
+      map.addLayer({
+        id: COUNT_LAYER,
+        type: "symbol",
+        source: PLACES_SOURCE,
+        filter: ["has", "point_count"],
+        layout: {
+          "text-field": ["get", "point_count_abbreviated"],
+          "text-font": ["Noto Sans Bold"],
+          "text-size": 14,
+          "text-allow-overlap": true,
+        },
+        paint: { "text-color": "#ffffff" },
+      });
+      map.addLayer({
+        id: PLACES_LAYER,
+        type: "symbol",
+        source: PLACES_SOURCE,
+        filter: ["!", ["has", "point_count"]],
+        layout: {
+          "icon-image": ["case", ["get", "hasStory"], STORY_ICON, PLAIN_ICON],
+          "icon-anchor": "bottom",
+          "icon-allow-overlap": true,
+        },
+      });
+    };
+    map.on("click", PLACES_LAYER, select);
+    map.on("click", CLUSTERS_LAYER, expand);
+    for (const layer of [PLACES_LAYER, CLUSTERS_LAYER]) {
+      map.on("mouseenter", layer, enter);
+      map.on("mouseleave", layer, leave);
+    }
+    map.on("load", load);
+    if (map.isStyleLoaded()) load();
+    return () => {
+      active = false;
+      map.off("load", load);
+      map.off("click", PLACES_LAYER, select);
+      map.off("click", CLUSTERS_LAYER, expand);
+      for (const layer of [PLACES_LAYER, CLUSTERS_LAYER]) {
+        map.off("mouseenter", layer, enter);
+        map.off("mouseleave", layer, leave);
+      }
+    };
+  }, [runtime, isExplore]);
 
   const sheet = explore?.sheet ?? "peek";
   const topOverlay = explore?.topOverlay;
@@ -192,20 +352,6 @@ export function PlaceMap({
           );
       map.stop();
       map.jumpTo({ center: map.getCenter(), padding });
-      // The full sheet can cover the entire usable map. Fit once a window is available again.
-      if (
-        markers.length &&
-        initiallyFitted.current !== map &&
-        rect.height > padding.top + padding.bottom
-      ) {
-        map.fitBounds(boundsFor(markers, [lng, lat, lng, lat]), {
-          padding,
-          absolutePadding: true,
-          maxZoom: 14,
-          duration: 0,
-        });
-        initiallyFitted.current = map;
-      }
     };
     const observer = new ResizeObserver(update);
     observer.observe(element);
@@ -216,19 +362,33 @@ export function PlaceMap({
       observer.disconnect();
       desktop.removeEventListener("change", update);
     };
-  }, [runtime, isExplore, sheet, topOverlay, markers, lng, lat]);
+  }, [runtime, isExplore, sheet, topOverlay]);
 
-  const selectedId = explore?.selectedId;
-  const position = explore?.position;
-  const selectedMarker = markers.find((marker) => marker.id === selectedId);
   useEffect(() => {
     if (!runtime?.isActive() || !isExplore) return;
-    for (const element of container.current?.querySelectorAll<HTMLButtonElement>(
-      "[data-marker-id]",
-    ) ?? []) {
-      const selected = element.dataset.markerId === selectedId;
-      setMarkerSelection(element, selected);
-    }
+    const { map } = runtime;
+    let loaded = map.isStyleLoaded();
+    const report = () => {
+      if (loaded && runtime.isActive()) {
+        callbacks.current?.onViewChange?.(visibleView(map, map.getPadding()));
+      }
+    };
+    const load = () => {
+      loaded = true;
+      report();
+    };
+    map.on("load", load);
+    map.on("moveend", report);
+    report();
+    return () => {
+      map.off("load", load);
+      map.off("moveend", report);
+    };
+  }, [runtime, isExplore]);
+
+  const position = explore?.position;
+  useEffect(() => {
+    if (!runtime?.isActive() || !isExplore) return;
     if (!selectedMarker) return;
     const { map, lib } = runtime;
     const content = document.createElement("div");

@@ -3,9 +3,25 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { requirePerson } from "./auth";
 import { appError } from "./errors";
+import { regionPolicy } from "./region";
 import { canReadPlace, type Viewer } from "./visibility";
 
 export type { Viewer } from "./visibility";
+
+export async function isOpenListing(ctx: QueryCtx, placeId: Id<"place">): Promise<boolean> {
+  const refs = await ctx.db
+    .query("placeExternalRef")
+    .withIndex("by_placeId_and_provider_and_ref", (q) =>
+      q.eq("placeId", placeId).eq("provider", "osm"),
+    )
+    .filter((q) => q.eq(q.field("licence"), "ODbL-1.0"))
+    .take(1);
+  return refs.length > 0;
+}
+
+export function publicStoriesAllowed(place: Pick<Doc<"place">, "isMock" | "regionId">): boolean {
+  return place.isMock || !regionPolicy(place.regionId).realBusinessesDraftOnly;
+}
 
 export function placeKind(place: Doc<"place">): PlaceKind {
   return place.kind ?? "business";
@@ -59,10 +75,15 @@ export async function canManagePlace(
   place: Doc<"place">,
 ): Promise<boolean> {
   if (viewer === null) return false;
+  if (viewer.role === "steward" || viewer._id === place.createdBy) return true;
+  if (viewer.role !== "business_owner") return false;
   return (
-    viewer.role === "steward" ||
-    viewer._id === place.createdBy ||
-    (await isVerifiedOwner(ctx, viewer._id, place._id))
+    (await ctx.db
+      .query("placeOwner")
+      .withIndex("by_placeId_and_personId", (q) =>
+        q.eq("placeId", place._id).eq("personId", viewer._id),
+      )
+      .unique()) !== null
   );
 }
 

@@ -4,11 +4,31 @@ import { HomeView, PublicLoading } from "@/components/public/home-view";
 import { toHomeModel } from "@/components/public/mapping";
 import { publicMessages } from "@/lib/i18n/messages/public";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
+import { exploreItems, type MapView } from "@/components/explore/helpers";
+import { PlaceMap } from "@/components/map/place-map";
 import { landmark, place, region } from "../fixtures/public-ui";
 
 vi.mock("maplibre-gl", () => {
   throw new Error("MapLibre must not load during SSR");
 });
+vi.mock("@/components/map/place-map", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/map/place-map")>();
+  return {
+    ...actual,
+    PlaceMap: vi.fn((props: React.ComponentProps<typeof actual.PlaceMap>) => (
+      <actual.PlaceMap {...props} />
+    )),
+  };
+});
+
+const view: MapView = {
+  west: 129.87,
+  south: 32.74,
+  east: 129.89,
+  north: 32.76,
+  center: { lat: 32.75, lng: 129.88 },
+  zoom: 14,
+};
 for (const locale of ["ja", "en"] as const) {
   const m = publicMessages[locale];
   const model = toHomeModel([{ ...place, hasStory: true }, landmark], locale, region);
@@ -110,6 +130,116 @@ for (const locale of ["ja", "en"] as const) {
       expect(html).not.toMatch(/\b(?:rating|score|star|sentiment)s?\b|評価|点数|星評価|感情分析/i);
   });
 }
+
+for (const locale of ["en", "ja"] as const) {
+  it(`caps rows at 50, counts all matches and offers a 44px show-more button (${locale})`, () => {
+    for (const n of [0, 1, 50, 51, 151]) {
+      const model = toHomeModel(
+        Array.from({ length: n }, (_, index) => ({ ...place, _id: `mock-${index}` })),
+        locale,
+        region,
+      );
+      const html = render(<HomeView locale={locale} region={region} model={model} view={view} />);
+      expect(html.match(/<li id="explore-place-/g) ?? []).toHaveLength(Math.min(50, n));
+      expect(html.includes(publicMessages[locale].showMorePlaces)).toBe(n > 50);
+      if (n > 50) {
+        expect(html).toMatch(
+          new RegExp(
+            `<button[^>]*class="[^"]*min-h-11[^"]*">${publicMessages[locale].showMorePlaces}</button>`,
+          ),
+        );
+        const expanded = render(
+          <HomeView locale={locale} region={region} model={model} view={view} rowLimit={100} />,
+        );
+        expect(expanded.match(/<li id="explore-place-/g)).toHaveLength(Math.min(100, n));
+        expect(expanded.includes(publicMessages[locale].showMorePlaces)).toBe(n > 100);
+      }
+      const expected =
+        locale === "en"
+          ? `${n} ${n === 1 ? "place" : "places"} in this area`
+          : `この範囲に ${n} 件`;
+      expect(html).toContain(`role="status" class="text-[15px] font-bold">${expected}</p>`);
+    }
+  });
+
+  for (const n of [0, 1, 2]) {
+    it(`counts ${n} search matches anywhere (${locale})`, () => {
+      const model = toHomeModel(
+        Array.from({ length: n }, (_, index) => ({ ...place, _id: `mock-${index}` })),
+        locale,
+        region,
+      );
+      const html = render(
+        <HomeView locale={locale} region={region} model={model} view={view} search="demo" />,
+      );
+      const expected =
+        locale === "en" ? `${n} ${n === 1 ? "place matches" : "places match"}` : `${n} 件が一致`;
+      expect(html).toContain(`role="status" class="text-[15px] font-bold">${expected}</p>`);
+    });
+  }
+
+  it(`uses the empty-area guidance while retaining search empty states (${locale})`, () => {
+    const props = {
+      locale,
+      region,
+      model: toHomeModel([], locale, region),
+      totalCount: 2,
+      view,
+      category: "cafe",
+    };
+    const html = render(<HomeView {...props} search="  " />);
+    expect(html).toContain(
+      locale === "en"
+        ? "No places in this area. Move or zoom out the map."
+        : "この範囲にお店はありません。地図を動かすか、縮小してください。",
+    );
+    const searched = render(<HomeView {...props} search="missing" />);
+    expect(searched).toContain(publicMessages[locale].noCafeMatches);
+    expect(searched).not.toContain(publicMessages[locale].noPlacesInArea);
+  });
+}
+
+it("passes every search/category match to PlaceMap while the list follows the view", () => {
+  const all = toHomeModel(
+    [
+      place,
+      { ...place, _id: "outside", pin: { lat: 32.8, lng: 129.9 } },
+      { ...landmark, category: "attraction" },
+    ],
+    "en",
+    region,
+  );
+  for (const search of ["", "demo"]) {
+    const items = exploreItems(all.items, { category: "cafe", search, locale: "en", view });
+    const mapItems = exploreItems(all.items, { category: "cafe", search, locale: "en" });
+    const model = {
+      ...all,
+      items,
+      markers: all.markers.filter((marker) => mapItems.some((item) => item.id === marker.id)),
+    };
+    const onViewChange = vi.fn();
+    const onSelect = vi.fn();
+    const html = render(
+      <HomeView
+        locale="en"
+        region={region}
+        model={model}
+        view={view}
+        category="cafe"
+        search={search}
+        onViewChange={onViewChange}
+        onSelect={onSelect}
+        selectedId="demo"
+      />,
+    );
+    expect(html.includes('id="explore-place-outside"')).toBe(search !== "");
+    const props = vi.mocked(PlaceMap).mock.lastCall![0];
+    expect(props.markers.map((marker) => marker.id)).toEqual(["demo", "outside"]);
+    expect(props.explore).toEqual(
+      expect.objectContaining({ onViewChange, onSelect, selectedId: "demo" }),
+    );
+  }
+});
 it("category chips preserve focus order even if region input is reversed", () => {
   const html = render(
     <HomeView

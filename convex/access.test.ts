@@ -21,6 +21,7 @@ import {
   canEditPlace,
   canManagePlace,
   canSeeSource,
+  isOpenListing,
   isPublicDemoPlace,
   isPubliclyReadablePlace,
   isPublicSafeClaim,
@@ -77,6 +78,35 @@ async function world() {
 }
 
 describe("place policy", () => {
+  it("isOpenListing requires both the OSM provider and ODbL licence on the same place's indexed reference", async () => {
+    const { b, placeA, placeB } = await world();
+    expect(await b.t.run((ctx) => isOpenListing(ctx, placeA))).toBe(false);
+    for (const input of [
+      {
+        placeId: placeA,
+        provider: "wikidata" as const,
+        licence: "ODbL-1.0" as const,
+        ref: "synthetic-other-provider",
+      },
+      { placeId: placeA, provider: "osm" as const, licence: "CC0" as const, ref: "node/1" },
+      { placeId: placeA, provider: "osm" as const, ref: "node/2" },
+      { placeId: placeB, provider: "osm" as const, licence: "ODbL-1.0" as const, ref: "node/3" },
+    ])
+      await b.run((ctx) => ctx.db.insert("placeExternalRef", { ...input, retrievedAt: 1 }));
+    expect(await b.t.run((ctx) => isOpenListing(ctx, placeA))).toBe(false);
+    // A later matching reference must be found even after unrelated licences.
+    await b.run((ctx) =>
+      ctx.db.insert("placeExternalRef", {
+        placeId: placeA,
+        provider: "osm",
+        licence: "ODbL-1.0",
+        ref: "node/4",
+        retrievedAt: 1,
+      }),
+    );
+    expect(await b.t.run((ctx) => isOpenListing(ctx, placeA))).toBe(true);
+  });
+
   it("placeKind treats unset as business", async () => {
     const { placeDoc, placeA } = await world();
     const place = await placeDoc(placeA);

@@ -10,6 +10,7 @@ import {
   locateInBrowser,
   haversine,
   normaliseSearch,
+  type MapView,
 } from "@/components/explore/helpers";
 import { toHomeModel } from "@/components/public/mapping";
 import { place, region } from "../fixtures/public-ui";
@@ -65,7 +66,7 @@ it("filters a single category or Demo together with search; clearing restores ev
   expect(filter("Zulu", "bar")).toEqual([]);
   expect(filter()).toHaveLength(3);
 });
-it("sorts stories before locale names without a position, nearest before stories with a position, missing pins last", () => {
+it("sorts stories first, then distance from the position, with missing pins last", () => {
   expect(filter().map((item) => item.id)).toEqual(["z", "a", "b"]);
   const nearest = exploreItems(items, {
     search: "",
@@ -73,10 +74,101 @@ it("sorts stories before locale names without a position, nearest before stories
     locale: "en",
     position: { lat: 0, lng: 0 },
   });
-  expect(nearest.map((item) => item.id)).toEqual(["b", "z", "a"]);
-  expect(nearest[0]!.distance).toBeCloseTo(111195, -1);
+  expect(nearest.map((item) => item.id)).toEqual(["z", "b", "a"]);
+  expect(nearest[1]!.distance).toBeCloseTo(111195, -1);
   expect(nearest[2]!.distance).toBeUndefined();
   expect(items.every((item) => item.distance === undefined)).toBe(true);
+});
+
+const view: MapView = {
+  west: 0,
+  south: -1,
+  east: 2,
+  north: 1,
+  center: { lat: 0, lng: 1 },
+  zoom: 12,
+};
+const areaItems = [
+  { ...items[0]!, id: "west", pin: { lat: 0, lng: 0 } },
+  { ...items[1]!, id: "east", pin: { lat: 0, lng: 2 } },
+  { ...items[1]!, id: "south", pin: { lat: -1, lng: 1 } },
+  { ...items[1]!, id: "north", pin: { lat: 1, lng: 1 } },
+  ...[
+    { lat: 0, lng: -0.001 },
+    { lat: 0, lng: 2.001 },
+    { lat: -1.001, lng: 1 },
+    { lat: 1.001, lng: 1 },
+  ].map((pin, index) => ({ ...items[1]!, id: `outside-${index}`, pin })),
+  items[2]!,
+];
+
+it("includes every bbox edge and excludes places just outside and places without a pin", () => {
+  const result = exploreItems(areaItems, { search: "  ", category: "", locale: "en", view });
+  expect(result.map((item) => item.id).sort()).toEqual(["east", "north", "south", "west"]);
+});
+
+it("search ignores the view, including aliases and places without pins; no view keeps all places", () => {
+  expect(
+    exploreItems(areaItems, { search: "Hidden", category: "", locale: "en", view }),
+  ).toHaveLength(7);
+  expect(
+    exploreItems(areaItems, { search: "Alpha", category: "", locale: "en", view }).map(
+      (item) => item.id,
+    ),
+  ).toEqual(["a"]);
+  for (const unknownView of [undefined, null]) {
+    expect(
+      exploreItems(areaItems, { search: "", category: "", locale: "en", view: unknownView }),
+    ).toHaveLength(areaItems.length);
+  }
+});
+
+it("applies categories and Demo with a view, with a search, and before the view is known", () => {
+  for (const options of [{ view, search: "" }, { view, search: "Hidden" }, { search: "" }]) {
+    for (const category of ["cafe", "bar", "demo"]) {
+      const result = exploreItems(areaItems, { ...options, category, locale: "en" });
+      const expected =
+        category === "demo"
+          ? ["west"]
+          : category === "cafe"
+            ? options.view
+              ? ["west"]
+              : ["west", "a"]
+            : options.search || !options.view
+              ? ["east", "north", "outside-0", "outside-1", "outside-2", "outside-3", "south"]
+              : ["east", "north", "south"];
+      expect(result.map((item) => item.id).sort()).toEqual(
+        options.search && category !== "bar" ? [] : [...expected].sort(),
+      );
+    }
+  }
+});
+
+it("keeps stories first, then uses the position ahead of the view centre", () => {
+  const places = [
+    { ...items[0]!, id: "far-story", pin: { lat: 0, lng: 1.7 } },
+    { ...items[0]!, id: "near-story", pin: { lat: 0, lng: 0.1 } },
+    { ...items[1]!, id: "near-person", pin: { lat: 0, lng: 0.2 } },
+    { ...items[1]!, id: "near-centre", pin: { lat: 0, lng: 1 } },
+  ];
+  expect(
+    exploreItems(places, { search: "", category: "", locale: "en", view }).map((item) => item.id),
+  ).toEqual(["far-story", "near-story", "near-centre", "near-person"]);
+  expect(
+    exploreItems(places, {
+      search: "",
+      category: "",
+      locale: "en",
+      view,
+      position: { lat: 0, lng: 0 },
+    }).map((item) => item.id),
+  ).toEqual(["near-story", "far-story", "near-person", "near-centre"]);
+  expect(places.every((item) => item.distance === undefined)).toBe(true);
+  expect(
+    exploreItems(places, { search: "", category: "", locale: "en", view }).every(
+      (item) => item.distance === undefined,
+    ),
+  ).toBe(true);
 });
 it("uses the page locale to break name ties in each ordering", () => {
   const same = items.map((item) => ({ ...item, hasStory: false, pin: { lat: 0, lng: 0 } }));
