@@ -170,16 +170,33 @@ describe("places.create", () => {
     ]);
   });
 
-  it("before launch no one can put a real place on the map by adding it", async () => {
+  it("before launch a member's place still goes on the map, shared with their agreement", async () => {
     const b = await setup();
     expect(regionPolicy("nagasaki").realBusinessesDraftOnly).toBe(true);
-    for (const caller of ["user", "creator", "steward"] as const)
-      expect(
-        await errorCode(
-          b.as(caller).mutation(api.places.create, { ...input, category: "cafe", onMap: true }),
-        ),
-      ).toBe("conflict");
-    expect(await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).toEqual([]);
+    const { placeId } = await b
+      .as("user")
+      .mutation(api.places.create, { ...input, category: "cafe", onMap: true });
+    expect(await b.run((ctx) => ctx.db.get("place", placeId))).toMatchObject({
+      visibility: "public",
+      sharedAt: expect.any(Number),
+    });
+    expect(
+      (await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).map((p) => p._id),
+    ).toEqual([placeId]);
+    // A steward who hid it can put it back before launch, as with an open-data listing.
+    await b.as("steward").mutation(api.places.setVisibility, { placeId, visibility: "draft" });
+    await b.as("steward").mutation(api.places.setVisibility, { placeId, visibility: "public" });
+    // A draft nobody shared still waits for launch.
+    const draft = await b.as("user").mutation(api.places.create, { ...input, category: "cafe" });
+    expect((await b.run((ctx) => ctx.db.get("place", draft.placeId)))?.sharedAt).toBeUndefined();
+    expect(
+      await errorCode(
+        b.as("steward").mutation(api.places.setVisibility, {
+          placeId: draft.placeId,
+          visibility: "public",
+        }),
+      ),
+    ).toBe("conflict");
   });
 
   it("any member may add a place, on the map only when asked and with a category; signed-out callers are refused", async () => {

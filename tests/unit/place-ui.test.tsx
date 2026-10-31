@@ -669,7 +669,7 @@ describe("place UI", () => {
   });
   it("the facade shows the platform, the author credit next to the post, the original link and the notice link", () => {
     const html = renderEmbed();
-    expect(html).toContain("Posted by @mock_creator (as entered by the creator)");
+    expect(html).toContain("Posted by @mock_creator (as entered when linked)");
     expect(html).toContain(`href="${source.authorUrl}"`);
     expect(html).toContain(`href="${source.canonicalUrl}"`);
     expect(html).toContain('href="/en/notice"');

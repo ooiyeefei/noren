@@ -208,6 +208,40 @@ describe("add sources", () => {
     ).toHaveLength(50);
   });
 
+  it("a post a member links shows to everyone with their name and line, and goes when they remove it", async () => {
+    const { b, steward } = await world();
+    const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
+    const { sourceId } = await b.as("user").mutation(api.sources.add, {
+      placeId,
+      url: video,
+      note: "Cats sleep on the steps here.",
+      noteLang: "en",
+    });
+    const publicView = await b.t.query(api.sources.listForPlace, { placeId });
+    expect(publicView).toHaveLength(1);
+    expect(publicView[0]).toMatchObject({
+      _id: sourceId,
+      creatorNote: "Cats sleep on the steps here.",
+      sharedBy: "Test Person (user)",
+      hasDemoConsent: false,
+      addedByMe: false,
+    });
+    expect(publicView[0]!.addedAt).toBeTypeOf("number");
+    await b.as("user").mutation(api.sources.remove, { sourceId });
+    expect(await b.t.query(api.sources.listForPlace, { placeId })).toEqual([]);
+  });
+
+  it("an old link nobody agreed to show stays off the public page", async () => {
+    const { b, steward, other } = await world();
+    const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
+    await addSource(b, { placeId, addedBy: other });
+    expect(await b.t.query(api.sources.listForPlace, { placeId })).toEqual([]);
+    // Its adder still sees it, but without a name line: they never agreed to show it.
+    const own = await b.as("other").query(api.sources.listForPlace, { placeId });
+    expect(own).toHaveLength(1);
+    expect(own[0]?.sharedBy).toBeUndefined();
+  });
+
   it("a member's author credit has a length limit", async () => {
     const { b, steward } = await world();
     const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
@@ -267,6 +301,7 @@ describe("add sources", () => {
         "noteLang",
         "addedBy",
         "status",
+        "sharedAt",
         "isMock",
       ].sort(),
     );

@@ -21,6 +21,21 @@ export const communityTables = {
     isMock: v.boolean(),
   }).index("by_placeId_and_status", ["placeId", "status"]),
 
+  /**
+   * A story a member wrote in Noren about a place: what they heard, saw or tasted there, shown in
+   * public with their name (FR-033). Unlike a visitor note it is not a message to the owner.
+   */
+  story: defineTable({
+    placeId: v.id("place"),
+    authorPersonId: v.id("person"),
+    body: v.string(),
+    lang: v.string(),
+    status: v.union(v.literal("live"), v.literal("hidden")),
+    isMock: v.boolean(),
+  })
+    .index("by_placeId_and_status", ["placeId", "status"])
+    .index("by_authorPersonId", ["authorPersonId"]),
+
   noteTranslation: defineTable({
     noteId: v.id("note"),
     lang: v.string(),

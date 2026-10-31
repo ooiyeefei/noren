@@ -7,29 +7,40 @@ import { addStoryMessages } from "@/lib/i18n/messages/add-story";
 import { cn } from "@/lib/utils";
 import {
   AUTHOR_LIMIT,
+  BODY_LIMIT,
   NOTE_LIMIT,
   TITLE_LIMIT,
   describeStoryLink,
   toStoryArgs,
+  toWrittenArgs,
   type StoryArgs,
   type StoryDraft,
   type StoryProblem,
   type StoryRegion,
+  type WrittenStoryArgs,
 } from "./add-story-form";
 
-/** What the page can do with a story; the container wires `add` to Convex. */
+/** What the page can do with a story; the container wires these to Convex. */
 export type AddStoryActions = {
   /** Undefined while sign-in is still loading. */
   signedIn: boolean | undefined;
+  /** Links a post the member made, or found, elsewhere. */
   add(args: StoryArgs): Promise<unknown>;
+  /** Keeps a story the member writes here. */
+  write(args: WrittenStoryArgs): Promise<unknown>;
 };
+
+type Mode = "write" | "link";
 
 const BUTTON =
   "inline-flex min-h-11 items-center justify-center rounded-[10px] px-5 py-2 font-bold disabled:opacity-50";
 const FIELD = "block w-full rounded-[10px] border border-input p-3 text-[16px]";
-const EMPTY: StoryDraft = { url: "", note: "", title: "", author: "" };
+const EMPTY: StoryDraft = { url: "", note: "", title: "", author: "", body: "" };
 
-/** FR-032: any signed-in member links a post about the place and says what it tells. */
+/**
+ * FR-032, FR-033: any signed-in member shares a story about the place, either written here or as a
+ * link to a post on the service they already use. Either way it is shown with their name.
+ */
 export function AddStory({
   locale,
   region,
@@ -41,7 +52,7 @@ export function AddStory({
 }) {
   const m = messagesFor(addStoryMessages, locale);
   const id = useId();
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<Mode | null>(null);
   const [draft, setDraft] = useState<StoryDraft>(EMPTY);
   const [problem, setProblem] = useState<StoryProblem>();
   const [pending, setPending] = useState(false);
@@ -62,17 +73,25 @@ export function AddStory({
       </p>
     );
   const link = describeStoryLink(draft.url, region);
-  async function submit(add: AddStoryActions["add"]) {
+  function prepare(current: Mode, send: AddStoryActions) {
+    if (current === "write") {
+      const result = toWrittenArgs(draft, region);
+      return result.ok ? { ok: true as const, run: () => send.write(result.args) } : result;
+    }
     const result = toStoryArgs(draft, region);
-    setProblem(result.ok ? undefined : result.problem);
-    if (!result.ok || busy.current) return;
+    return result.ok ? { ok: true as const, run: () => send.add(result.args) } : result;
+  }
+  async function submit(current: Mode, send: AddStoryActions) {
+    const prepared = prepare(current, send);
+    setProblem(prepared.ok ? undefined : prepared.problem);
+    if (!prepared.ok || busy.current) return;
     busy.current = true;
     setPending(true);
     setError(null);
     try {
-      await add(result.args);
+      await prepared.run();
       setDraft(EMPTY);
-      setOpen(false);
+      setMode(null);
       setAdded(true);
     } catch (caught) {
       setError(caught);
@@ -81,6 +100,12 @@ export function AddStory({
       setPending(false);
     }
   }
+  const choose = (next: Mode) => {
+    setMode(next);
+    setProblem(undefined);
+    setError(null);
+    setAdded(false);
+  };
   const described = (field: StoryProblem, hint?: string) => ({
     "aria-invalid": problem === field || undefined,
     "aria-describedby":
@@ -95,97 +120,134 @@ export function AddStory({
     );
   return (
     <div className="space-y-3">
-      {!open ? (
-        <button
-          type="button"
-          className={cn(BUTTON, "border border-input text-kon")}
-          onClick={() => {
-            setOpen(true);
-            setAdded(false);
-          }}
-        >
-          {m.open}
-        </button>
+      {mode === null ? (
+        <div className="space-y-3">
+          <p className="text-[17px]">{m.prompt}</p>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className={cn(BUTTON, "bg-kon text-white")}
+              onClick={() => choose("write")}
+            >
+              {m.write}
+            </button>
+            <button
+              type="button"
+              className={cn(BUTTON, "border border-kon text-kon")}
+              onClick={() => choose("link")}
+            >
+              {m.link}
+            </button>
+          </div>
+        </div>
       ) : (
         <form
           className="space-y-4 rounded-[14px] border border-line p-4"
-          aria-label={m.open}
+          aria-label={mode === "write" ? m.write : m.link}
           onSubmit={(event) => {
             event.preventDefault();
-            void submit(actions.add);
+            void submit(mode, actions);
           }}
         >
-          <p className="max-w-prose text-[15px] leading-relaxed">{m.intro}</p>
           <fieldset disabled={pending} className="min-w-0 space-y-4">
-            <label className="block space-y-1">
-              <span className="font-bold">{m.url}</span>
-              <input
-                type="url"
-                inputMode="url"
-                maxLength={2048}
-                value={draft.url}
-                {...described("url")}
-                onChange={(event) => {
-                  const url = event.target.value;
-                  const suggested = describeStoryLink(url, region)?.suggestedAuthor ?? "";
-                  const previous = describeStoryLink(draft.url, region)?.suggestedAuthor ?? "";
-                  // Follow the link's own credit until the member types a different one.
-                  setDraft({
-                    ...draft,
-                    url,
-                    author: draft.author === previous ? suggested : draft.author,
-                  });
-                }}
-                className={FIELD}
-              />
-              {problemText("url", m.urlProblem)}
-            </label>
-            {link?.linkCard && (
+            {mode === "write" ? (
               <label className="block space-y-1">
-                <span className="font-bold">{m.title}</span>
-                <input
-                  value={draft.title}
-                  maxLength={TITLE_LIMIT}
-                  {...described("title")}
-                  onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                <span className="font-bold">{m.body}</span>
+                <span id={`${id}-body-hint`} className="block text-[15px] text-muted-foreground">
+                  {m.bodyHint}
+                </span>
+                <textarea
+                  value={draft.body}
+                  maxLength={BODY_LIMIT}
+                  rows={6}
+                  {...described("body", `${id}-body-hint`)}
+                  onChange={(event) => setDraft({ ...draft, body: event.target.value })}
                   className={FIELD}
                 />
-                {problemText("title", m.titleProblem)}
+                {problemText("body", m.bodyProblem)}
               </label>
+            ) : (
+              <>
+                <p className="max-w-prose text-[15px] leading-relaxed">{m.intro}</p>
+                <label className="block space-y-1">
+                  <span className="font-bold">{m.url}</span>
+                  <input
+                    type="url"
+                    inputMode="url"
+                    maxLength={2048}
+                    value={draft.url}
+                    {...described("url")}
+                    onChange={(event) => {
+                      const url = event.target.value;
+                      const suggested = describeStoryLink(url, region)?.suggestedAuthor ?? "";
+                      const previous = describeStoryLink(draft.url, region)?.suggestedAuthor ?? "";
+                      // Follow the link's own credit until the member types a different one.
+                      setDraft({
+                        ...draft,
+                        url,
+                        author: draft.author === previous ? suggested : draft.author,
+                      });
+                    }}
+                    className={FIELD}
+                  />
+                  {problemText("url", m.urlProblem)}
+                </label>
+                {link?.linkCard && (
+                  <label className="block space-y-1">
+                    <span className="font-bold">{m.title}</span>
+                    <input
+                      value={draft.title}
+                      maxLength={TITLE_LIMIT}
+                      {...described("title")}
+                      onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                      className={FIELD}
+                    />
+                    {problemText("title", m.titleProblem)}
+                  </label>
+                )}
+                <label className="block space-y-1">
+                  <span className="font-bold">{m.note}</span>
+                  <span id={`${id}-note-hint`} className="block text-[15px] text-muted-foreground">
+                    {m.noteHint}
+                  </span>
+                  <textarea
+                    value={draft.note}
+                    maxLength={NOTE_LIMIT}
+                    rows={3}
+                    {...described("note", `${id}-note-hint`)}
+                    onChange={(event) => setDraft({ ...draft, note: event.target.value })}
+                    className={FIELD}
+                  />
+                  {problemText("note", m.noteProblem)}
+                </label>
+                <label className="block space-y-1">
+                  <span>{m.author}</span>
+                  <input
+                    value={draft.author}
+                    maxLength={AUTHOR_LIMIT}
+                    onChange={(event) => setDraft({ ...draft, author: event.target.value })}
+                    className={FIELD}
+                  />
+                </label>
+              </>
             )}
-            <label className="block space-y-1">
-              <span className="font-bold">{m.note}</span>
-              <span id={`${id}-note-hint`} className="block text-[15px] text-muted-foreground">
-                {m.noteHint}
-              </span>
-              <textarea
-                value={draft.note}
-                maxLength={NOTE_LIMIT}
-                rows={3}
-                {...described("note", `${id}-note-hint`)}
-                onChange={(event) => setDraft({ ...draft, note: event.target.value })}
-                className={FIELD}
-              />
-              {problemText("note", m.noteProblem)}
-            </label>
-            <label className="block space-y-1">
-              <span>{m.author}</span>
-              <input
-                value={draft.author}
-                maxLength={AUTHOR_LIMIT}
-                onChange={(event) => setDraft({ ...draft, author: event.target.value })}
-                className={FIELD}
-              />
-            </label>
+            {/* Sharing is the agreement to show it; saying so beside the button is the consent. */}
+            <p id={`${id}-public`} className="text-[15px]">
+              {m.shownPublicly}
+            </p>
             <div className="flex flex-wrap gap-3">
-              <button type="submit" className={cn(BUTTON, "bg-kon text-white")}>
-                {pending ? m.adding : m.add}
+              <button
+                type="submit"
+                aria-describedby={`${id}-public`}
+                className={cn(BUTTON, "bg-kon text-white")}
+              >
+                {pending ? m.sharing : m.share}
               </button>
               <button
                 type="button"
                 className={cn(BUTTON, "border border-input text-kon")}
                 onClick={() => {
-                  setOpen(false);
+                  setMode(null);
                   setProblem(undefined);
                   setError(null);
                 }}

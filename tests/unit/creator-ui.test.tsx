@@ -238,7 +238,7 @@ describe("creator UI", () => {
   it("the editor view lists posts with credit and remove buttons and interviews with their status", () => {
     const html = renderToStaticMarkup(<PlaceEditorView {...editorProps} />);
     for (const text of [
-      "Posted by @mock_creator (as entered by the creator)",
+      "Posted by @mock_creator (as entered when linked)",
       "Mock source note",
       "Remove",
       "Interview in Japanese, awaiting consent",
@@ -736,7 +736,7 @@ describe("adding a place from the wizard", () => {
       {},
     );
     const wizard = () => element<NewPlaceViewProps>(render(), NewPlaceView).props;
-    expect(wizard().onMap).toBe(person.isMock === false && inRegion === open);
+    expect(wizard().onMap).toBe(person.isMock === false);
     wizard().onChange({
       kind: "business",
       category: "cafe",
@@ -749,21 +749,16 @@ describe("adding a place from the wizard", () => {
     );
     return create.mock.calls[0]![0] as Record<string, unknown>;
   }
-  it("saves a member's place as a draft before launch", async () => {
+  it("puts a member's place on the map before launch and after", async () => {
     expect(region.legal.launchPackComplete).toBe(false);
-    expect(await addPlace({ role: "user", isMock: false }, region)).toMatchObject({
-      category: "cafe",
-      onMap: false,
-    });
-  });
-  it("puts a member's place straight on the map once the region has launched", async () => {
-    for (const role of ["user", "creator", "business_owner", "steward"]) {
-      expect(await addPlace({ role, isMock: false })).toMatchObject({
-        category: "cafe",
-        onMap: true,
-      });
-      vi.clearAllMocks();
-    }
+    for (const inRegion of [region, open])
+      for (const role of ["user", "creator", "business_owner", "steward"]) {
+        expect(await addPlace({ role, isMock: false }, inRegion)).toMatchObject({
+          category: "cafe",
+          onMap: true,
+        });
+        vi.clearAllMocks();
+      }
   });
   it("sends nothing while the place has no category", async () => {
     vi.mocked(useQuery).mockImplementation((...args: Parameters<typeof useQuery>) =>

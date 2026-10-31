@@ -347,13 +347,6 @@ export const create = mutation({
         "a place goes on the map with a category, as a real business, from a real account",
       );
     }
-    // Before launch only open-data listings of real businesses are public, as in setVisibility.
-    if (args.onMap && regionPolicy(args.regionId).realBusinessesDraftOnly) {
-      throw appError(
-        "conflict",
-        "complete the launch pack (operator and takedown contact) before a place goes public",
-      );
-    }
     await limitContribution(ctx, person, "place");
     const slug = await uniqueSlug(ctx, args.regionId, slugBase(names));
     const placeId = await ctx.db.insert(
@@ -364,6 +357,8 @@ export const create = mutation({
         category: args.category,
         slug,
         visibility: args.onMap ? ("public" as const) : ("draft" as const),
+        // The add form says the place is shown with the member's name; adding it is the agreement.
+        ...(args.onMap ? { sharedAt: Date.now() } : {}),
         createdBy: person._id,
         // The person who placed the pin is the first to confirm the place (FR-030).
         confirmedAt: Date.now(),
@@ -493,8 +488,10 @@ export const setVisibility = mutation({
         .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
         .unique();
       if (pin === null) throw appError("conflict", "a pin is required before a place goes public");
+      // Before launch, only open-data listings and places members shared may be public (FR-032).
       if (
         regionPolicy(place.regionId).realBusinessesDraftOnly &&
+        place.sharedAt === undefined &&
         !(await isOpenListing(ctx, placeId))
       ) {
         throw appError(
