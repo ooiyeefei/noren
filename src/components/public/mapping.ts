@@ -23,6 +23,8 @@ export type PublicRegionProps = {
   attribution: string[];
   scriptOrigins: string[];
   frameOrigins: string[];
+  sourceAdapters: RegionConfig["enabledSourceAdapters"];
+  locales: RegionConfig["locales"];
   cautionVocabulary: RegionConfig["cautionVocabulary"];
 };
 export type NameLike = PlaceNameLike;
@@ -71,6 +73,8 @@ export function publicRegionProps(region: RegionConfig, locale: Locale): PublicR
     attribution: [...style.attribution],
     scriptOrigins: scriptHostsFor(region.enabledSourceAdapters),
     frameOrigins: frameHostsFor(region.enabledSourceAdapters),
+    sourceAdapters: region.enabledSourceAdapters,
+    locales: region.locales,
     cautionVocabulary: region.cautionVocabulary,
   };
 }

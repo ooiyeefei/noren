@@ -3,6 +3,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { ChevronLeft } from "lucide-react";
 import { NorenHeader } from "@/components/place/noren-header";
 import { PlaceActions } from "@/components/place/place-actions";
+import { AddStory, type AddStoryActions } from "@/components/place/add-story";
 import { PlaceCheck, type PlaceCheckActions } from "@/components/place/place-check";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { labelForCategory } from "./category";
@@ -33,6 +34,7 @@ export function PlaceView({
   page,
   sources,
   checks,
+  story,
 }: {
   locale: Locale;
   region: PublicRegionProps;
@@ -40,6 +42,7 @@ export function PlaceView({
   page?: PageViewLike | null;
   sources?: readonly SourceViewLike[];
   checks?: PlaceCheckActions;
+  story?: AddStoryActions;
 }) {
   const m = messagesFor(publicMessages, locale);
   const shell = messagesFor(shellMessages, locale);
@@ -153,7 +156,8 @@ export function PlaceView({
         {sources === undefined ? (
           <PublicLoading locale={locale} />
         ) : (
-          sources.length > 0 && (
+          // The fictional demo place takes no stories about it.
+          (sources.length > 0 || (story && !place.isMock)) && (
             <section
               className="space-y-4 border-t border-line pt-10"
               aria-labelledby="posts-heading"
@@ -161,6 +165,7 @@ export function PlaceView({
               <h2 id="posts-heading" className="font-sans text-[22px] font-bold">
                 {ui.posts}
               </h2>
+              {!place.isMock && <AddStory locale={locale} region={region} actions={story} />}
               {sources.some((source) => source.embed.kind !== "link") && (
                 <EmbedNotice locale={locale} />
               )}

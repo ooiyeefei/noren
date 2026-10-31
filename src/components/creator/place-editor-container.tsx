@@ -102,9 +102,12 @@ function Editor({
   region: RegionConfig;
 }) {
   const posts = useQuery(api.sources.listForPlace, { placeId: place._id });
+  const person = useQuery(api.people.current, {});
+  // Owner interviews are creators' work; a member who added the place links posts instead.
+  const canInterview = person?.role === "creator" || person?.role === "steward";
   const interviews = useQuery(
     api.interviews.listForPlace,
-    place.canManage ? { placeId: place._id } : "skip",
+    place.canManage && canInterview ? { placeId: place._id } : "skip",
   );
   const updateNames = useMutation(api.places.updateNames);
   const setCategory = useMutation(api.places.setCategory);
@@ -220,7 +223,11 @@ function Editor({
       setSourceDraft(emptySource);
     });
   }
-  if (posts === undefined || (place.canManage && interviews === undefined)) {
+  if (
+    posts === undefined ||
+    person === undefined ||
+    (place.canManage && canInterview && interviews === undefined)
+  ) {
     return (
       <PageContainer locale={locale} title={messagesFor(creatorMessages, locale).editor}>
         <p role="status">{messagesFor(creatorMessages, locale).loading}</p>
@@ -240,6 +247,7 @@ function Editor({
       sourceError={sourceError}
       posts={(posts ?? []).map((post) => ({ ...post, id: post._id }))}
       interviews={(interviews ?? []).map((interview) => ({ ...interview, id: interview._id }))}
+      canInterview={canInterview}
       interviewLanguage={language}
       onInterviewLanguage={setLanguage}
       pending={pending}

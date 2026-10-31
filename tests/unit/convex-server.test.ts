@@ -10,6 +10,7 @@ import { api } from "../../convex/_generated/api";
 import {
   convexToken,
   currentPersonOnServer,
+  requirePersonOnServer,
   requireRoleOnServer,
 } from "../../src/lib/convex/server";
 
@@ -92,4 +93,20 @@ it("does not allow a creator to act as steward", async () => {
   const result = await requireRoleOnServer(["steward"]);
   expect(result.ok).toBe(false);
   if (!result.ok) expect(result.response.status).toBe(403);
+});
+
+it.each(["user", "creator", "business_owner", "steward"] as const)(
+  "any signed-in member passes the member check (%s)",
+  async (role) => {
+    const person = { displayName: "Demo person", role };
+    mockQuery.mockResolvedValue(person);
+    expect(await requirePersonOnServer()).toEqual({ ok: true, person });
+  },
+);
+
+it.each(["signed out", "no person"])("the member check returns 401 for %s", async (state) => {
+  if (state === "signed out") session(null);
+  const result = await requirePersonOnServer();
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.response.status).toBe(401);
 });

@@ -3,7 +3,7 @@ import { jsonError } from "@/lib/http/handler";
 
 const { authorize, session } = vi.hoisted(() => ({ authorize: vi.fn(), session: vi.fn() }));
 vi.mock("@clerk/nextjs/server", () => ({ auth: session }));
-vi.mock("@/lib/convex/server", () => ({ requireRoleOnServer: authorize }));
+vi.mock("@/lib/convex/server", () => ({ requirePersonOnServer: authorize }));
 let GET: (request: Request) => Promise<Response>;
 const request = (url = "https://google.com/maps/place/Mock/@32,129,17z") =>
   new Request(`https://example.org/api/geo/maps-link?${new URLSearchParams({ url })}`);
@@ -43,20 +43,20 @@ describe("Maps link route", () => {
     await check(req, 401);
     expect(fetch).not.toHaveBeenCalled();
   });
-  it("a plain user is 403", async () => {
+  it("a refused caller is stopped before anything is fetched", async () => {
     authorize.mockResolvedValue({
       ok: false,
-      response: jsonError("forbidden", "the user role may not do this"),
+      response: jsonError("forbidden", "refused"),
     });
     await check(request("bad"), 403);
     expect(fetch).not.toHaveBeenCalled();
   });
-  it("creator succeeds", async () => {
+  it("any signed-in member succeeds", async () => {
     expect(await (await check(request(), 200)).json()).toEqual({
       suggestion: { name: "Mock", lat: 32, lng: 129 },
       source: "the link you pasted",
     });
-    expect(authorize).toHaveBeenCalledWith(["creator"]);
+    expect(authorize).toHaveBeenCalledWith();
   });
   it("cooldown returns 429 with Retry-After and is per user", async () => {
     vi.useFakeTimers();

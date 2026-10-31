@@ -9,6 +9,7 @@ import { currentPerson, requirePerson, requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
+import { limitContribution } from "./lib/rateLimit";
 import { isRegionLocale, regionConfig } from "./lib/region";
 import { literals, sourceStatusValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
@@ -124,7 +125,8 @@ export const add = mutation({
     platform: v.string(),
   }),
   handler: async (ctx, args) => {
-    const person = await requireRole(ctx, ["creator"]);
+    // Any signed-in member may link a post about a place they can read (FR-032).
+    const person = await requirePerson(ctx);
     const place = await loadReadablePlace(ctx, person, args.placeId);
     const region = regionConfig(place.regionId);
     const described = describeSource(args.url, region.enabledSourceAdapters);
@@ -146,6 +148,10 @@ export const add = mutation({
         "noteLang must be a region locale and is required with a note",
       );
     }
+    if (args.authorHandle !== undefined && args.authorHandle.length > 100)
+      throw appError("invalid_input", "authorHandle must be at most 100 characters");
+    if (args.authorUrl !== undefined && args.authorUrl.length > 500)
+      throw appError("invalid_input", "authorUrl must be at most 500 characters");
     if (args.authorUrl !== undefined) {
       let valid = false;
       try {
@@ -162,6 +168,7 @@ export const add = mutation({
       )
       .first();
     if (existing !== null) throw appError("conflict", "this URL is already attached to the place");
+    await limitContribution(ctx, person, "post");
     const sourceId = await ctx.db.insert(
       "source",
       withMock(person, {

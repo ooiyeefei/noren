@@ -119,7 +119,8 @@ describe("creator wizard completeness", () => {
     expect(
       stepError(2, { ...valid, names: [names[0]!, { ...names[0]!, value: "別名" }] }, region),
     ).toBe("two_primaries");
-    expect(stepError(3, valid, region)).toBeUndefined();
+    expect(stepError(3, valid, region)).toBe("no_category");
+    expect(stepError(3, { ...valid, category: "cafe" }, region)).toBeUndefined();
     expect(validatePlaceDraft(valid, region)).toEqual({});
   });
   it("keeps the wizard step in a shareable URL and tolerates invalid URL input", () => {

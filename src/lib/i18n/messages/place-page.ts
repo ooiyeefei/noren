@@ -24,7 +24,7 @@ export const placePageMessages = defineMessages({
     copied: "リンクをコピーしました",
     copyFailed: "リンクをコピーできませんでした。",
     manage: "管理",
-    posts: "このお店についての投稿",
+    posts: "この場所についての投稿",
     where: "場所",
     removal: "このページの削除を依頼",
     categoryInRegion: "{region}にある{category}",

@@ -186,11 +186,41 @@ describe("add sources", () => {
     expect((await row(sourceId))?.authorHandle).toBe("@mock_creator");
   });
 
-  it("a user is forbidden", async () => {
-    const { b, placeId } = await world();
-    expect(await errorCode(b.as("user").mutation(api.sources.add, { placeId, url: video }))).toBe(
-      "forbidden",
+  it("any member may link a post to a place they can read, up to 50 a day", async () => {
+    const { b, steward } = await world();
+    const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
+    const add = (i: number) =>
+      b.as("user").mutation(api.sources.add, {
+        placeId,
+        url: `https://example.com/story-${i}`,
+        title: "Fictional story link",
+      });
+    for (let i = 0; i < 50; i++) await add(i);
+    expect(await errorCode(add(50))).toBe("rate_limited");
+    // A refused link writes nothing, so the 51st is not stored.
+    expect(
+      await b.run((ctx) =>
+        ctx.db
+          .query("source")
+          .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId).eq("status", "live"))
+          .take(60),
+      ),
+    ).toHaveLength(50);
+  });
+
+  it("a member's author credit has a length limit", async () => {
+    const { b, steward } = await world();
+    const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
+    const add = (extra: { authorHandle?: string; authorUrl?: string }) =>
+      b.as("user").mutation(api.sources.add, { placeId, url: video, ...extra });
+    expect(await errorCode(add({ authorHandle: "a".repeat(101) }))).toBe("invalid_input");
+    expect(await errorCode(add({ authorUrl: `https://example.com/${"a".repeat(481)}` }))).toBe(
+      "invalid_input",
     );
+    await add({
+      authorHandle: "a".repeat(100),
+      authorUrl: `https://example.com/${"a".repeat(480)}`,
+    });
   });
 
   it("another creator's draft is not_found", async () => {

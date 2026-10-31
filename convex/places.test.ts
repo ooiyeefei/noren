@@ -161,10 +161,48 @@ describe("places.create", () => {
     ]);
   });
 
-  it("a user is forbidden and a signed-out caller unauthenticated", async () => {
+  it("any member may add a place, on the map only when asked and with a category; signed-out callers are refused", async () => {
     const b = await setup();
-    expect(await errorCode(b.as("user").mutation(api.places.create, input))).toBe("forbidden");
+    const asUser = b.as("user");
+    const draft = await asUser.mutation(api.places.create, input);
+    expect((await b.run((ctx) => ctx.db.get("place", draft.placeId)))?.visibility).toBe("draft");
+    expect(await errorCode(asUser.mutation(api.places.create, { ...input, onMap: true }))).toBe(
+      "invalid_input",
+    );
+    const onMap = { ...input, category: "cafe", onMap: true };
+    expect(
+      await errorCode(asUser.mutation(api.places.create, { ...onMap, kind: "landmark" })),
+    ).toBe("forbidden");
+    // Landmarks are stewards' work and reach the map through a steward's review, not this flag.
+    expect(
+      await errorCode(b.as("steward").mutation(api.places.create, { ...onMap, kind: "landmark" })),
+    ).toBe("invalid_input");
+    const listed = await asUser.mutation(api.places.create, onMap);
+    expect(await b.run((ctx) => ctx.db.get("place", listed.placeId))).toMatchObject({
+      visibility: "public",
+      confirmedBy: b.user,
+      createdBy: b.user,
+    });
+    const map = await b.t.query(api.places.listForMap, { regionId: "nagasaki" });
+    expect(map.map((place) => place._id)).toEqual([listed.placeId]);
+    expect(await asUser.query(api.places.listMine, { regionId: "nagasaki" })).toHaveLength(2);
     expect(await errorCode(b.t.mutation(api.places.create, input))).toBe("unauthenticated");
+  });
+
+  it("a mock account cannot put a place on the map", async () => {
+    const b = await setup({ isMock: true });
+    expect(
+      await errorCode(
+        b.as("creator").mutation(api.places.create, { ...input, category: "cafe", onMap: true }),
+      ),
+    ).toBe("invalid_input");
+  });
+
+  it("a member adds at most 20 places a day; a steward is not capped", async () => {
+    const b = await setup();
+    for (let i = 0; i < 20; i++) await b.as("user").mutation(api.places.create, input);
+    expect(await errorCode(b.as("user").mutation(api.places.create, input))).toBe("rate_limited");
+    for (let i = 0; i < 21; i++) await b.as("steward").mutation(api.places.create, input);
   });
 
   it("a pin outside the region is invalid_input", async () => {
@@ -414,6 +452,25 @@ describe("places reads", () => {
       visibility: "demo_public",
     });
     await addPlace(b, { createdBy: b.creator, regionId: "another-region" });
+    // listMine shows places made by hand, which are confirmed when made; a listing a steward
+    // published from open data is not, and carries its open-data reference.
+    await b.run((ctx) =>
+      ctx.db.patch("place", stewardId, { confirmedAt: 1, confirmedBy: b.steward }),
+    );
+    const listing = await addPlace(b, { createdBy: b.steward, visibility: "public" });
+    await b.run((ctx) =>
+      ctx.db.insert("placeExternalRef", {
+        placeId: listing,
+        provider: "osm",
+        ref: "node/1",
+        licence: "ODbL-1.0",
+        attribution: "© OpenStreetMap contributors",
+        retrievedAt: 1,
+      }),
+    );
+    await b.run((ctx) =>
+      ctx.db.patch("place", listing, { confirmedAt: 2, confirmedBy: b.steward }),
+    );
     await addOwner(b, placeId, b.owner, b.steward);
     expect(
       (await b.as("creator").query(api.places.listMine, { regionId: "nagasaki" })).map(
@@ -430,7 +487,9 @@ describe("places reads", () => {
     );
     expect(await b.as("user").query(api.places.listOwned, {})).toEqual([]);
     const all = await b.as("steward").query(api.places.listAll, { regionId: "nagasaki" });
-    expect(all.map((place) => place._id).sort()).toEqual([placeId, otherId, stewardId].sort());
+    expect(all.map((place) => place._id).sort()).toEqual(
+      [placeId, otherId, stewardId, listing].sort(),
+    );
     expect(all.find((place) => place._id === placeId)?.ownerCount).toBe(1);
     expect(all.find((place) => place._id === otherId)?.ownerCount).toBe(0);
   });
