@@ -347,6 +347,13 @@ export const create = mutation({
         "a place goes on the map with a category, as a real business, from a real account",
       );
     }
+    // Before launch only open-data listings of real businesses are public, as in setVisibility.
+    if (args.onMap && regionPolicy(args.regionId).realBusinessesDraftOnly) {
+      throw appError(
+        "conflict",
+        "complete the launch pack (operator and takedown contact) before a place goes public",
+      );
+    }
     await limitContribution(ctx, person, "place");
     const slug = await uniqueSlug(ctx, args.regionId, slugBase(names));
     const placeId = await ctx.db.insert(

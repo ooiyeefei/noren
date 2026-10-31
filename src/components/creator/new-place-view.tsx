@@ -509,6 +509,8 @@ export type NewPlaceViewProps = {
   locale: Locale;
   region: RegionConfig;
   role: Role;
+  /** Whether the place goes on the public map when added, or is saved as a draft. */
+  onMap?: boolean;
   draft: PlaceDraft;
   errors?: PlaceErrors;
   pending?: boolean;
@@ -524,6 +526,7 @@ export type NewPlaceViewProps = {
 export function NewPlaceView({
   locale,
   region,
+  onMap = false,
   draft,
   errors,
   pending,
@@ -605,7 +608,9 @@ export function NewPlaceView({
                   m.noCategory}
               </p>
             </section>
-            <p className="max-w-prose text-[15px] leading-relaxed">{m.businessHint}</p>
+            <p className="max-w-prose text-[15px] leading-relaxed">
+              {onMap ? m.businessHint : m.draftHint}
+            </p>
           </>
         )}
         {error && <Alert>{error}</Alert>}
@@ -641,7 +646,7 @@ export function NewPlaceView({
               aria-describedby={reason ? reasonId : undefined}
               onClick={onCreate}
             >
-              {pending ? m.pending : m.create}
+              {pending ? m.pending : onMap ? m.create : m.createDraft}
             </Button>
           )}
         </div>

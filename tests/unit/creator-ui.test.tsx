@@ -169,7 +169,7 @@ describe("creator UI", () => {
       expect(html).not.toContain("場所の種類");
       expect(html).not.toContain('value="business"');
       expect(html).not.toContain('value="landmark"');
-      expect(html).toContain(creatorMessages.ja.businessHint);
+      expect(html).toContain(creatorMessages.ja.draftHint);
     }
   });
   it("the creator form displays the chosen category", () => {
@@ -668,21 +668,45 @@ it("a member who added the place links posts but is not offered owner interviews
 
 it("the last wizard step needs a category before the place can go on the map", () => {
   const m = creatorMessages.ja;
-  const without = renderToStaticMarkup(<NewPlaceView {...newProps} step={3} />);
+  const without = renderToStaticMarkup(<NewPlaceView {...newProps} onMap step={3} />);
   expect(without).toMatch(
     new RegExp(`disabled=""[^>]*aria-describedby="[^"]+"[^>]*>${m.create}</button>`),
   );
   expect(without).toContain(m.no_category);
   expect(without).not.toContain(`>${m.noCategory}</button>`);
   const chosen = renderToStaticMarkup(
-    <NewPlaceView {...newProps} step={3} draft={{ ...newProps.draft, category: "cafe" }} />,
+    <NewPlaceView {...newProps} onMap step={3} draft={{ ...newProps.draft, category: "cafe" }} />,
   );
   expect(chosen).not.toMatch(new RegExp(`disabled=""[^>]*>${m.create}</button>`));
   expect(chosen).not.toContain(m.no_category);
 });
 
+it.each(["ja", "en"] as const)(
+  "says plainly whether the place goes on the map or is saved as a draft (%s)",
+  (locale) => {
+    const m = creatorMessages[locale];
+    const view = (onMap: boolean) =>
+      renderToStaticMarkup(
+        <NewPlaceView
+          {...newProps}
+          locale={locale}
+          onMap={onMap}
+          step={3}
+          draft={{ ...newProps.draft, category: "cafe" }}
+        />,
+      );
+    expect(view(true)).toContain(m.businessHint);
+    expect(view(true)).toContain(`>${m.create}</button>`);
+    expect(view(false)).toContain(m.draftHint);
+    expect(view(false)).toContain(`>${m.createDraft}</button>`);
+    expect(view(false)).not.toContain(m.businessHint);
+    expect(view(false)).not.toContain(`>${m.create}</button>`);
+  },
+);
+
 describe("adding a place from the wizard", () => {
-  async function addPlace(person: { role: string; isMock: boolean }) {
+  const open = { ...region, legal: { ...region.legal, launchPackComplete: true } };
+  async function addPlace(person: { role: string; isMock: boolean }, inRegion = open) {
     vi.mocked(useQuery).mockImplementation((...args: Parameters<typeof useQuery>) => {
       switch (getFunctionName(args[0])) {
         case "people:current":
@@ -707,11 +731,12 @@ describe("adding a place from the wizard", () => {
             value: { lang: "ja" },
           }),
           locale: "ja",
-          region,
+          region: inRegion,
         }),
       {},
     );
     const wizard = () => element<NewPlaceViewProps>(render(), NewPlaceView).props;
+    expect(wizard().onMap).toBe(person.isMock === false && inRegion === open);
     wizard().onChange({
       kind: "business",
       category: "cafe",
@@ -724,7 +749,14 @@ describe("adding a place from the wizard", () => {
     );
     return create.mock.calls[0]![0] as Record<string, unknown>;
   }
-  it("puts a member's place straight on the map", async () => {
+  it("saves a member's place as a draft before launch", async () => {
+    expect(region.legal.launchPackComplete).toBe(false);
+    expect(await addPlace({ role: "user", isMock: false }, region)).toMatchObject({
+      category: "cafe",
+      onMap: false,
+    });
+  });
+  it("puts a member's place straight on the map once the region has launched", async () => {
     for (const role of ["user", "creator", "business_owner", "steward"]) {
       expect(await addPlace({ role, isMock: false })).toMatchObject({
         category: "cafe",

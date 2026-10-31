@@ -200,8 +200,8 @@ for (const locale of ["en", "ja"] as const)
         expect(html).toContain(m.back);
         if (step < 3) expect(html).toContain(`>${m.next}</button>`);
         else {
-          expect(html).toContain(m.create);
-          expect(html).toContain(m.businessHint);
+          expect(html).toContain(m.createDraft);
+          expect(html).toContain(m.draftHint);
           expect(html).toContain(m.pinPlaced);
           expect(html).not.toContain("129.");
         }
