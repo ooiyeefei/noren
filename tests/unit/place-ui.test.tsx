@@ -381,7 +381,7 @@ describe("place UI", () => {
     setMarkerSelection(element, true);
     expect(classes.has("maplibregl-marker")).toBe(true);
     expect(classes.has("maplibregl-marker-covered")).toBe(true);
-    expect(classes.has("scale-[1.2]")).toBe(true);
+    expect(classes.has("[&>svg]:scale-[1.2]")).toBe(true);
     expect(classes.has("ring-ai")).toBe(true);
     expect(setAttribute).toHaveBeenLastCalledWith("aria-pressed", "true");
     setMarkerSelection(element, false);
@@ -404,9 +404,14 @@ describe("place UI", () => {
       fill: "#f2c14e",
       stroke: "#23305c",
       strokeWidth: "2",
-      className: expect.stringContaining("scale-[1.2]"),
+      className: expect.stringContaining("[&>svg]:scale-[1.2]"),
     });
     expect(markerPresentation(marker, "Demo", true).className).toContain("ring-ai");
+    // MapLibre positions the marker element with a transform; a scale, rotate or translate on the
+    // element itself composes with it and moves the marker off its place (2026-10-31).
+    for (const selected of [false, true])
+      for (const name of markerPresentation(marker, "Demo", selected).className.split(" "))
+        expect(name).not.toMatch(/^(?:[a-z-]+:)*-?(?:scale|rotate|translate|transform|skew)/);
     expect(markerPresentation(marker, "Demo").className).not.toContain("ring-ai");
     expect(renderToStaticMarkup(<NorenTab story />)).toContain('fill="#f2c14e"');
     expect(renderToStaticMarkup(<NorenTab />)).toContain('fill="#23305c"');
