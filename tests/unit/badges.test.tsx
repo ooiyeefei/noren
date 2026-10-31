@@ -84,7 +84,7 @@ it("no badge renders an empty label", () => {
 
 it("badge messages have the same keys in both locales", () => {
   expect(Object.keys(badgeMessages.ja).sort()).toEqual(Object.keys(badgeMessages.en).sort());
-  expect(Object.keys(badgeMessages.ja)).toHaveLength(10);
+  expect(Object.keys(badgeMessages.ja)).toHaveLength(12);
   for (const { key, hint } of badges) {
     for (const locale of SUPPORTED_LOCALES) {
       expect(badgeMessages[locale][key].trim()).not.toBe("");

@@ -13,6 +13,8 @@ export const badgeMessages = defineMessages({
     aiAssistedHint: "AI の支援を受けて作成されました",
     translationPending: "翻訳待ち",
     translationPendingHint: "まだ翻訳がないため、原文を表示しています",
+    unconfirmed: "未確認",
+    unconfirmedHint: "オープンデータから載せた場所で、まだ誰も現地で確かめていません",
   },
   en: {
     demo: "Demo",
@@ -25,5 +27,7 @@ export const badgeMessages = defineMessages({
     aiAssistedHint: "Written with help from AI",
     translationPending: "Translation pending",
     translationPendingHint: "No translation yet; showing the original",
+    unconfirmed: "Not yet confirmed",
+    unconfirmedHint: "Listed from open data; no one has checked it in person yet",
   },
 });

@@ -23,6 +23,12 @@ export const SCRIPTS = ["kanji", "kana", "romaji", "latin"] as const;
 export const PLACE_KINDS = ["business", "landmark"] as const;
 
 export const SOURCE_STATUSES = ["live", "gone", "hidden"] as const;
+/** A person saying a place is still there, or reporting that something is wrong (FR-030). */
+export const CHECK_VERDICTS = ["still_here", "something_wrong"] as const;
+export const CHECK_PROBLEMS = ["closed", "moved", "details", "other"] as const;
+/** What a steward decided about a report: the place stays, or it is hidden (back to draft). */
+export const CHECK_OUTCOMES = ["kept", "hidden"] as const;
+export type CheckProblem = (typeof CHECK_PROBLEMS)[number];
 /** Adapters the core code can run; a region chooses which are enabled. */
 export const SOURCE_ADAPTER_IDS = [
   "link_card",

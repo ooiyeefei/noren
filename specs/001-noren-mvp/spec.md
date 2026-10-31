@@ -235,7 +235,7 @@ A steward can see what moderation actions and AI edits happened, an administrato
 - **FR-020**: The system MUST use accounts with four roles: user (a visitor: reads published pages and leaves notes), creator (creates places, attaches posts and runs interviews, tied to a public profile), business owner (confirms, edits or removes claims about their own place, replies to notes and sets conversation topics) and steward (verifies creators and owners, moderates, handles takedowns and manages region settings, and may do everything a creator can, for example to seed landmark pages). The creator and business-owner roles MUST be granted by a steward after verification, and new accounts MUST NOT be able to add cautions.
 - **FR-021**: In the pilot, accounts MUST be invite-only (an account can be created only with a steward's invitation), draft pages MUST be visible only to stewards, to the verified business owner of that place and to the creator who made it, and every page MUST be hidden from search engines.
 - **FR-022**: Every mock record MUST be flagged, display a visible Demo marker, and be excluded from all statistics and from any export of real data.
-- **FR-023**: Seed places MUST be confirmed by a person, and openly licensed data MUST be kept separate by licence and attributed. Openly licensed text about a place with no business owner MAY be published only after a steward approves it, with its licence and attribution shown.
+- **FR-023**: Seed places listed from open data MAY be shown before a person checks them, labelled as in FR-030 (constitution 2.0.0, principle II); openly licensed data MUST be kept separate by licence and attributed. Openly licensed text about a place with no business owner MAY be published only after a steward approves it, with its licence and attribution shown.
 
 **Traffic, takedown and operations**
 
@@ -245,6 +245,7 @@ A steward can see what moderation actions and AI edits happened, an administrato
 - **FR-027**: Region-specific settings (languages, map area, enabled platforms, caution vocabulary, consent text, minimum age, retention, takedown contact) MUST be configuration, so a new region needs no change to core behaviour.
 - **FR-028**: Every page MUST offer a list view as an alternative to the map and MUST be usable by keyboard with text alternatives for images and audio.
 - **FR-029**: A public, read-only demo MUST be available that shows only mock content, openly licensed content and posts whose creators have agreed (a steward records each agreement, even for a mock place), requires no sign-up, never shows a real business draft or any real person's data, and carries a short notice in Japanese and English that its pages load third-party embeds.
+- **FR-030** (added 2026-10-31, owner): A place listed from open data that no person has checked MUST show "Not yet confirmed" (未確認) on its page and in the list, with a way to see where it came from and its licence. Any signed-in member MAY say "Still here", which records who and when and shows "Confirmed in person" instead; a confirmation older than 12 months MUST say so. Any signed-in member MAY report that something is wrong (closed or gone, in a different place, wrong name or details, or something else, with an optional note); a report changes nothing in public until a steward keeps the place or hides it, and the steward MUST see open reports in one list. A place a person placed the pin for counts as confirmed when it is made. Confirmations MUST NOT be counted or ranked (FR-015).
 
 ### Key Entities *(include if feature involves data)*
 
@@ -259,6 +260,7 @@ A steward can see what moderation actions and AI edits happened, an administrato
 - **Person and role**: An account with one role (user, creator, business owner or steward); creators are tied to a public profile; mock users are flagged.
 - **Link count**: A total of how often readers followed a link to an original, per source.
 - **Takedown request**: A removal or withdrawal request with its reason, status and outcome.
+- **Place check**: One person saying a place is still there, or reporting what is wrong with it (the kind of problem and an optional note), with when, and for a report the steward's outcome.
 
 ## Success Criteria *(mandatory)*
 

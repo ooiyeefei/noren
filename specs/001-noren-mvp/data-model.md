@@ -12,6 +12,9 @@ Logical model derived from the spec's Key Entities. Types are indicative; names 
 - `claim_status`: proposed, owner_confirmed, published, disputed, hidden
 - `translation_origin`: machine, human
 - `interview_status`: consent_pending, uploaded, transcribing, transcript_ready, correcting, claims_proposed, owner_review, done, withdrawn
+- `check_verdict`: still_here, something_wrong
+- `check_problem`: closed, moved, details, other
+- `check_outcome`: kept, hidden
 - `licence`: CC0, CC-BY-4.0, CC-BY-SA-4.0, PDL-1.0, ODbL-1.0, CDLA-Permissive-2.0
 
 ## Tables
@@ -24,8 +27,13 @@ Created on a person's first sign-in with role `user`. The Clerk user ID comes fr
 `place_id`, `person_id`, `verified_by`, `verified_at`. Links a business owner to the one place they may confirm. Unique per pair.
 
 ### place
-`id`, `region_id`, `slug` (unique per region), `visibility`, `created_by`, `is_mock`.
+`id`, `region_id`, `slug` (unique per region), `visibility`, `created_by`, `confirmed_at`, `confirmed_by`, `is_mock`.
 A real place or a labelled mock place. Visibility `draft` for real businesses until the owner agrees. A draft is readable only by stewards, the place's verified owner and the place's creator (`created_by`).
+`confirmed_at`/`confirmed_by` record the last person who said in person that the place is there: set when a person places the pin or says "Still here", never by an import or a steward's desk approval. Unset shows "Not yet confirmed"; older than 12 months shows as such (FR-030).
+
+### place_check
+`place_id`, `region_id`, `person_id`, `verdict`, `problem` (reports only), `note` (reports only, at most 500 characters), `reviewed_by`, `reviewed_at`, `outcome` (the three set together, reports only), `is_mock`.
+One "Still here" or one "Something's wrong" report (FR-030). Never counted into a score (SC-005).
 
 ### place_name
 `place_id`, `lang`, `script` (kanji, kana, romaji, latin), `value`, `confirmed_by`, `is_primary`.
@@ -99,7 +107,7 @@ Visitor notes and owner replies (FR-017). Notes with personal information are he
 ## Relationships
 
 - person (creator) 1..n place via `created_by`; person (business_owner) 1..1 place via `place_owner`.
-- place 1..n place_name, source, interview, claim, note, page_version; place 1..1 pin.
+- place 1..n place_name, place_check, source, interview, claim, note, page_version; place 1..1 pin.
 - interview 1..1 consent, 1..n transcript; interview 1..n claim (origin interview).
 - claim 1..n claim_translation; page_sentence n..n claim via `claim_ids`.
 - source 1..n link_count_daily.
@@ -109,6 +117,8 @@ Visitor notes and owner replies (FR-017). Notes with personal information are he
 **Claim**: proposed -> owner_confirmed -> published. Any state -> hidden (takedown, consent withdrawal, owner removal). published -> disputed when a steward marks two published claims as conflicting (each points to the other through `disputed_with`); both stay citable, the page says accounts differ, and neither is hidden. Attaching a verified owner to a place returns that place's `open_text` claims to `proposed`, so the owner decides.
 
 **Interview**: consent_pending -> uploaded -> transcribing -> transcript_ready -> correcting -> claims_proposed -> owner_review -> done. Any state -> withdrawn, which hides the audio, transcript, claims and every sentence citing them.
+
+**Place check**: a report is open until a steward records `kept` (nothing changes) or `hidden` (the place returns to `draft`). One open report per person and place; sending again replaces it. A person's second "Still here" within a day records nothing.
 
 **Place visibility**: draft -> demo_public (mock or open-licensed content only) or pilot (after the owner agrees). Changing a real business out of `draft` requires a steward and a recorded owner agreement.
 

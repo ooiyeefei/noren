@@ -47,7 +47,16 @@ function fieldPaths(validator: GenericValidator, path: string): string[] {
   }
 }
 
-const hasMockFlag = ["person", "place", "source", "interview", "claim", "note", "linkCountDaily"];
+const hasMockFlag = [
+  "person",
+  "place",
+  "placeCheck",
+  "source",
+  "interview",
+  "claim",
+  "note",
+  "linkCountDaily",
+];
 const inheritsMockFlag = [
   "placeOwner",
   "placeName",

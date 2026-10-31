@@ -3,6 +3,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { ChevronLeft } from "lucide-react";
 import { NorenHeader } from "@/components/place/noren-header";
 import { PlaceActions } from "@/components/place/place-actions";
+import { PlaceCheck, type PlaceCheckActions } from "@/components/place/place-check";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { labelForCategory } from "./category";
 import { EmbedNotice } from "@/components/embeds/embed-notice";
@@ -31,12 +32,14 @@ export function PlaceView({
   place,
   page,
   sources,
+  checks,
 }: {
   locale: Locale;
   region: PublicRegionProps;
   place: PlaceDetailLike | null;
   page?: PageViewLike | null;
   sources?: readonly SourceViewLike[];
+  checks?: PlaceCheckActions;
 }) {
   const m = messagesFor(publicMessages, locale);
   const shell = messagesFor(shellMessages, locale);
@@ -89,6 +92,15 @@ export function PlaceView({
             hasStory={page != null}
           />
           <PlaceActions locale={locale} title={heading.primary.text} pin={place.pin} />
+          {/* The fictional demo place has nothing to check in person. */}
+          {!place.isMock && (
+            <PlaceCheck
+              locale={locale}
+              confirmedAt={place.confirmedAt}
+              osmRef={place.dataSources.find((source) => source.provider === "osm")?.ref}
+              actions={checks}
+            />
+          )}
           {place.visibility === "draft" && <p role="note">{m.draft}</p>}
           {(place.canEdit || place.isOwner) && (
             <nav aria-label={ui.manage} className="flex flex-wrap items-center gap-x-4 text-[15px]">

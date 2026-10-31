@@ -35,6 +35,8 @@ export type PlaceSummaryLike = {
   isMock: boolean;
   category?: string;
   hasStory?: boolean;
+  /** When a person last said it is still there; unset for an open-data listing (FR-030). */
+  confirmedAt?: number;
   names: NameLike[];
   pin: { lat: number; lng: number } | null;
 };
@@ -103,6 +105,7 @@ export function toHomeModel(
       secondaryNameLang: heading.secondary?.lang,
       isMock: place.isMock,
       hasStory: place.hasStory,
+      unconfirmed: !place.isMock && place.confirmedAt === undefined,
       names: place.names.map((name) => name.value),
       category: place.category,
       pin: place.pin,
