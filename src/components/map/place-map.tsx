@@ -28,10 +28,12 @@ import {
   normalisePoint,
   markerPresentation,
   markersToFeatures,
+  showAerialPhoto,
   visibleView,
   NOREN_PATH,
   type MapMarker,
 } from "./map-helpers";
+import type { AerialPhoto } from "@/lib/region/schema";
 
 let workerUrlConfigured = false;
 const PLACES_SOURCE = "explore-places";
@@ -92,6 +94,8 @@ export type PlaceMapProps = {
      */
     centreLabel?: string;
   };
+  /** Aerial photos the map can switch to, with the credit shown while they are on. */
+  aerial?: AerialPhoto;
   localIdeographFontFamily?: string;
 };
 
@@ -105,6 +109,7 @@ export function PlaceMap({
   markers,
   picker,
   explore,
+  aerial,
   localIdeographFontFamily = DEFAULT_IDEOGRAPH_FONT,
 }: PlaceMapProps): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null);
@@ -121,6 +126,7 @@ export function PlaceMap({
     isActive(): boolean;
   } | null>(null);
   const [failed, setFailed] = useState(false);
+  const [view, setView] = useState<"map" | "photo">("map");
   const messages = messagesFor(placeUiMessages, locale);
   const credit = attributionText(attribution);
   const { lat, lng, zoom } = center;
@@ -505,6 +511,20 @@ export function PlaceMap({
     };
   }, [runtime, picker, label, messages.mapLabel, pickerHintId]);
 
+  useEffect(() => {
+    if (!runtime?.isActive() || !aerial) return;
+    const { map } = runtime;
+    const apply = () => {
+      if (runtime.isActive()) showAerialPhoto(map, aerial, view === "photo");
+    };
+    // A source can be added only once the style has loaded, and "idle" comes after that.
+    if (map.isStyleLoaded()) apply();
+    else map.once("idle", apply);
+    return () => {
+      map.off("idle", apply);
+    };
+  }, [runtime, aerial, view]);
+
   return (
     <section
       lang={locale}
@@ -535,6 +555,25 @@ export function PlaceMap({
             +
           </span>
         )}
+        {aerial && !failed && (
+          <div
+            role="group"
+            aria-label={messages.mapViews}
+            className="absolute top-2 left-2 z-10 flex overflow-hidden rounded-[10px] border border-line bg-white shadow-[var(--shadow-float)]"
+          >
+            {(["map", "photo"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={view === option}
+                onClick={() => setView(option)}
+                className={`min-h-11 px-3 text-[15px] font-medium ${view === option ? "bg-kon text-white" : "text-kon"}`}
+              >
+                {option === "map" ? messages.mapLayer : messages.photoLayer}
+              </button>
+            ))}
+          </div>
+        )}
         {!isExplore && !failed && (
           <div
             data-map-credit
@@ -551,6 +590,14 @@ export function PlaceMap({
             <a href="https://openmaptiles.org/" className="underline">
               © OpenMapTiles
             </a>
+            {aerial && view === "photo" && (
+              <>
+                {" | "}
+                <a href={aerial.creditUrl} className="underline">
+                  {aerial.credit}
+                </a>
+              </>
+            )}
           </div>
         )}
       </div>
