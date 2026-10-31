@@ -162,5 +162,7 @@ it("the walkthrough runs through the public gates and produces a signed-out bili
   expect(page?.claims).toHaveLength(2);
   expect(page?.claims.every((c) => c.isMock && c.status === "published")).toBe(true);
   expect(new Set(page?.sentences.map((s) => s.lang))).toEqual(new Set(["ja", "en"]));
-  expect(await b.t.query(api.sources.listForPlace, { placeId })).toHaveLength(1);
+  // A linked post is already public where it was posted; it shows without the author's agreement,
+  // which the walkthrough still records for the one author who gave it (FR-033).
+  expect(await b.t.query(api.sources.listForPlace, { placeId })).toHaveLength(2);
 });

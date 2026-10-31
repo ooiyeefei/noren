@@ -124,9 +124,11 @@ export async function canSeeSource(
   source: Doc<"source">,
 ): Promise<boolean> {
   if (source.placeId !== place._id || source.status !== "live") return false;
+  // A post is already public where it was posted; it shows once the member who linked it agreed to
+  // show it with their name, or a steward recorded the author's agreement for the demo (FR-033).
   return (
     ((isPubliclyReadablePlace(place) || place.visibility === "pilot") &&
-      source.demoConsentAt !== undefined) ||
+      (source.sharedAt !== undefined || source.demoConsentAt !== undefined)) ||
     (viewer !== null && source.addedBy === viewer._id) ||
     (await canManagePlace(ctx, viewer, place))
   );

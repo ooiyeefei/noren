@@ -85,6 +85,11 @@ export const placeTables = {
      * stewards, who still reach it by its page. Clearing it never republishes anything by itself.
      */
     hiddenReason: v.optional(v.union(v.literal("not_for_visitors"), v.literal("reported"))),
+    /**
+     * When a member who had been there added the place to the map and agreed to show it (FR-032).
+     * Such a place may be public before launch, like an open-data listing.
+     */
+    sharedAt: v.optional(v.number()),
   })
     .index("by_regionId_and_slug", ["regionId", "slug"])
     .index("by_regionId_and_visibility", ["regionId", "visibility"])
@@ -221,6 +226,11 @@ export const placeTables = {
     lastCheckedAt: v.optional(v.number()),
     demoConsentAt: v.optional(v.number()),
     demoConsentBy: v.optional(v.id("person")),
+    /**
+     * When the member who linked the post agreed to show it, with their line and name, in public
+     * (FR-033). The post itself is already public where it was posted; its author needs no say.
+     */
+    sharedAt: v.optional(v.number()),
     isMock: v.boolean(),
   })
     .index("by_placeId_and_status", ["placeId", "status"])

@@ -47,6 +47,7 @@ import type * as seed from "../seed.js";
 import type * as sourceChecks from "../sourceChecks.js";
 import type * as sources from "../sources.js";
 import type * as stewardPeople from "../stewardPeople.js";
+import type * as stories from "../stories.js";
 import type * as tables_community from "../tables/community.js";
 import type * as tables_interviews from "../tables/interviews.js";
 import type * as tables_places from "../tables/places.js";
@@ -98,6 +99,7 @@ declare const fullApi: ApiFromModules<{
   sourceChecks: typeof sourceChecks;
   sources: typeof sources;
   stewardPeople: typeof stewardPeople;
+  stories: typeof stories;
   "tables/community": typeof tables_community;
   "tables/interviews": typeof tables_interviews;
   "tables/places": typeof tables_places;
