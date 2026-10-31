@@ -81,6 +81,7 @@ function admin(locale: Locale): PlaceAdminProps {
         hasDemoConsent: false,
         isMock: true,
         addedByMe: false,
+        addedAt: 0,
       },
     ],
     onSource: noop,

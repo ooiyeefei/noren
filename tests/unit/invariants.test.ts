@@ -56,6 +56,7 @@ const hasMockFlag = [
   "claim",
   "note",
   "linkCountDaily",
+  "story",
 ];
 const inheritsMockFlag = [
   "placeOwner",

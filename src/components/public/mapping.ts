@@ -57,7 +57,26 @@ export type PageViewLike = {
   sentences: StorySentenceView[];
   claims: (Omit<StoryClaimView, "id"> & { _id: string })[];
 };
-export type SourceViewLike = Omit<EmbedSourceView, "id"> & { _id: string };
+export type SourceViewLike = Omit<EmbedSourceView, "id"> & {
+  _id: string;
+  /** The member who linked it, once they agreed to show it with their name (FR-033). */
+  sharedBy?: string;
+  addedAt?: number;
+  addedByMe?: boolean;
+};
+export type WrittenStoryLike = {
+  _id: string;
+  body: string;
+  lang: string;
+  authorName: string;
+  addedAt: number;
+  isMock: boolean;
+  canRemove: boolean;
+};
+export type StoryFeedEntry = { id: string; addedAt: number; canRemove: boolean } & (
+  | { kind: "written"; story: WrittenStoryLike }
+  | { kind: "post"; sharedBy?: string; source: EmbedSourceView }
+);
 type NameRegion = Pick<PublicRegionProps, "nameFallback" | "defaultLocale">;
 
 export function publicRegionProps(region: RegionConfig, locale: Locale): PublicRegionProps {
@@ -165,6 +184,33 @@ export function toStoryViewModel(
       ]),
     ),
   };
+}
+
+/**
+ * Stories written here and posts linked from elsewhere read as one list, newest first (FR-033). The
+ * member who shared a post may take it down, and so may the place's editor or a steward.
+ */
+export function toStoryFeed(
+  sources: readonly SourceViewLike[],
+  stories: readonly WrittenStoryLike[],
+  canEdit: boolean,
+): StoryFeedEntry[] {
+  const written = stories.map((story): StoryFeedEntry => ({
+    kind: "written",
+    id: story._id,
+    addedAt: story.addedAt,
+    canRemove: story.canRemove,
+    story,
+  }));
+  const posts = sources.map((source): StoryFeedEntry => ({
+    kind: "post",
+    id: source._id,
+    addedAt: source.addedAt ?? 0,
+    canRemove: source.addedByMe === true || canEdit,
+    sharedBy: source.sharedBy,
+    source: toEmbedSource(source),
+  }));
+  return [...written, ...posts].sort((a, b) => b.addedAt - a.addedAt);
 }
 
 export function toEmbedSource(source: SourceViewLike): EmbedSourceView {

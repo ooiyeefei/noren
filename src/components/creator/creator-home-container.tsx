@@ -9,8 +9,6 @@ import { PageContainer } from "@/components/layout/page-container";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { creatorMessages } from "@/lib/i18n/messages/creator";
 import type { RegionConfig } from "@/lib/region";
-// The schema module, not the region index: the index reads region files from disk on the server.
-import { deriveRegionPolicy } from "@/lib/region/schema";
 import { api } from "../../../convex/_generated/api";
 import { searchPlaces } from "./geo-search";
 import { CreatorHomeView } from "./creator-home-view";
@@ -122,8 +120,9 @@ export function CreatorHomeContainer({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
   const search = useCreatorSearch(locale, (pin) => setDraft((old) => ({ ...old, pin })));
-  // Before launch, and always for a demo account, a place a member adds is saved as a draft.
-  const onMap = person?.isMock === false && !deriveRegionPolicy(region).realBusinessesDraftOnly;
+  // A member's place goes on the map with their agreement, before launch too (FR-033); a demo
+  // account's place stays a draft.
+  const onMap = person?.isMock === false;
   async function submit() {
     const errors = validatePlaceDraft(draft, region);
     setErrors(errors);
