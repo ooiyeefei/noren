@@ -7,7 +7,7 @@ for (const [language, expected] of [
   ["fr", "ja"],
   ["", "ja"],
 ] as const) {
-  test(`/ redirects Accept-Language ${language || "absent"} to ${expected}`, async ({
+  test(`/ sends a signed-out visitor with Accept-Language ${language || "absent"} to /${expected}/about`, async ({
     request,
   }) => {
     const response = await request.get("/", {
@@ -15,7 +15,9 @@ for (const [language, expected] of [
       maxRedirects: 0,
     });
     expect([301, 302, 303, 307, 308]).toContain(response.status());
-    expect(new URL(response.headers().location!, response.url()).pathname).toBe(`/${expected}`);
+    expect(new URL(response.headers().location!, response.url()).pathname).toBe(
+      `/${expected}/about`,
+    );
   });
 }
 
