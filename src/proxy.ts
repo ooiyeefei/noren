@@ -26,8 +26,11 @@ export default clerkMiddleware(
   async (auth, request) => {
     const { pathname } = request.nextUrl;
     if (!UNPREFIXED.test(pathname) && localeFromPathname(pathname, region.locales) === null) {
+      // The bare domain is the front door: a signed-out visitor meets Noren on the about page. Its
+      // "Open the map" leads to /{locale}, which shows the map to everyone, signed in or not.
+      const rest = pathname !== "/" ? pathname : (await auth()).isAuthenticated ? "" : "/about";
       const url = request.nextUrl.clone();
-      url.pathname = `/${requestLocale(request)}${pathname === "/" ? "" : pathname}`;
+      url.pathname = `/${requestLocale(request)}${rest}`;
       return NextResponse.redirect(url);
     }
     if (ROLE_PAGES.test(pathname)) {
