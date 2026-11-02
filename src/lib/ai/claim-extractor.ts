@@ -5,13 +5,14 @@ import { quoteMatches } from "../claims/transcript-text";
 import type { ClaimExtractor, ExtractedClaim } from "../ports/index";
 import type { RegionConfig } from "../region/schema";
 import type { AiModelConfig } from "./config";
+import { createMeta } from "./meta";
 
 export function createLanguageModel(
   config: AiModelConfig,
   factories: Record<
     AiModelConfig["provider"],
     (options: { apiKey: string }) => (modelId: string) => LanguageModel
-  > = { anthropic: createAnthropic, gateway: createGateway },
+  > = { anthropic: createAnthropic, gateway: createGateway, meta: createMeta },
 ): LanguageModel {
   return factories[config.provider]({ apiKey: config.apiKey })(config.modelId);
 }

@@ -18,6 +18,7 @@ const modules = import.meta.glob("./**/*.ts");
 const variables = [
   "ANTHROPIC_API_KEY",
   "AI_GATEWAY_API_KEY",
+  "META_API_KEY",
   "AI_MODEL_EXTRACT",
   "AI_MODEL_TRANSLATE",
   "TRANSCRIBE_PROVIDER",
@@ -100,6 +101,19 @@ it("with no AI variables every request is conflict naming the variable, and noth
     }
   }
   expect(await scheduled(s.b)).toHaveLength(0);
+});
+
+it("the recorder is asked for WAV only when the transcription service needs it", async () => {
+  const b = newBackend(modules);
+  for (const [provider, format] of [
+    [undefined, "original"],
+    ["gateway", "original"],
+    ["openai-compatible", "original"],
+    [" meta ", "wav"],
+  ] as const) {
+    vi.stubEnv("TRANSCRIBE_PROVIDER", provider);
+    expect(await b.t.query(api.aiRequests.audioFormat, {})).toBe(format);
+  }
 });
 
 describe("configured requests", () => {
