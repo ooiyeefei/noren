@@ -204,6 +204,19 @@ describe("AI jobs", () => {
     expect(JSON.stringify(deps.log.mock.calls)).not.toContain("test-key");
     expect(deps.log).toHaveBeenCalledTimes(2);
   });
+  it("every provider key is redacted, not only the gateway key", async () => {
+    const keys = {
+      ANTHROPIC_API_KEY: "mock-anthropic-secret",
+      META_API_KEY: "mock-meta-secret",
+      TRANSCRIBE_API_KEY: "mock-transcribe-secret",
+    };
+    const deps = { ...transcriptionDeps(), env: { ...env, ...keys } };
+    deps.loadAudio.mockRejectedValue(new Error(Object.values(keys).join(" ")));
+    expect(await transcribeJob(input, deps)).toBe("failed");
+    const logged = JSON.stringify([deps.log.mock.calls, deps.recordProcessingError.mock.calls]);
+    for (const key of Object.values(keys)) expect(logged).not.toContain(key);
+    expect(logged).toContain("[redacted] [redacted] [redacted]");
+  });
 });
 
 it("transcription factory and save failures are recorded with a readable error name", async () => {

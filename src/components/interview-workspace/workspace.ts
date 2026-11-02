@@ -43,6 +43,7 @@ export type WorkspacePanels = {
   editor: "hidden" | "editable" | "readonly";
   canProposeSpan: boolean;
   canProposeWithAi: boolean;
+  canSuggestFollowUps: boolean;
   processing: boolean;
   canWithdraw: boolean;
   assistedConsentAllowed: boolean;
@@ -65,6 +66,8 @@ export function workspacePanels(view: InterviewViewLike, role: WorkspaceRole): W
     editor: !live || !view.latestTranscript ? "hidden" : editable ? "editable" : "readonly",
     canProposeSpan: propose,
     canProposeWithAi: propose,
+    // Suggestions help while the interview is still going, so a machine transcript is enough.
+    canSuggestFollowUps: editable && view.latestTranscript != null,
     processing,
     canWithdraw: !withdrawn && view.canWithdraw,
     assistedConsentAllowed: !withdrawn && role === "steward",

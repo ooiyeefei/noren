@@ -10,9 +10,18 @@ export type JobDeps = {
   log: (line: string) => void;
 };
 
+const KEY_VARIABLES = [
+  "AI_GATEWAY_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "META_API_KEY",
+  "TRANSCRIBE_API_KEY",
+] as const;
+
 function safeMessage(message: string, deps: JobDeps): string {
-  const key = deps.env.AI_GATEWAY_API_KEY?.trim();
-  return key ? message.replaceAll(key, "[redacted]") : message;
+  return KEY_VARIABLES.reduce((safe, variable) => {
+    const key = deps.env[variable]?.trim();
+    return key ? safe.replaceAll(key, "[redacted]") : safe;
+  }, message);
 }
 
 function describe(error: unknown): string {

@@ -12,8 +12,7 @@ This is an MVP. Real places are not published until the launch pack (terms, crea
 - Convex: backend functions, database and audio storage; production is in Sydney.
 - Clerk: accounts with invite-only sign-up.
 - MapLibre with OpenFreeMap tiles: the map.
-- An OpenAI-compatible transcription endpoint: consented interview audio to text.
-- Anthropic: story drafting from consented text.
+- AI, chosen per step by a setting: Meta's Muse Spark and Muse Voice Transcribe through the Meta Model API, Anthropic's Claude, or an OpenAI-compatible transcription endpoint. See [AI, step by step](#ai-step-by-step).
 
 ## Run it locally
 
@@ -37,7 +36,7 @@ Set these variables for your own services. Never commit their values.
 | `CLERK_JWT_ISSUER_DOMAIN`           | Clerk Frontend API issuer; also configure it on the matching Convex deployment and enable Clerk's Convex integration. |
 | `GEO_USER_AGENT`                    | Geocoding request identification: project name and repository URL, with no personal contact details.                  |
 
-The AI variables in the template are optional and belong on the Convex deployment, where the AI steps run. `AI_MODEL_EXTRACT`, `AI_MODEL_TRANSLATE`, `AI_MODEL_COMPOSE` and `AI_MODEL_ENTAIL` choose the model for claim extraction, translation, composition and grounding checks. A `vendor/model` id goes through AI Gateway (`AI_GATEWAY_API_KEY`) and a slashless id calls Anthropic directly (`ANTHROPIC_API_KEY`). Transcription uses `TRANSCRIBE_PROVIDER` (`gateway` or `openai-compatible`), `TRANSCRIBE_MODEL`, `TRANSCRIBE_BASE_URL`, `TRANSCRIBE_API_KEY` and, optionally, `TRANSCRIBE_MAX_BYTES`. The [AI configuration](src/lib/ai/config.ts) checks them. Without them the app offers the typed-transcript fallback.
+The AI variables in the template are optional and belong on the Convex deployment, where the AI steps run. `AI_MODEL_EXTRACT`, `AI_MODEL_TRANSLATE`, `AI_MODEL_COMPOSE`, `AI_MODEL_ENTAIL` and `AI_MODEL_FOLLOWUP` choose the model for claim extraction, translation, composition, grounding checks and follow-up questions. A `meta:` id such as `meta:muse-spark-1.3` calls the Meta Model API (`META_API_KEY`), a `vendor/model` id goes through AI Gateway (`AI_GATEWAY_API_KEY`) and a slashless id calls Anthropic directly (`ANTHROPIC_API_KEY`). Transcription uses `TRANSCRIBE_PROVIDER` (`meta`, `gateway` or `openai-compatible`), `TRANSCRIBE_MODEL`, `TRANSCRIBE_BASE_URL`, `TRANSCRIBE_API_KEY` and, optionally, `TRANSCRIBE_MAX_BYTES`. The [AI configuration](src/lib/ai/config.ts) checks them. Without them the app offers the typed-transcript fallback.
 
 Start Convex, then leave it running and start Next.js in a second terminal:
 
@@ -81,6 +80,28 @@ Production e2e must use `--workers=2`: a full parallel run trips Vercel's automa
 ## Adding a region
 
 Regions are configuration in `regions/<id>.json`. Start from [Nagasaki](regions/nagasaki.json) and follow the [region schema](src/lib/region/schema.ts), rather than hard-coding regional behaviour. A region file holds languages, map bounds and providers, name fallbacks, source adapters, categories, caution labels, consent, retention, takedown, demo and legal settings. The server loader validates region files; register new files in [the shared registry](src/lib/region/registry.ts) too. Set `REGION_ID` when choosing among multiple regions.
+
+## AI, step by step
+
+AI only ever works on words people agreed to share: an owner's recorded interview and the sentences they approve. Each step names its model in one Convex setting, so a step moves between Meta's models and Claude without a code change.
+
+| Step | What it does | Setting | With Meta's models | Alternative |
+| --- | --- | --- | --- | --- |
+| Transcribe | Turns the owner's recording into text the interviewer then corrects | `TRANSCRIBE_PROVIDER=meta`, `TRANSCRIBE_MODEL` | `muse-voice-transcribe-1.0` (Japanese; the recorder sends 16 kHz WAV, split into 9-minute parts) | `openai-compatible` with `whisper-1` |
+| Extract | Proposes short statements, each with a quote copied from the corrected transcript | `AI_MODEL_EXTRACT` | `meta:muse-spark-1.3`, strict JSON schema | `claude-sonnet-5-5` |
+| Translate | Japanese ↔ English drafts of approved statements, labelled machine until a person checks them | `AI_MODEL_TRANSLATE` | `meta:muse-spark-1.3` | `claude-sonnet-5-5` |
+| Follow up | An agent that reads the interview so far and suggests what to ask next | `AI_MODEL_FOLLOWUP` | `meta:muse-spark-1.3` with tool calling | `claude-sonnet-5-5` |
+
+The follow-up agent ([src/lib/ai/follow-ups.ts](src/lib/ai/follow-ups.ts)) runs a tool loop. It searches the transcript, lists what earlier interviews already recorded and lists the region's practical topics (cash only, closed days and the rest). It then hands back up to five questions in the owner's language, each translated for the interviewer. Code keeps only questions that quote the owner exactly or ask about a topic nobody has covered, and nothing it suggests is stored or published.
+
+Limits that hold whichever model runs:
+
+- A model never adds a place, story, caution or pick. Every statement must quote the transcript, and an owner approves it before anyone sees it.
+- The owner's consent names both possible services for each step (Meta Platforms or OpenAI; Meta Platforms or Anthropic).
+- Meta's `-contributor` models are refused, because Meta trains on what they receive. The standard models are not used for training.
+- The app names no AI provider; the badge says only that AI assisted.
+
+Noren was built from 30 October 2026; the Meta Model API steps and the follow-up agent were added on 2 November 2026.
 
 ## Data and licences
 

@@ -21,6 +21,7 @@ const query = vi.hoisted(() => ({
 vi.mock("convex/react", () => ({
   useQuery: query.useQuery,
   useMutation: () => vi.fn(),
+  useAction: () => vi.fn(),
   useQueries: () => ({}),
 }));
 
