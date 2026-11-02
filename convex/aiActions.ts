@@ -104,12 +104,13 @@ export const suggestFollowUps = action({
   args: { interviewId: v.id("interview"), readerLanguage: v.string() },
   returns: v.array(followUpValidator),
   handler: async (ctx, args): Promise<FollowUp[]> => {
-    const config = aiConfig("followup", process.env);
-    if (!config.ok) throw appError("conflict", config.reason);
+    // Checks access first, then the setting, as the other AI requests do.
     const context: Omit<FollowUpInput, "region"> & { regionId: string } = await ctx.runMutation(
       internal.aiRequests.beginFollowUps,
       args,
     );
+    const config = aiConfig("followup", process.env);
+    if (!config.ok) throw appError("conflict", config.reason);
     try {
       return await createFollowUpAgent({ model: createLanguageModel(config.config) }).suggest({
         ...context,
