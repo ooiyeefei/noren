@@ -140,9 +140,14 @@ export const beginFollowUps = internalMutation({
       now: Date.now(),
     });
     if (!limit.ok) throw appError("rate_limited", "too many follow-up requests this hour");
+    // The agent sees only what the caller may already read: an interviewer who does not manage
+    // the place sees published statements, never ones still waiting for an owner's approval.
+    const statuses = (await canManagePlace(ctx, person, place))
+      ? (["proposed", "owner_confirmed", "published", "disputed"] as const)
+      : (["published"] as const);
     const recorded = (
       await Promise.all(
-        (["proposed", "owner_confirmed", "published", "disputed"] as const).map((status) =>
+        statuses.map((status) =>
           ctx.db
             .query("claim")
             .withIndex("by_placeId_and_status", (q) =>
