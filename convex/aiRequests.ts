@@ -124,6 +124,7 @@ export const beginFollowUps = internalMutation({
   }),
   handler: async (ctx, { interviewId, readerLanguage }) => {
     const { person, interview, place } = await requireInterviewer(ctx, interviewId);
+    requireConfig("followup");
     await requireLiveConsent(ctx, interviewId);
     if (interview.status === "withdrawn") throw appError("conflict", "interview withdrawn");
     const transcript = await ctx.db
