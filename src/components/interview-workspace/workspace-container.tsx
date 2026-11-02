@@ -1,7 +1,7 @@
 "use client";
 
 import { Component, use, type ReactNode } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { uploadWithRetry } from "@/components/interview/upload";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { ErrorPage } from "@/components/layout/error-page";
@@ -83,6 +83,7 @@ function InterviewQuery(props: { id: Id<"interview">; locale: Locale; region: Wo
   const transcribe = useMutation(api.aiRequests.transcribe);
   const proposeAi = useMutation(api.aiRequests.proposeClaims);
   const audioFormat = useQuery(api.aiRequests.audioFormat, {});
+  const suggestFollowUps = useAction(api.aiActions.suggestFollowUps);
   if (!view || !person)
     return <p role="status">{messagesFor(shellMessages, props.locale).signingIn}</p>;
   const render = (claims?: WorkspaceClaim[], claimsNotice?: ReactNode) => (
@@ -128,6 +129,7 @@ function InterviewQuery(props: { id: Id<"interview">; locale: Locale; region: Wo
       onProposeAi={async () => {
         await proposeAi({ interviewId });
       }}
+      onSuggestFollowUps={() => suggestFollowUps({ interviewId, readerLanguage: props.locale })}
       onWithdraw={async () => {
         await withdraw({ interviewId });
       }}

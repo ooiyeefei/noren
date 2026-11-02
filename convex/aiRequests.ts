@@ -1,13 +1,17 @@
 import { v } from "convex/values";
 import { aiConfig, type AiCapability } from "../src/lib/ai/config";
+import { transcriptText } from "../src/lib/claims/transcript-text";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalQuery, query } from "./_generated/server";
+import { requireLiveConsent } from "./interviews";
 import { canManagePlace, loadReadablePlace, requireInterviewer } from "./lib/access";
 import { writeAudit } from "./lib/audit";
 import { requirePerson } from "./lib/auth";
 import { appError } from "./lib/errors";
-import { mutation } from "./lib/gate";
+import { internalMutation, mutation } from "./lib/gate";
+import { consumeRateLimit } from "./lib/rateLimit";
+import { isRegionLocale, regionConfig } from "./lib/region";
 
 function requireConfig(capability: AiCapability) {
   const result = aiConfig(capability, process.env);
@@ -94,6 +98,82 @@ export const translatePlace = mutation({
       targetId: placeId,
     });
     return { pending: items.length };
+  },
+});
+
+const FOLLOW_UPS_PER_HOUR = 20;
+
+/**
+ * Checks access and consent for the follow-up agent and hands it the owner's words. Called by the
+ * suggestFollowUps action with the caller's identity; the suggestions are never stored.
+ */
+export const beginFollowUps = internalMutation({
+  args: { interviewId: v.id("interview"), readerLanguage: v.string() },
+  returns: v.object({
+    transcript: v.string(),
+    language: v.string(),
+    readerLanguage: v.string(),
+    regionId: v.string(),
+    recorded: v.array(
+      v.object({
+        kind: v.string(),
+        cautionType: v.optional(v.string()),
+        textOriginal: v.string(),
+      }),
+    ),
+  }),
+  handler: async (ctx, { interviewId, readerLanguage }) => {
+    const { person, interview, place } = await requireInterviewer(ctx, interviewId);
+    await requireLiveConsent(ctx, interviewId);
+    if (interview.status === "withdrawn") throw appError("conflict", "interview withdrawn");
+    const transcript = await ctx.db
+      .query("transcript")
+      .withIndex("by_interviewId_and_version", (q) => q.eq("interviewId", interviewId))
+      .order("desc")
+      .first();
+    const text = transcript ? transcriptText(transcript.segments) : "";
+    if (!text.trim()) throw appError("conflict", "transcribe or type the interview first");
+    const limit = await consumeRateLimit(ctx, {
+      key: `ai:followups:${person._id}`,
+      limit: FOLLOW_UPS_PER_HOUR,
+      windowMs: 60 * 60 * 1000,
+      now: Date.now(),
+    });
+    if (!limit.ok) throw appError("rate_limited", "too many follow-up requests this hour");
+    const recorded = (
+      await Promise.all(
+        (["proposed", "owner_confirmed", "published", "disputed"] as const).map((status) =>
+          ctx.db
+            .query("claim")
+            .withIndex("by_placeId_and_status", (q) =>
+              q.eq("placeId", place._id).eq("status", status),
+            )
+            .take(50),
+        ),
+      )
+    )
+      .flat()
+      .slice(0, 50);
+    await writeAudit(ctx, {
+      actorKind: "person",
+      actorPersonId: person._id,
+      action: "ai.followups_requested",
+      targetType: "interview",
+      targetId: interviewId,
+    });
+    return {
+      transcript: text,
+      language: interview.language,
+      readerLanguage: isRegionLocale(regionConfig(place.regionId), readerLanguage)
+        ? readerLanguage
+        : interview.language,
+      regionId: place.regionId,
+      recorded: recorded.map(({ kind, cautionType, textOriginal }) => ({
+        kind,
+        ...(cautionType === undefined ? {} : { cautionType }),
+        textOriginal,
+      })),
+    };
   },
 });
 

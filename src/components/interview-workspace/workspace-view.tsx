@@ -11,7 +11,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { isSupportedLocale, messagesFor, type Locale } from "@/lib/i18n";
+import { format, isSupportedLocale, messagesFor, type Locale } from "@/lib/i18n";
 import { interviewPageMessages } from "@/lib/i18n/messages/interview-page";
 import { interviewUiMessages } from "@/lib/i18n/messages/interview-ui";
 import type { ClaimStatus } from "@/lib/domain/constants";
@@ -38,6 +38,11 @@ export type WorkspaceClaim = {
   aiAssisted: boolean;
   isMock: boolean;
 };
+export type FollowUpView = {
+  question: string;
+  translation?: string;
+  basis: { kind: "quote"; quote: string } | { kind: "gap"; cautionType: string };
+};
 export type WorkspaceViewProps = {
   locale: Locale;
   region: WorkspaceRegion;
@@ -53,6 +58,7 @@ export type WorkspaceViewProps = {
   onSave(segments: EditableSegment[]): Promise<void>;
   onPropose(draft: ProposalDraft, transcriptId: string): Promise<void>;
   onProposeAi(): Promise<void>;
+  onSuggestFollowUps?(): Promise<FollowUpView[]>;
   onWithdraw(): Promise<void>;
 };
 export function WorkspaceView(props: WorkspaceViewProps) {
@@ -205,6 +211,16 @@ export function WorkspaceView(props: WorkspaceViewProps) {
             />
           </section>
         )}
+        {panels.canSuggestFollowUps && props.onSuggestFollowUps && transcript && (
+          <FollowUps
+            key={transcript._id}
+            locale={locale}
+            lang={transcript.lang}
+            vocabulary={region.cautionVocabulary}
+            disabled={busy}
+            onSuggest={props.onSuggestFollowUps}
+          />
+        )}
         {visibleProposal && (
           <ClaimProposal
             key={`${visibleProposal.transcriptId}:${visibleProposal.draft.spanStart}:${visibleProposal.draft.spanEnd}`}
@@ -271,6 +287,83 @@ export function WorkspaceView(props: WorkspaceViewProps) {
         )}
       </div>
     </PageContainer>
+  );
+}
+
+function FollowUps(props: {
+  locale: Locale;
+  lang: string;
+  vocabulary: WorkspaceRegion["cautionVocabulary"];
+  disabled: boolean;
+  onSuggest(): Promise<FollowUpView[]>;
+}) {
+  const m = messagesFor(interviewPageMessages, props.locale);
+  const [questions, setQuestions] = useState<FollowUpView[]>();
+  const [asking, setAsking] = useState(false);
+  const [failure, setFailure] = useState<unknown>();
+  async function ask() {
+    setAsking(true);
+    setFailure(undefined);
+    try {
+      setQuestions(await props.onSuggest());
+    } catch (error) {
+      setFailure(error);
+    } finally {
+      setAsking(false);
+    }
+  }
+  return (
+    <section className="space-y-3">
+      <Button variant="outline" disabled={props.disabled || asking} onClick={() => void ask()}>
+        {m.suggestFollowUps}
+      </Button>
+      {failure != null && <Alert variant="destructive">{errorText(failure, props.locale)}</Alert>}
+      {questions && (
+        <FollowUpList
+          locale={props.locale}
+          lang={props.lang}
+          vocabulary={props.vocabulary}
+          questions={questions}
+        />
+      )}
+    </section>
+  );
+}
+
+export function FollowUpList(props: {
+  locale: Locale;
+  lang: string;
+  vocabulary: WorkspaceRegion["cautionVocabulary"];
+  questions: readonly FollowUpView[];
+}) {
+  const m = messagesFor(interviewPageMessages, props.locale);
+  const topic = (key: string) =>
+    props.vocabulary.find((caution) => caution.key === key)?.labels[props.locale] ?? key;
+  return (
+    <div className="space-y-3" aria-live="polite">
+      <h2 className="text-lg font-semibold">{m.followUps}</h2>
+      <AiAssistedBadge locale={props.locale} />
+      <p className="text-[13px]">{m.followUpsNote}</p>
+      {props.questions.length === 0 ? (
+        <p>{m.followUpsNone}</p>
+      ) : (
+        <ol className="space-y-3">
+          {props.questions.map((item) => (
+            <li key={item.question} className="space-y-1 rounded-lg border p-4">
+              <p lang={props.lang} className="text-lg">
+                {item.question}
+              </p>
+              {item.translation && <p>{item.translation}</p>}
+              <p className="text-[13px]">
+                {item.basis.kind === "quote"
+                  ? format(m.followUpBecause, { quote: item.basis.quote })
+                  : format(m.followUpGap, { topic: topic(item.basis.cautionType) })}
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }
 
