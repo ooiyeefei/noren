@@ -7,6 +7,7 @@ function stubConfig(values: Record<string, string | undefined>) {
   for (const variable of [
     "ANTHROPIC_API_KEY",
     "AI_GATEWAY_API_KEY",
+    "META_API_KEY",
     "TRANSCRIBE_PROVIDER",
     "TRANSCRIBE_MODEL",
     "TRANSCRIBE_BASE_URL",
@@ -308,5 +309,75 @@ describe("openai-compatible config", () => {
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.reason.trim().length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("Meta Model API", () => {
+  it("meta:model routes a language capability to Meta with META_API_KEY", () => {
+    for (const capability of ["extract", "translate", "compose", "entail"] as const) {
+      stubConfig({
+        ANTHROPIC_API_KEY: "mock-anthropic-key",
+        META_API_KEY: " mock-meta-key ",
+        [`AI_MODEL_${capability.toUpperCase()}`]: " meta:muse-spark-1.3 ",
+      });
+      expect(aiConfig(capability, process.env)).toEqual({
+        ok: true,
+        config: { provider: "meta", apiKey: "mock-meta-key", modelId: "muse-spark-1.3" },
+      });
+    }
+  });
+  it("meta:model without META_API_KEY fails closed naming it, never falling back", () => {
+    stubConfig({
+      ANTHROPIC_API_KEY: "mock-anthropic-key",
+      AI_MODEL_EXTRACT: "meta:muse-spark-1.3",
+    });
+    expect(aiConfig("extract", process.env)).toEqual({
+      ok: false,
+      reason: expect.stringContaining("META_API_KEY"),
+    });
+  });
+  it("a malformed meta id or key is refused, and no reason contains the key", () => {
+    for (const [model, key] of [
+      ["meta:", "recognisable-fake-secret"],
+      ["meta:bad model", "recognisable-fake-secret"],
+      ["meta:meta/muse", "recognisable-fake-secret"],
+      ["meta:muse-spark-1.3", "recognisable-fake-secret\nsecond-line"],
+    ]) {
+      stubConfig({
+        ANTHROPIC_API_KEY: "mock-anthropic-key",
+        META_API_KEY: key,
+        AI_MODEL_TRANSLATE: model,
+      });
+      const result = aiConfig("translate", process.env);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.reason).not.toContain("recognisable-fake-secret");
+    }
+  });
+  it("TRANSCRIBE_PROVIDER=meta needs a model id and META_API_KEY", () => {
+    stubConfig({ TRANSCRIBE_PROVIDER: "meta", META_API_KEY: "mock-meta-key" });
+    expect(aiConfig("transcribe", process.env)).toEqual({
+      ok: false,
+      reason: expect.stringContaining("TRANSCRIBE_MODEL"),
+    });
+    stubConfig({ TRANSCRIBE_PROVIDER: "meta", TRANSCRIBE_MODEL: "muse-voice-transcribe-1.0" });
+    expect(aiConfig("transcribe", process.env)).toEqual({
+      ok: false,
+      reason: expect.stringContaining("META_API_KEY"),
+    });
+    stubConfig({
+      TRANSCRIBE_PROVIDER: " meta ",
+      TRANSCRIBE_MODEL: " muse-voice-transcribe-1.0 ",
+      META_API_KEY: "mock-meta-key",
+    });
+    expect(aiConfig("transcribe", process.env)).toEqual({
+      ok: true,
+      config: { provider: "meta", apiKey: "mock-meta-key", modelId: "muse-voice-transcribe-1.0" },
+    });
+    stubConfig({
+      TRANSCRIBE_PROVIDER: "meta",
+      TRANSCRIBE_MODEL: "meta/muse voice",
+      META_API_KEY: "mock-meta-key",
+    });
+    expect(aiConfig("transcribe", process.env).ok).toBe(false);
   });
 });
