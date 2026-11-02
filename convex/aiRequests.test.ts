@@ -683,6 +683,9 @@ describe("follow-up agent", () => {
     const other = await withTranscript();
     await addPerson(other.b, "other", "creator", { isMock: true });
     expect(["forbidden", "not_found"]).toContain(await errorCode(ask(other, other.b.as("other"))));
+    // Access is checked before the setting, so a stranger never learns how AI is configured.
+    vi.stubEnv("AI_MODEL_FOLLOWUP", undefined);
+    expect(["forbidden", "not_found"]).toContain(await errorCode(ask(other, other.b.as("other"))));
     expect(factory).not.toHaveBeenCalled();
     expect(await auditRows(unconfigured)).toEqual([]);
   });
