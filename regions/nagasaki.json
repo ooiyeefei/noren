@@ -107,10 +107,10 @@
     }
   ],
   "consent": {
-    "textVersion": "draft-1",
+    "textVersion": "draft-2",
     "text": {
-      "ja": "私は、自分のお店についてのインタビューを受けることに同意します。次のことを理解しています。(1) 私が話した内容は、私が一つひとつ確認した後にのみ Noren に掲載され、掲載後は誰でも読めます。(2) 録音は文字起こしのために音声認識サービス（OpenAI、米国）へ送信され、文字起こしのテキストは発言の候補や翻訳を作るために AI サービス（Anthropic、米国）へ送信されます。このため、私の発言は日本国外で処理されます。(3) Noren のデータは Convex（オーストラリア・シドニー）に保存され、ログインには Clerk（米国）を使用します。(4) 録音は、文字起こしの修正と内容の確認が終わるまで保管され、その後削除されます。(5) 私はいつでも同意を撤回できます。撤回すると、このインタビューに由来する内容はすべて非表示になり、録音は削除されます。",
-      "en": "I agree to be interviewed about my business. I understand that: (1) what I say may be published on Noren only after I have confirmed each statement, and anyone can then read it; (2) my voice recording is sent to a speech-to-text service (OpenAI, United States) to make a transcript, and the transcript text is sent to an AI service (Anthropic, United States) to suggest statements and translations, so my words are processed outside Japan; (3) Noren stores its data with Convex (Australia, Sydney) and uses Clerk (United States) for sign-in; (4) my voice recording is kept until the transcript is corrected and my statements are confirmed, and is then deleted; (5) I can withdraw this consent at any time: everything that came from this interview is then hidden and the recording deleted."
+      "ja": "私は、自分のお店についてのインタビューを受けることに同意します。次のことを理解しています。(1) 私が話した内容は、私が一つひとつ確認した後にのみ Noren に掲載され、掲載後は誰でも読めます。(2) 録音は文字起こしのために音声認識サービス（Meta Platforms または OpenAI、米国）へ送信され、文字起こしのテキストは発言の候補や翻訳を作るために AI サービス（Meta Platforms または Anthropic、米国）へ送信されます。このため、私の発言は日本国外で処理されます。(3) Noren のデータは Convex（オーストラリア・シドニー）に保存され、ログインには Clerk（米国）を使用します。(4) 録音は、文字起こしの修正と内容の確認が終わるまで保管され、その後削除されます。(5) 私はいつでも同意を撤回できます。撤回すると、このインタビューに由来する内容はすべて非表示になり、録音は削除されます。",
+      "en": "I agree to be interviewed about my business. I understand that: (1) what I say may be published on Noren only after I have confirmed each statement, and anyone can then read it; (2) my voice recording is sent to a speech-to-text service (Meta Platforms or OpenAI, United States) to make a transcript, and the transcript text is sent to an AI service (Meta Platforms or Anthropic, United States) to suggest statements and translations, so my words are processed outside Japan; (3) Noren stores its data with Convex (Australia, Sydney) and uses Clerk (United States) for sign-in; (4) my voice recording is kept until the transcript is corrected and my statements are confirmed, and is then deleted; (5) I can withdraw this consent at any time: everything that came from this interview is then hidden and the recording deleted."
     },
     "requiredScopes": ["publish", "aiProcessing", "transferAbroad", "voiceRetention"]
   },
