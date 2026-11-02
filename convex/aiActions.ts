@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { createClaimExtractor, createLanguageModel } from "../src/lib/ai/claim-extractor";
 import type { TranscriptionConfig } from "../src/lib/ai/config";
 import { extractJob, transcribeJob, translateJob } from "../src/lib/ai/jobs";
+import { createMetaTranscriber } from "../src/lib/ai/meta";
 import { createCompatibleTranscriber, createTranscriber } from "../src/lib/ai/transcriber";
 import { createTranslator } from "../src/lib/ai/translator";
 import { internal } from "./_generated/api";
@@ -22,7 +23,8 @@ export const transcribeInterview = internalAction({
       log: () => console.error(input.interviewId, "transcription failed"),
       loadAudio: async (storageId) => {
         const blob = await ctx.storage.get(storageId as Id<"_storage">);
-        if (blob !== null && process.env.TRANSCRIBE_PROVIDER?.trim() === "openai-compatible") {
+        const provider = process.env.TRANSCRIBE_PROVIDER?.trim();
+        if (blob !== null && (provider === "openai-compatible" || provider === "meta")) {
           context = await ctx.runQuery(internal.aiRequests.transcriptionContext, {
             interviewId: input.interviewId,
           });
@@ -31,15 +33,15 @@ export const transcribeInterview = internalAction({
       },
       makeTranscriber: (config: TranscriptionConfig) => {
         modelVersion =
-          config.provider === "openai-compatible"
-            ? `openai-compatible:${config.modelId}`
-            : config.modelId;
-        return config.provider === "openai-compatible"
-          ? createCompatibleTranscriber({ ...config, ...context })
-          : createTranscriber({
-              model: createGateway({ apiKey: config.apiKey }).transcription(config.modelId),
-              modelVersion: config.modelId,
-            });
+          config.provider === "gateway" ? config.modelId : `${config.provider}:${config.modelId}`;
+        if (config.provider === "openai-compatible")
+          return createCompatibleTranscriber({ ...config, ...context });
+        if (config.provider === "meta")
+          return createMetaTranscriber({ ...config, vocabularyHint: context?.vocabularyHint });
+        return createTranscriber({
+          model: createGateway({ apiKey: config.apiKey }).transcription(config.modelId),
+          modelVersion: config.modelId,
+        });
       },
       saveMachineTranscript: (args) =>
         ctx.runMutation(internal.interviews.saveMachineTranscript, {

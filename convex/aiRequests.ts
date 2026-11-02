@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { aiConfig, type AiCapability } from "../src/lib/ai/config";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalQuery } from "./_generated/server";
+import { internalQuery, query } from "./_generated/server";
 import { canManagePlace, loadReadablePlace, requireInterviewer } from "./lib/access";
 import { writeAudit } from "./lib/audit";
 import { requirePerson } from "./lib/auth";
@@ -13,6 +13,14 @@ function requireConfig(capability: AiCapability) {
   const result = aiConfig(capability, process.env);
   if (!result.ok) throw appError("conflict", result.reason);
 }
+
+// The recorder converts to WAV only for a transcription service that cannot decode browser audio,
+// so other services keep the smaller compressed recording.
+export const audioFormat = query({
+  args: {},
+  returns: v.union(v.literal("wav"), v.literal("original")),
+  handler: async () => (process.env.TRANSCRIBE_PROVIDER?.trim() === "meta" ? "wav" : "original"),
+});
 
 export const transcribe = mutation({
   args: { interviewId: v.id("interview") },

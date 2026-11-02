@@ -6,6 +6,7 @@ import { uploadWithRetry } from "@/components/interview/upload";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { ErrorPage } from "@/components/layout/error-page";
 import { PageContainer } from "@/components/layout/page-container";
+import { toSpeechWav } from "@/lib/audio/speech-wav";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { interviewPageMessages } from "@/lib/i18n/messages/interview-page";
 import { shellMessages } from "@/lib/i18n/messages/shell";
@@ -81,6 +82,7 @@ function InterviewQuery(props: { id: Id<"interview">; locale: Locale; region: Wo
   const withdraw = useMutation(api.interviews.withdraw);
   const transcribe = useMutation(api.aiRequests.transcribe);
   const proposeAi = useMutation(api.aiRequests.proposeClaims);
+  const audioFormat = useQuery(api.aiRequests.audioFormat, {});
   if (!view || !person)
     return <p role="status">{messagesFor(shellMessages, props.locale).signingIn}</p>;
   const render = (claims?: WorkspaceClaim[], claimsNotice?: ReactNode) => (
@@ -95,7 +97,11 @@ function InterviewQuery(props: { id: Id<"interview">; locale: Locale; region: Wo
       onConsent={async (submission) => {
         await consent({ interviewId, ...submission });
       }}
-      onRecorded={async (file, durationS) => {
+      onRecorded={async (recording, durationS) => {
+        // If the browser cannot decode the recording, keep the original rather than lose it;
+        // transcription then explains the format it needs and the typed transcript still works.
+        const file =
+          audioFormat === "wav" ? await toSpeechWav(recording).catch(() => recording) : recording;
         const { storageId } = await uploadWithRetry({
           getUploadUrl: () => uploadUrl({ interviewId }),
           file,
