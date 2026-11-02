@@ -82,7 +82,7 @@ describe("aiConfig", () => {
     }
   });
   it("a slashless id with ANTHROPIC_API_KEY resolves to the direct Anthropic route", () => {
-    for (const capability of ["extract", "translate", "compose", "entail"] as const) {
+    for (const capability of ["extract", "translate", "compose", "entail", "followup"] as const) {
       stubConfig({
         ANTHROPIC_API_KEY: "mock-anthropic-key",
         AI_GATEWAY_API_KEY: "mock-gateway-key",
@@ -314,7 +314,7 @@ describe("openai-compatible config", () => {
 
 describe("Meta Model API", () => {
   it("meta:model routes a language capability to Meta with META_API_KEY", () => {
-    for (const capability of ["extract", "translate", "compose", "entail"] as const) {
+    for (const capability of ["extract", "translate", "compose", "entail", "followup"] as const) {
       stubConfig({
         ANTHROPIC_API_KEY: "mock-anthropic-key",
         META_API_KEY: " mock-meta-key ",
@@ -379,5 +379,27 @@ describe("Meta Model API", () => {
       META_API_KEY: "mock-meta-key",
     });
     expect(aiConfig("transcribe", process.env).ok).toBe(false);
+  });
+  it("a -contributor model is refused on every route, because Meta trains on what it receives", () => {
+    for (const [variable, model, extra] of [
+      ["AI_MODEL_EXTRACT", "meta:muse-spark-1.3-contributor", {}],
+      ["AI_MODEL_FOLLOWUP", "meta:Muse-Spark-1.2-CONTRIBUTOR", {}],
+      ["AI_MODEL_TRANSLATE", "meta/muse-spark-1.3-contributor", { AI_GATEWAY_API_KEY: "mock" }],
+      [
+        "TRANSCRIBE_MODEL",
+        "muse-voice-transcribe-1.0-contributor",
+        { TRANSCRIBE_PROVIDER: "meta" },
+      ],
+    ] as const) {
+      stubConfig({ META_API_KEY: "mock-meta-key", [variable]: model, ...extra });
+      const capability =
+        variable === "TRANSCRIBE_MODEL"
+          ? "transcribe"
+          : (variable.slice("AI_MODEL_".length).toLowerCase() as "extract");
+      expect(aiConfig(capability, process.env)).toEqual({
+        ok: false,
+        reason: expect.stringContaining("-contributor"),
+      });
+    }
   });
 });

@@ -3,14 +3,17 @@
 import { createGateway } from "ai";
 import { v } from "convex/values";
 import { createClaimExtractor, createLanguageModel } from "../src/lib/ai/claim-extractor";
-import type { TranscriptionConfig } from "../src/lib/ai/config";
+import { aiConfig, type TranscriptionConfig } from "../src/lib/ai/config";
+import { createFollowUpAgent, type FollowUp, type FollowUpInput } from "../src/lib/ai/follow-ups";
 import { extractJob, transcribeJob, translateJob } from "../src/lib/ai/jobs";
 import { createMetaTranscriber } from "../src/lib/ai/meta";
 import { createCompatibleTranscriber, createTranscriber } from "../src/lib/ai/transcriber";
 import { createTranslator } from "../src/lib/ai/translator";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalAction } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
+import { appError } from "./lib/errors";
+import { regionConfig } from "./lib/region";
 
 export const transcribeInterview = internalAction({
   args: { interviewId: v.id("interview"), storageId: v.id("_storage"), language: v.string() },
@@ -81,6 +84,44 @@ export const extractClaims = internalAction({
         }),
     });
     return null;
+  },
+});
+
+const followUpValidator = v.object({
+  question: v.string(),
+  translation: v.optional(v.string()),
+  basis: v.union(
+    v.object({ kind: v.literal("quote"), quote: v.string() }),
+    v.object({ kind: v.literal("gap"), cautionType: v.string() }),
+  ),
+});
+
+/**
+ * The follow-up agent: reads the owner's words and suggests what the interviewer could ask next.
+ * Questions go back to the interviewer only; nothing is stored or published.
+ */
+export const suggestFollowUps = action({
+  args: { interviewId: v.id("interview"), readerLanguage: v.string() },
+  returns: v.array(followUpValidator),
+  handler: async (ctx, args): Promise<FollowUp[]> => {
+    const config = aiConfig("followup", process.env);
+    if (!config.ok) throw appError("conflict", config.reason);
+    const context: Omit<FollowUpInput, "region"> & { regionId: string } = await ctx.runMutation(
+      internal.aiRequests.beginFollowUps,
+      args,
+    );
+    try {
+      return await createFollowUpAgent({ model: createLanguageModel(config.config) }).suggest({
+        ...context,
+        region: regionConfig(context.regionId),
+      });
+    } catch (error) {
+      console.error(
+        args.interviewId,
+        `follow-up suggestions failed (${error instanceof Error ? error.name : "NonError"})`,
+      );
+      throw appError("conflict", "follow-up questions could not be suggested; try again");
+    }
   },
 });
 

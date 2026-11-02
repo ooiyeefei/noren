@@ -1,4 +1,11 @@
-export const AI_CAPABILITIES = ["extract", "translate", "transcribe", "compose", "entail"] as const;
+export const AI_CAPABILITIES = [
+  "extract",
+  "translate",
+  "transcribe",
+  "compose",
+  "entail",
+  "followup",
+] as const;
 export type AiCapability = (typeof AI_CAPABILITIES)[number];
 // Each capability names its model in AI_MODEL_<CAPABILITY>, so switching provider is a settings
 // change: "claude-sonnet-5-5" (Anthropic), "meta:muse-spark-1.3" (Meta Model API) or
@@ -24,6 +31,9 @@ export type TranscriptionConfig =
 type ConfigResult<T> = { ok: true; config: T } | { ok: false; reason: string };
 
 const META_MODEL = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+// Meta trains future models on whatever is sent to its discounted "-contributor" models, and the
+// owner consent does not cover that.
+const META_TRAINING_MODEL = /-contributor$/i;
 
 function metaKey(
   env: Readonly<Record<string, string | undefined>>,
@@ -110,6 +120,11 @@ export function aiConfig(
     capability === "transcribe" ? "TRANSCRIBE_MODEL" : `AI_MODEL_${capability.toUpperCase()}`;
   const modelId = env[variable]?.trim();
   const fallback = " The typed-transcript fallback can be used instead.";
+  if (modelId && META_TRAINING_MODEL.test(modelId))
+    return {
+      ok: false,
+      reason: `${variable} must not be a -contributor model: Meta trains on what it receives, and owners did not agree to that`,
+    };
   if (capability === "transcribe") {
     const provider = env.TRANSCRIBE_PROVIDER?.trim();
     if (provider === "openai-compatible") return compatibleConfig(env);

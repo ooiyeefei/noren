@@ -21,6 +21,7 @@ const variables = [
   "META_API_KEY",
   "AI_MODEL_EXTRACT",
   "AI_MODEL_TRANSLATE",
+  "AI_MODEL_FOLLOWUP",
   "TRANSCRIBE_PROVIDER",
   "TRANSCRIBE_MODEL",
   "TRANSCRIBE_BASE_URL",
@@ -568,5 +569,143 @@ describe("configured requests", () => {
         actorPersonId: s.creator,
         targetType: row.action === "ai.translate_requested" ? "place" : "interview",
       });
+  });
+});
+
+describe("follow-up agent", () => {
+  const usage = {
+    inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+    outputTokens: { total: 1, text: 1, reasoning: undefined },
+  };
+  // One step that hands over the questions through the agent's submit tool.
+  function submitting(questions: unknown[]) {
+    return new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "call-1",
+            toolName: "submit_questions",
+            input: JSON.stringify({ questions }),
+          },
+        ],
+        finishReason: { unified: "tool-calls", raw: undefined },
+        usage,
+        warnings: [],
+      }),
+    });
+  }
+  const question = {
+    question: "おばあさまはどうして始めたのですか？",
+    translation: "Why did your grandmother start it?",
+    quote: "祖母が始めた",
+    cautionType: "",
+  };
+  beforeEach(() => {
+    for (const variable of variables) vi.stubEnv(variable, undefined);
+    vi.stubEnv("META_API_KEY", "mock-meta-key");
+    vi.stubEnv("AI_MODEL_FOLLOWUP", "meta:muse-spark-1.3");
+  });
+  async function withTranscript(options: { consent?: boolean } = {}) {
+    const s = await setup(options);
+    await s.b.t.mutation(internal.interviews.saveMachineTranscript, {
+      interviewId: s.interviewId,
+      segments: [{ start: 0, end: 1, text: "架空のテスト店です。祖母が始めた店です。" }],
+      lang: "ja",
+      modelVersion: "mock/transcriber",
+    });
+    return s;
+  }
+  const auditRows = (s: Awaited<ReturnType<typeof setup>>) =>
+    s.b.t.run(async (ctx) =>
+      (await ctx.db.query("auditLog").take(100)).filter(
+        ({ action }) => action === "ai.followups_requested",
+      ),
+    );
+
+  it("works on a machine transcript, returns only checked questions and stores none of them", async () => {
+    const s = await withTranscript();
+    const factory = vi
+      .spyOn(languageModels, "createLanguageModel")
+      .mockReturnValueOnce(
+        submitting([question, { ...question, question: "作り話", quote: "存在しない言葉" }]),
+      );
+    await expect(
+      s.caller.action(api.aiActions.suggestFollowUps, {
+        interviewId: s.interviewId,
+        readerLanguage: "en",
+      }),
+    ).resolves.toEqual([
+      {
+        question: question.question,
+        translation: question.translation,
+        basis: { kind: "quote", quote: "祖母が始めた" },
+      },
+    ]);
+    expect(factory).toHaveBeenCalledExactlyOnceWith({
+      provider: "meta",
+      apiKey: "mock-meta-key",
+      modelId: "muse-spark-1.3",
+    });
+    expect(await s.b.t.run((ctx) => ctx.db.query("claim").take(10))).toEqual([]);
+    expect(await auditRows(s)).toEqual([
+      expect.objectContaining({
+        actorPersonId: s.creator,
+        targetType: "interview",
+        targetId: s.interviewId,
+      }),
+    ]);
+  });
+  it("a reader language outside the region drops the translation", async () => {
+    const s = await withTranscript();
+    vi.spyOn(languageModels, "createLanguageModel").mockReturnValueOnce(submitting([question]));
+    const [item] = await s.caller.action(api.aiActions.suggestFollowUps, {
+      interviewId: s.interviewId,
+      readerLanguage: "fr",
+    });
+    expect(item).not.toHaveProperty("translation");
+  });
+  it("is refused before any model call when unconfigured, without consent or transcript, or for another creator", async () => {
+    const factory = vi.spyOn(languageModels, "createLanguageModel");
+    vi.stubEnv("AI_MODEL_FOLLOWUP", undefined);
+    const unconfigured = await withTranscript();
+    const ask = (s: Awaited<ReturnType<typeof setup>>, caller = s.caller) =>
+      caller.action(api.aiActions.suggestFollowUps, {
+        interviewId: s.interviewId,
+        readerLanguage: "en",
+      });
+    await expect(ask(unconfigured)).rejects.toMatchObject({
+      data: { code: "conflict", message: expect.stringContaining("AI_MODEL_FOLLOWUP") },
+    });
+    vi.stubEnv("AI_MODEL_FOLLOWUP", "meta:muse-spark-1.3");
+    expect(await errorCode(ask(await setup({ consent: false })))).toBe("conflict");
+    expect(await errorCode(ask(await setup()))).toBe("conflict");
+    const other = await withTranscript();
+    await addPerson(other.b, "other", "creator", { isMock: true });
+    expect(["forbidden", "not_found"]).toContain(await errorCode(ask(other, other.b.as("other"))));
+    expect(factory).not.toHaveBeenCalled();
+    expect(await auditRows(unconfigured)).toEqual([]);
+  });
+  it("a provider failure is a readable conflict, and the hourly limit stops the 21st request", async () => {
+    const s = await withTranscript();
+    const failing = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw new Error("mock-meta-key and mock transcript");
+      },
+    });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const factory = vi.spyOn(languageModels, "createLanguageModel").mockReturnValueOnce(failing);
+    const ask = () =>
+      s.caller.action(api.aiActions.suggestFollowUps, {
+        interviewId: s.interviewId,
+        readerLanguage: "en",
+      });
+    await expect(ask()).rejects.toMatchObject({
+      data: { code: "conflict", message: expect.stringContaining("could not be suggested") },
+    });
+    expect(JSON.stringify(errors.mock.calls)).not.toMatch(/mock-meta-key|mock transcript/);
+    factory.mockImplementation(() => submitting([]));
+    for (let i = 1; i < 20; i++) await expect(ask()).resolves.toEqual([]);
+    expect(await errorCode(ask())).toBe("rate_limited");
   });
 });

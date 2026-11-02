@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
+  FollowUpList,
   WorkspaceView,
   type WorkspaceViewProps,
 } from "@/components/interview-workspace/workspace-view";
@@ -210,4 +211,55 @@ it("finished interview and recorded consent are labelled status chips in both la
       expect(chip).toContain("text-[13px]");
     }
   }
+});
+
+describe("follow-up questions", () => {
+  const live = { ...base.view, consent, status: "transcript_ready" as const, hasAudio: true };
+  it("are offered once any transcript exists, and never for a finished or withdrawn interview", () => {
+    const ask = { onSuggestFollowUps: async () => [] };
+    const machine = { ...transcript, origin: "machine" as const };
+    expect(render({ ...ask, view: { ...live, latestTranscript: machine } })).toContain(
+      "Suggest what to ask next with AI",
+    );
+    for (const view of [
+      live,
+      { ...live, latestTranscript: machine, status: "done" as const },
+      { ...live, latestTranscript: machine, consent: { ...consent, withdrawn: true } },
+    ])
+      expect(render({ ...ask, view })).not.toContain("Suggest what to ask next");
+    expect(render({ view: { ...live, latestTranscript: machine } })).not.toContain(
+      "Suggest what to ask next",
+    );
+  });
+  it("show each question in the interview language with why it is asked, in both languages", () => {
+    for (const locale of ["ja", "en"] as const) {
+      const html = renderToStaticMarkup(
+        <FollowUpList
+          locale={locale}
+          lang="ja"
+          vocabulary={base.region.cautionVocabulary}
+          questions={[
+            {
+              question: "どうして始めたのですか？",
+              translation: "Why did you start?",
+              basis: { kind: "quote", quote: "祖母が始めた" },
+            },
+            {
+              question: "入り口に段差はありますか？",
+              basis: { kind: "gap", cautionType: "access" },
+            },
+          ]}
+        />,
+      );
+      expect(html).toContain('<p lang="ja" class="text-lg">どうして始めたのですか？</p>');
+      expect(html).toContain("Why did you start?");
+      expect(html).toContain("祖母が始めた");
+      expect(html).toContain(base.region.cautionVocabulary[0]!.labels[locale]);
+      expect(html).toContain(interviewPageMessages[locale].followUpsNote);
+      expect(html).not.toMatch(/undefined|\{[a-zA-Z]+\}/);
+    }
+    expect(
+      renderToStaticMarkup(<FollowUpList locale="en" lang="ja" vocabulary={[]} questions={[]} />),
+    ).toContain("No questions to suggest right now.");
+  });
 });
