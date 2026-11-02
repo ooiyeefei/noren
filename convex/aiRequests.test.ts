@@ -686,6 +686,41 @@ describe("follow-up agent", () => {
     expect(factory).not.toHaveBeenCalled();
     expect(await auditRows(unconfigured)).toEqual([]);
   });
+  it("an interviewer who does not manage the place gives the agent only published statements", async () => {
+    const b = newBackend(modules);
+    const owner = await addPerson(b, "placeCreator", "creator", { isMock: true });
+    const interviewer = await addPerson(b, "visitor", "creator", { isMock: true });
+    const placeId = await addPlace(b, {
+      createdBy: owner,
+      isMock: true,
+      visibility: "demo_public",
+      demoPublicBasis: "fictional",
+    });
+    const interviewId = await addInterview(b, { placeId, interviewerId: interviewer });
+    const { transcriptId } = await addCorrectedTranscript(b, {
+      interviewId,
+      createdBy: interviewer,
+    });
+    for (const [status, text] of [
+      ["proposed", "unapproved mock statement"],
+      ["owner_confirmed", "confirmed mock statement"],
+      ["published", "published mock statement"],
+    ] as const)
+      await addClaim(b, { placeId, origin: "interview", status, text, transcriptId });
+    const recordedFor = async (name: string) =>
+      (
+        await b
+          .as(name)
+          .mutation(internal.aiRequests.beginFollowUps, { interviewId, readerLanguage: "en" })
+      ).recorded.map(({ textOriginal }) => textOriginal);
+    expect(await recordedFor("visitor")).toEqual(["published mock statement"]);
+    await addPerson(b, "steward", "steward", { isMock: true });
+    expect((await recordedFor("steward")).sort()).toEqual([
+      "confirmed mock statement",
+      "published mock statement",
+      "unapproved mock statement",
+    ]);
+  });
   it("a provider failure is a readable conflict, and the hourly limit stops the 21st request", async () => {
     const s = await withTranscript();
     const failing = new MockLanguageModelV4({
