@@ -518,6 +518,11 @@ function quoteLang(candidate: Doc<"mentionCandidate">, quote: string): string {
   return guessLang(quote) ?? candidate.langGuess ?? regionConfig(candidate.regionId).defaultLocale;
 }
 
+/** A blog's author field can hold the writer's email address, which a public card must not show. */
+function publicAuthor(name: string | undefined) {
+  return name !== undefined && contactIn(name) === "email" ? undefined : name;
+}
+
 /**
  * Links an accepted candidate to its place as a source, in the name of the steward who ran the
  * finder, who agreed to show it (FR-033). Embeddable posts appear through the platform's official
@@ -598,7 +603,9 @@ async function attachCandidate(
           : source.platform,
       url: source.adapter === "google_maps_link" ? source.canonicalUrl : candidate.url,
       canonicalUrl: source.canonicalUrl,
-      authorHandle: candidate.authorHandle ?? candidate.authorName ?? source.author?.handle,
+      authorHandle: publicAuthor(
+        candidate.authorHandle ?? candidate.authorName ?? source.author?.handle,
+      ),
       authorUrl: candidate.authorUrl ?? source.author?.url,
       postedAt: candidate.postedAt,
       addedBy: steward._id,
