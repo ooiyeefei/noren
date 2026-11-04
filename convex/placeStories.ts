@@ -24,7 +24,14 @@ import {
  */
 
 /** What the agent reads unless a batch names more. */
-const DEFAULT_PLATFORMS: MentionPlatform[] = ["google_reviews", "web"];
+const DEFAULT_PLATFORMS: MentionPlatform[] = [
+  "google_reviews",
+  "web",
+  "instagram",
+  "facebook",
+  "tiktok",
+  "reddit",
+];
 /** One post has nothing to compare with, so its card says it better than a story would. */
 const MIN_POSTS = 2;
 /** The second reader takes about four minutes to wake; a run looks again this often. */

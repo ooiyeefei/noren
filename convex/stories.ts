@@ -11,7 +11,7 @@ import {
 import { writeAudit } from "./lib/audit";
 import { currentPerson, requirePerson } from "./lib/auth";
 import { appError } from "./lib/errors";
-import { excerptTranslations } from "./lib/foundPosts";
+import { excerptTranslations, hasNoCard } from "./lib/foundPosts";
 import { mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
 import { readMapNames } from "./lib/mapCopies";
@@ -197,6 +197,7 @@ export const latest = query({
     for (const source of [...shared, ...found]) {
       const isFound = source.origin === "story_finder";
       if (isFound && foundShown >= LATEST_FOUND_LIMIT) break;
+      if (hasNoCard(source)) continue;
       const place = await readable(source.placeId);
       if (place === null || !isSharedPublicly(place, source)) continue;
       if (isFound) foundShown++;

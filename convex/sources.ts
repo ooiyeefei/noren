@@ -17,7 +17,7 @@ import { internalMutation, mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
 import { limitContribution } from "./lib/rateLimit";
 import { isRegionLocale, regionConfig } from "./lib/region";
-import { eraseFoundPost, excerptTranslations } from "./lib/foundPosts";
+import { eraseFoundPost, excerptTranslations, hasNoCard } from "./lib/foundPosts";
 import { literals, sourceStatusValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
 
@@ -127,6 +127,7 @@ export const listForPlace = query({
       .take(50);
     const visible: SourceView[] = [];
     for (const source of sources) {
+      if (hasNoCard(source)) continue;
       if (await canSeeSource(ctx, viewer, place, source))
         visible.push(await sourceView(ctx, place, source, viewer));
     }

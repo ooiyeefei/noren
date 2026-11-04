@@ -2,6 +2,16 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { dropCheck, isExcerptHeld } from "./translationChecks";
 
+const NO_CARD = new Set(["instagram", "facebook"]);
+
+/**
+ * Found posts from these get no card of their own, on a place's page or the home page: the story agent
+ * reads them and a sentence can cite them, and the page shows the story (owner's choice, 4 Nov 2026).
+ */
+export function hasNoCard(source: Doc<"source">): boolean {
+  return source.origin === "story_finder" && NO_CARD.has(source.platform ?? "");
+}
+
 /**
  * Translations made from the quote as it stands now; one made from an earlier quote is left out, and
  * so is one the translation check holds back (the card then shows the quote alone).
