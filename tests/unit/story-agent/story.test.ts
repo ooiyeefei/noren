@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { storyPrompt, verifyStory, WORDS_MAX, type ReportedStory } from "./story";
+import { storyPrompt, verifyStory, WORDS_MAX, type ReportedStory } from "@/lib/story-agent/story";
 
 // All posts are made up.
 const posts = [
@@ -15,6 +15,7 @@ const posts = [
     text: "二階の窓から港を出る船が見えます。",
   },
 ];
+const WORDS = "店主の祖父が屋台から始めた";
 const sentence = (citations: ReportedStory["sentences"][number]["citations"]) => ({
   en: "A reviewer heard it began as a street stall.",
   ja: "屋台から始まったと聞いた人がいます。",
@@ -89,6 +90,54 @@ describe("verifyStory", () => {
     });
     expect(sentences).toEqual([]);
     expect(problems.map((item) => item.problem)).toEqual(["cites nothing", "missing a language"]);
+  });
+
+  it("fails a sentence with Japanese in its English", () => {
+    const { sentences, problems } = verifyStory(posts, {
+      sentences: [
+        { ...sentence([{ post: 1, words: WORDS }]), en: "One post speaks of 屋台 here." },
+      ],
+    });
+    expect(sentences).toEqual([]);
+    expect(problems[0]?.problem).toBe("the English has Japanese in it");
+  });
+
+  it.each([
+    "The same write-up says it moved.",
+    "Per that same writer, it moved.",
+    "Another post says it moved.",
+    "A different reviewer says it moved.",
+    "That account says it moved.",
+  ])("fails a sentence that leans on another: %s", (en) => {
+    const { sentences, problems } = verifyStory(posts, {
+      sentences: [{ ...sentence([{ post: 1, words: WORDS }]), en }],
+    });
+    expect(sentences).toEqual([]);
+    expect(problems[0]?.problem).toContain("leans on another sentence");
+  });
+
+  it("does not mistake an ordinary 'that' for leaning on another sentence", () => {
+    const { sentences } = verifyStory(posts, {
+      sentences: [
+        {
+          ...sentence([{ post: 1, words: WORDS }]),
+          en: "Two reviewers say that one stall became the shop.",
+        },
+      ],
+    });
+    expect(sentences).toHaveLength(1);
+  });
+
+  it("keeps a sentence that says who said it without leaning on another", () => {
+    const { sentences } = verifyStory(posts, {
+      sentences: [
+        {
+          ...sentence([{ post: 1, words: WORDS }]),
+          en: "It began as a stall, one reviewer heard.",
+        },
+      ],
+    });
+    expect(sentences).toHaveLength(1);
   });
 
   it("keeps at most four sentences", () => {
