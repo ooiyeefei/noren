@@ -23,6 +23,8 @@ export type CollectFlags = {
   limit: number;
   categories?: string[];
   bbox?: [number, number, number, number];
+  /** Only these places, by slug (--places). */
+  slugs?: ReadonlySet<string>;
   budgetUsd: number;
   perPlace: number;
   batchSize: number;
@@ -349,7 +351,9 @@ export async function collect(flags: CollectFlags, deps: RunnerDeps) {
   const searched = flags.searched;
   const places = await loadPlaces(deps.convex, {
     ...flags,
-    ...(searched ? { keep: (place) => stillToSearch(place, flags.platforms, searched) } : {}),
+    keep: (place) =>
+      (!flags.slugs || flags.slugs.has(place.slug)) &&
+      (!searched || stillToSearch(place, flags.platforms, searched)),
   });
   const runs = planRuns(places, flags);
   const plan = summarisePlan(runs);
