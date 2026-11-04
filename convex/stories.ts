@@ -11,6 +11,7 @@ import {
 import { writeAudit } from "./lib/audit";
 import { currentPerson, requirePerson } from "./lib/auth";
 import { appError } from "./lib/errors";
+import { excerptTranslations } from "./lib/foundPosts";
 import { mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
 import { readMapNames } from "./lib/mapCopies";
@@ -122,6 +123,8 @@ const latestEntry = v.object({
   sharedBy: v.string(),
   /** The story finder found it in a public post. */
   found: v.optional(v.boolean()),
+  /** A found post's quote in other languages, without any the translation check holds back. */
+  translations: v.optional(v.array(v.object({ lang: v.string(), text: v.string() }))),
   addedAt: v.number(),
 });
 
@@ -171,7 +174,7 @@ export const latest = query({
       });
     }
     // Members' posts and found posts are read apart, so a batch of found posts never pushes the
-    // members' out of the scan.
+    // members' out of the scan. A found tip stays on its place's page: this list is for stories.
     const shared = await ctx.db
       .query("source")
       .withIndex("by_status_and_origin_and_sharedAt", (q) =>
@@ -181,8 +184,12 @@ export const latest = query({
       .take(LATEST_SCAN);
     const found = await ctx.db
       .query("source")
-      .withIndex("by_status_and_origin_and_sharedAt", (q) =>
-        q.eq("status", "live").eq("origin", "story_finder").gte("sharedAt", 0),
+      .withIndex("by_status_and_origin_and_foundKind_and_sharedAt", (q) =>
+        q
+          .eq("status", "live")
+          .eq("origin", "story_finder")
+          .eq("foundKind", "story")
+          .gte("sharedAt", 0),
       )
       .order("desc")
       .take(LATEST_SCAN);
@@ -202,7 +209,7 @@ export const latest = query({
         lang: isFound ? source.excerptLang : source.noteLang,
         platform: source.platform,
         sharedBy: isFound ? (source.authorHandle ?? "") : await nameOf(source.addedBy),
-        ...(isFound ? { found: true } : {}),
+        ...(isFound ? { found: true, translations: await excerptTranslations(ctx, source) } : {}),
         addedAt: source.sharedAt ?? source._creationTime,
       });
     }

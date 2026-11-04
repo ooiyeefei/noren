@@ -508,6 +508,30 @@ describe("what the public sees", () => {
     );
   });
 
+  it("the home page's list leaves a found tip on its place's page and shows a story's translation", async () => {
+    const w = await world();
+    await w.ingest([w.candidate(posts.instagram, { text: IG_TEXT }), w.candidate(posts.google)]);
+    const [instagramRow, googleRow] = await w.rows();
+    await w.record(instagramRow!._id, { quote: IG_QUOTE, kind: "tip" });
+    const { sourceId } = await w.record(googleRow!._id, {});
+    await w.b.t.mutation(internal.storyFinder.saveExcerptTranslation, {
+      sourceId: sourceId!,
+      lang: "en",
+      sourceText: QUOTE,
+      text: "A made-up translation.",
+      modelVersion: "mock/translator",
+    });
+    const latest = await w.b.t.query(api.stories.latest, { regionId: "nagasaki" });
+    expect(latest.filter((entry) => entry.found)).toEqual([
+      expect.objectContaining({
+        text: QUOTE,
+        translations: [{ lang: "en", text: "A made-up translation." }],
+      }),
+    ]);
+    const onThePage = await w.b.t.query(api.sources.listForPlace, { placeId: w.placeId });
+    expect(onThePage).toHaveLength(2);
+  });
+
   it("a machine translation of the quote is shown only while it matches the quote", async () => {
     const w = await world();
     await w.ingest([w.candidate(posts.google)]);
