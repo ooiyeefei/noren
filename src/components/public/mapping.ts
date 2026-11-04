@@ -93,6 +93,8 @@ export type LatestStoryLike = {
   sharedBy: string;
   /** The story finder found it in a public post. */
   found?: boolean;
+  /** A found post's quote in other languages. */
+  translations?: { lang: string; text: string }[];
   addedAt: number;
 };
 export type StoryFeedEntry = { id: string; addedAt: number; canRemove: boolean } & (

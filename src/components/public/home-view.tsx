@@ -186,7 +186,7 @@ export function HomeView({
   return (
     <div
       lang={locale}
-      className="relative isolate h-[calc(100dvh-56px)] overflow-hidden bg-kamenozoki text-kon lg:grid lg:grid-cols-[400px_minmax(0,1fr)]"
+      className="relative isolate h-[calc(100dvh-56px)] overflow-hidden bg-kamenozoki text-kon lg:grid lg:grid-cols-[400px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]"
     >
       <section
         aria-label={m.places}
