@@ -38,7 +38,7 @@ Default adapters: OpenFreeMap style and Nominatim (submit-only). Provider output
 
 ## GroundingChecker
 
-`check(sentences[{ text, claimIds }], claims) -> [{ sentenceIndex, verdict: "pass" | "hold", reasons[] }]`. Two stages: deterministic (IDs exist and are published, no sentence without an ID, quoted material present) and an entailment check by a model from a different vendor than the composer. Any failure returns `hold`, and the app fails closed to human review.
+`check(sentences[{ text, claimIds }], claims) -> [{ sentenceIndex, verdict: "pass" | "hold", reasons[] }]`. Two stages: deterministic (IDs exist and are published, no sentence without an ID, quoted material present) and an entailment check. Today the entailment check is verbatim-only (a sentence passes only when it is exactly a cited claim's text); a model from a different vendor than the composer is planned, not built (task T072). Any failure returns `hold`, and the app fails closed: the sentence stays off the page (FR-014).
 
 ## Storage (audio)
 
