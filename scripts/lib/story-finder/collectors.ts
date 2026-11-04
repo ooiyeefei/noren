@@ -1,6 +1,7 @@
 import {
   guessLang,
   mentionCanonicalUrl,
+  storedPostText,
   type MentionCandidate,
   type MentionPlatform,
 } from "../../../src/lib/story-finder/mention";
@@ -62,7 +63,8 @@ function candidate(
   },
 ): MentionCandidate | null {
   const canonicalUrl = mentionCanonicalUrl(fields.url, ALL_ADAPTERS);
-  const text = fields.text.trim();
+  // Cut here as storyFinder.ingest cuts it, so a long page is not sent whole.
+  const text = storedPostText(fields.text, planned.names);
   if (!canonicalUrl || !text) return null;
   return {
     platform,
