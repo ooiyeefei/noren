@@ -13,6 +13,10 @@
  *      (scripts/fetch-chain-evidence.py), the branches Overture lists outside Nagasaki prefecture.
  *      A base name found only in Nagasaki and fewer than five times is a local multi-branch place and
  *      is spared (src/lib/chains/local.ts).
+ *  Two more reasons spare a place that a signal would hide, a brand of the Name Suggestion Index
+ *  included: it is Nagasaki-born (Nagasaki prefecture holds 30% or more of the places that carry its
+ *  name in Japan, counted from the snapshot and the Japan-wide evidence), or its name marks the head
+ *  shop (本店, 総本店, 本家).
  *  (c) The Overture brand field of a place's Overture record.
  *
  * A place with a story, a linked post or a confirmed owner is never hidden, here or in the mutation
@@ -32,6 +36,7 @@ import {
   type PlaceMatch,
   type PublicPlace,
   type SignalKind,
+  type SpareRule,
 } from "../src/lib/chains/plan";
 import { getRegionConfig } from "../src/lib/region/registry";
 import { readChainSnapshot } from "./lib/chain-snapshot";
@@ -105,6 +110,7 @@ export function summarise(plan: ChainPlan, publicPlaces: number) {
   const hide = plan.matches.filter((match) => match.decision === "hide");
   const spared = plan.matches.filter((match) => match.decision === "spare");
   const kept = plan.matches.filter((match) => match.decision === "protected");
+  const sparedBy = (rule: SpareRule) => spared.filter((match) => match.spareRules?.includes(rule));
   const withSignal = (kind: SignalKind) =>
     hide.filter((match) => match.signals.some((signal) => signal.kind === kind));
   const only = (kind: SignalKind) =>
@@ -127,7 +133,9 @@ export function summarise(plan: ChainPlan, publicPlaces: number) {
       { places: number; onlyThisSignal: number; byCategory: Record<string, number> }
     >,
     branchPatternFoundOnlyWithJapanWideCount: hide.filter((match) => match.japanWideOnly).length,
-    sparedAsLocalMultiBranch: spared.length,
+    sparedAsLocalMultiBranch: sparedBy("local_multi_branch").length,
+    sparedAsNagasakiBorn: sparedBy("nagasaki_born").length,
+    sparedAsFlagship: sparedBy("flagship").length,
     keptBecauseStoriesPostsOrOwner: kept.length,
     afterHiding: publicPlaces - hide.length,
   };
@@ -148,7 +156,10 @@ function markdown(report: ReturnType<typeof buildReport>): string {
     "",
     `- Public places read: ${s.publicPlaces}`,
     `- To hide: ${s.toHide} (map after hiding: ${s.afterHiding})`,
-    `- Spared as local multi-branch places (branch pattern only, fewer than 5, only in Nagasaki): ${s.sparedAsLocalMultiBranch}`,
+    `- Spared (a place can have more than one reason):`,
+    `  - local multi-branch place (branch pattern only, fewer than 5, only in Nagasaki): ${s.sparedAsLocalMultiBranch}`,
+    `  - Nagasaki-born (Nagasaki prefecture holds 30% or more of the name's places in Japan): ${s.sparedAsNagasakiBorn}`,
+    `  - flagship (the name ends in 本店, 総本店 or 本家): ${s.sparedAsFlagship}`,
     `- Kept because they hold a story, a linked post or an owner: ${s.keptBecauseStoriesPostsOrOwner}`,
     "",
     "| Signal | Places | Only this signal |",
@@ -184,13 +195,13 @@ function markdown(report: ReturnType<typeof buildReport>): string {
         `| ${cell(match.name)} | ${match.category} | ${cell(match.signals.map((signal) => signal.reason).join(" AND "))} |`,
     ),
     "",
-    `## Spared by the local multi-branch rule (${report.spared.length})`,
+    `## Spared (${report.spared.length})`,
     "",
-    "| Name | Category | Why spared | Branch-pattern reason |",
-    "| --- | --- | --- | --- |",
+    "| Name | Category | Rule | Why spared | What would have hidden it |",
+    "| --- | --- | --- | --- | --- |",
     ...report.spared.map(
       (match) =>
-        `| ${cell(match.name)} | ${match.category} | ${cell(match.note ?? "")} | ${cell(match.signals.map((signal) => signal.reason).join("; "))} |`,
+        `| ${cell(match.name)} | ${match.category} | ${(match.spareRules ?? []).join(", ")} | ${cell(match.note ?? "")} | ${cell(match.signals.map((signal) => signal.reason).join("; "))} |`,
     ),
     "",
     `## Kept: story, linked post or owner (${report.kept.length})`,
@@ -220,7 +231,7 @@ function buildReport(args: {
     summary: summarise(plan, args.publicPlaces),
     evidence: {
       file: args.evidenceFile,
-      requested: plan.evidenceRequest.length,
+      requested: plan.evidenceRequest.bases.length + plan.evidenceRequest.brands.length,
       missing: plan.missingEvidence,
     },
     perBrand: plan.perBrand,
@@ -254,7 +265,7 @@ export async function runHideChains(
         "       npx tsx scripts/hide-chains.ts --deployment <name> --steward <personId>",
         "       npx tsx scripts/hide-chains.ts --export-dir <dir> --dry-run",
         "Finds chain businesses among the public places and, without --dry-run, hides them as not for visitors.",
-        "(a) a brand of the OSM Name Suggestion Index; (b) a base name shared by three or more places with a branch suffix (spared when it is fewer than five and only in Nagasaki); (c) the Overture brand field.",
+        "(a) a brand of the OSM Name Suggestion Index; (b) a base name shared by three or more places with a branch suffix (spared when it is fewer than five and only in Nagasaki); (c) the Overture brand field. Spared whatever the signal: a name Nagasaki prefecture holds 30% or more of in Japan, and a head shop (本店, 総本店, 本家).",
         "The deployment is read with `npx convex data` (read-only) into .scratch/chains-export/<name>; a dry run writes only .scratch/chains-report.json and .md.",
         "A place with a story, a linked post or a confirmed owner is never hidden. The run can be repeated: hidden places are no longer public, so nothing is hidden twice.",
         "Options: --snapshot <jsonl> (default " +
@@ -308,7 +319,8 @@ export async function runHideChains(
       {
         release: snapshot.release,
         genericSuffixes: [...GENERIC_SUFFIXES],
-        bases: plan.evidenceRequest,
+        bases: plan.evidenceRequest.bases,
+        brands: plan.evidenceRequest.brands,
       },
       null,
       1,
@@ -321,7 +333,9 @@ export async function runHideChains(
       `HIDE  ${match.name} | ${match.category} | ${match.signals.map((s) => s.reason).join(" AND ")}`,
     );
   for (const match of report.spared)
-    options.log(`SPARE ${match.name} | ${match.category} | ${match.note}`);
+    options.log(
+      `SPARE ${match.name} | ${match.category} | ${(match.spareRules ?? []).join(", ")} | ${match.note}`,
+    );
   for (const match of report.kept)
     options.log(`KEPT  ${match.name} | ${match.category} | ${match.note}`);
   options.log(

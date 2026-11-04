@@ -59,3 +59,51 @@ export function prefectureOf(addresses: readonly RecordAddress[]): Prefecture {
   }
   return known;
 }
+
+/**
+ * A business born in Nagasaki stays on the map even when it has grown branches elsewhere: 福砂屋,
+ * castella since 1624, is what Noren exists for (the owner, 2026-11-04). A name is Nagasaki-born when
+ * Nagasaki prefecture holds at least this share of all the places that carry it in Japan.
+ */
+export const NAGASAKI_BORN_SHARE = 0.3;
+
+export type PlaceCounts = {
+  /** Places that carry the name in Nagasaki prefecture. */
+  nagasaki: number;
+  /** Places that carry the name in the rest of Japan. */
+  elsewhere: number;
+};
+
+/** Nagasaki's share of the places that carry a name, from 0 to 1 (0 when there are none). */
+export function nagasakiShare(counts: PlaceCounts): number {
+  const total = counts.nagasaki + counts.elsewhere;
+  return total === 0 ? 0 : counts.nagasaki / total;
+}
+
+/**
+ * True when Nagasaki prefecture holds NAGASAKI_BORN_SHARE or more of a name's places in Japan. Needs the
+ * counts of both sides, so a name with no count outside Nagasaki must not be passed as zero.
+ */
+export function isNagasakiBorn(counts: PlaceCounts): boolean {
+  return counts.nagasaki > 0 && nagasakiShare(counts) >= NAGASAKI_BORN_SHARE;
+}
+
+// The head shop of a business: 本店 (main shop), 総本店 (head main shop) or 本家 (the original house).
+// 本舗 is left out on purpose: it is part of many brand names and says nothing about a flagship.
+const FLAGSHIP_JA = /^(.*?)\s*(?:総本店|本店|本家)$/u;
+const FLAGSHIP_ROMAJI = /^(.*?)[\s-]*(?:sou)?hon(?:ten|ke)$/iu;
+
+/**
+ * Whether a name marks its place as the head shop: it ends in 本店, 総本店 or 本家, after the base name
+ * ("岩崎本舗本店", "文明堂 総本店", "牛たん本家") or after the base name and an area ("清香園 古町本店"), or in
+ * the same words written in romaji ("Bunmeido Souhonten"). The name that IS the brand plus 本店 counts;
+ * 本店 alone, 本舗 by itself and a branch such as "大村店" do not.
+ */
+export function isFlagshipName(name: string): boolean {
+  const text = name.normalize("NFKC").replace(/\s+/gu, " ").trim();
+  for (const pattern of [FLAGSHIP_JA, FLAGSHIP_ROMAJI]) {
+    const base = pattern.exec(text)?.[1];
+    if (base !== undefined && [...base.replace(/\s/gu, "")].length >= 2) return true;
+  }
+  return false;
+}
