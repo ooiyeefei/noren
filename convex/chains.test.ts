@@ -241,3 +241,54 @@ describe("chains.hideChains", () => {
     );
   });
 });
+
+describe("chains.hideClosed", () => {
+  const hideClosed = (
+    b: Awaited<ReturnType<typeof setup>>,
+    placeIds: Id<"place">[],
+    stewardPersonId: Id<"person"> = b.steward,
+  ) =>
+    b.t.mutation(internal.chains.hideClosed, {
+      regionId: "nagasaki",
+      stewardPersonId,
+      basis: "synthetic listing marked closed",
+      placeIds,
+    });
+
+  it("hides a listing or a place a person added, audits it, and a rerun writes nothing", async () => {
+    const b = await setup();
+    const listing = await b.listing();
+    const added = await addPlace(b, { createdBy: b.steward, visibility: "public" });
+    expect(await hideClosed(b, [listing, added])).toEqual({
+      hidden: 2,
+      alreadyHidden: 0,
+      skipped: [],
+    });
+    expect(await b.run((ctx) => ctx.db.get("place", added))).toMatchObject({
+      visibility: "draft",
+      hiddenReason: "not_for_visitors",
+    });
+    const audits = await b.run((ctx) => ctx.db.query("auditLog").collect());
+    expect(audits.filter((a) => a.action === "closed_listing.hide")).toHaveLength(2);
+    expect(await hideClosed(b, [listing])).toEqual({ hidden: 0, alreadyHidden: 1, skipped: [] });
+  });
+
+  it("leaves a place holding a linked post, and reports why", async () => {
+    const b = await setup();
+    const placeId = await b.listing();
+    await addSource(b, { placeId, addedBy: b.steward });
+    expect(await hideClosed(b, [placeId])).toEqual({
+      hidden: 0,
+      alreadyHidden: 0,
+      skipped: [{ placeId, reason: "has a linked post" }],
+    });
+    expect((await b.run((ctx) => ctx.db.get("place", placeId)))?.visibility).toBe("public");
+  });
+
+  it("refuses a mock steward", async () => {
+    const b = await setup();
+    const placeId = await b.listing();
+    const mock = await addPerson(b, "synthetic-mock-steward", "steward", { isMock: true });
+    expect(await errorCode(hideClosed(b, [placeId], mock))).toBe("invalid_input");
+  });
+});

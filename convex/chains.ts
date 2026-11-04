@@ -141,3 +141,70 @@ export const hideChains = internalMutation({
     return { hidden, alreadyHidden, skipped };
   },
 });
+
+/**
+ * Takes listings off the map because the business has closed, on a steward's decision: nothing here
+ * is decided from a name, so a place a person added can be hidden too. Same path as a chain: a draft
+ * marked `not_for_visitors`, which a steward can put back with setVisibility. It still never hides a
+ * place holding a story, a linked post or a confirmed owner: those come back as skipped to look at.
+ */
+export const hideClosed = internalMutation({
+  args: {
+    regionId: v.string(),
+    stewardPersonId: v.id("person"),
+    /** Why these places are believed closed, for the audit entry. */
+    basis: v.string(),
+    placeIds: v.array(v.id("place")),
+  },
+  returns: v.object({
+    hidden: v.number(),
+    alreadyHidden: v.number(),
+    skipped: v.array(v.object({ placeId: v.id("place"), reason: v.string() })),
+  }),
+  handler: async (ctx, { regionId, stewardPersonId, basis, placeIds }) => {
+    const steward = await realSteward(ctx, stewardPersonId);
+    if (placeIds.length > HIDE_BATCH) throw appError("invalid_input", `hide at most ${HIDE_BATCH}`);
+    regionConfig(regionId);
+    let hidden = 0;
+    let alreadyHidden = 0;
+    const skipped: { placeId: Id<"place">; reason: string }[] = [];
+    for (const placeId of placeIds) {
+      const place = await ctx.db.get("place", placeId);
+      if (!place || place.regionId !== regionId) {
+        skipped.push({ placeId, reason: "place not found in this region" });
+        continue;
+      }
+      if (place.hiddenReason !== undefined) {
+        alreadyHidden++;
+        continue;
+      }
+      if (place.visibility !== "public" || place.isMock) {
+        skipped.push({ placeId, reason: "not a real public place" });
+        continue;
+      }
+      const kept = await whyKept(ctx, place);
+      if (kept) {
+        skipped.push({ placeId, reason: kept });
+        continue;
+      }
+      await ctx.db.patch("place", placeId, {
+        visibility: "draft",
+        hiddenReason: "not_for_visitors",
+      });
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: steward._id,
+        action: "closed_listing.hide",
+        targetType: "place",
+        targetId: placeId,
+        diff: {
+          visibility: { from: "public", to: "draft" },
+          hiddenReason: "not_for_visitors",
+          closed: { basis },
+        },
+      });
+      hidden++;
+    }
+    return { hidden, alreadyHidden, skipped };
+  },
+});
