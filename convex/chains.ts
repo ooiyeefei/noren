@@ -35,7 +35,11 @@ async function realSteward(ctx: QueryCtx, personId: Id<"person">) {
  * Why a place must stay on the map whatever its name: someone wrote about it, linked a post, told its
  * story in an interview, or owns it. Null when nothing holds it.
  */
-export async function whyKept(ctx: QueryCtx, place: Doc<"place">): Promise<string | null> {
+export async function whyKept(
+  ctx: QueryCtx,
+  place: Doc<"place">,
+  { ignoreLinkedPosts = false }: { ignoreLinkedPosts?: boolean } = {},
+): Promise<string | null> {
   const placeId = place._id;
   if (place.sharedAt !== undefined) return "added by a member";
   const found = async (table: "story" | "source" | "note" | "claim") =>
@@ -44,7 +48,7 @@ export async function whyKept(ctx: QueryCtx, place: Doc<"place">): Promise<strin
       .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId))
       .first()) !== null;
   if (await found("story")) return "has a story";
-  if (await found("source")) return "has a linked post";
+  if (!ignoreLinkedPosts && (await found("source"))) return "has a linked post";
   if (
     (await ctx.db
       .query("placeOwner")
@@ -155,13 +159,15 @@ export const hideClosed = internalMutation({
     /** Why these places are believed closed, for the audit entry. */
     basis: v.string(),
     placeIds: v.array(v.id("place")),
+    /** For a place the owner has named as closed: the posts about it don't keep it on the map. */
+    evenWithPosts: v.optional(v.boolean()),
   },
   returns: v.object({
     hidden: v.number(),
     alreadyHidden: v.number(),
     skipped: v.array(v.object({ placeId: v.id("place"), reason: v.string() })),
   }),
-  handler: async (ctx, { regionId, stewardPersonId, basis, placeIds }) => {
+  handler: async (ctx, { regionId, stewardPersonId, basis, placeIds, evenWithPosts }) => {
     const steward = await realSteward(ctx, stewardPersonId);
     if (placeIds.length > HIDE_BATCH) throw appError("invalid_input", `hide at most ${HIDE_BATCH}`);
     regionConfig(regionId);
@@ -182,7 +188,7 @@ export const hideClosed = internalMutation({
         skipped.push({ placeId, reason: "not a real public place" });
         continue;
       }
-      const kept = await whyKept(ctx, place);
+      const kept = await whyKept(ctx, place, { ignoreLinkedPosts: evenWithPosts });
       if (kept) {
         skipped.push({ placeId, reason: kept });
         continue;

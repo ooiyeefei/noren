@@ -285,6 +285,22 @@ describe("chains.hideClosed", () => {
     expect((await b.run((ctx) => ctx.db.get("place", placeId)))?.visibility).toBe("public");
   });
 
+  it("hides a place holding a linked post when told to", async () => {
+    const b = await setup();
+    const placeId = await b.listing();
+    await addSource(b, { placeId, addedBy: b.steward });
+    expect(
+      await b.t.mutation(internal.chains.hideClosed, {
+        regionId: "nagasaki",
+        stewardPersonId: b.steward,
+        basis: "named as closed by the owner",
+        placeIds: [placeId],
+        evenWithPosts: true,
+      }),
+    ).toEqual({ hidden: 1, alreadyHidden: 0, skipped: [] });
+    expect((await b.run((ctx) => ctx.db.get("place", placeId)))?.visibility).toBe("draft");
+  });
+
   it("refuses a mock steward", async () => {
     const b = await setup();
     const placeId = await b.listing();
