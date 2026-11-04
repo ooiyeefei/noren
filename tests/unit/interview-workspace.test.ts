@@ -184,7 +184,12 @@ describe("interview workspace", () => {
   it("consentTextFor falls back to the default locale and returns the region's version", () => {
     const region = {
       defaultLocale: "ja",
-      consent: { textVersion: "v3", requiredScopes: [], text: { ja: "同意", en: "Consent" } },
+      consent: {
+        textVersion: "v3",
+        requiredScopes: [],
+        text: { ja: "同意", en: "Consent" },
+        versionsNamingModal: [],
+      },
     };
     expect(consentTextFor(region, "unknown")).toEqual({
       text: "同意",
