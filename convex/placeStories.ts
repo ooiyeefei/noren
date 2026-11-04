@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation } from "./lib/gate";
@@ -10,7 +10,7 @@ import { appError } from "./lib/errors";
 import { readMapNames } from "./lib/mapCopies";
 import { scriptValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
-import { guessLang, type MentionPlatform } from "../src/lib/story-finder/mention";
+import { aboutHealth, guessLang, type MentionPlatform } from "../src/lib/story-finder/mention";
 import {
   mentionPlatformValidator,
   storyRunStatusValidator,
@@ -360,13 +360,27 @@ export const beginRun = internalMutation({
   },
 });
 
+/**
+ * A run's log says what code refused, but never repeats words about someone's health or death: a
+ * steward doesn't need them to judge the run. Applied when a step is written and when one is read,
+ * so runs logged before this rule keep them out of the panel too.
+ */
+function withoutHealth(step: Infer<typeof storyStepValidator>): Infer<typeof storyStepValidator> {
+  const { words, sentence } = step;
+  return {
+    ...step,
+    ...(words !== undefined && aboutHealth(words) ? { words: "…" } : {}),
+    ...(sentence !== undefined && aboutHealth(sentence) ? { sentence: "…" } : {}),
+  };
+}
+
 export const addStep = internalMutation({
   args: { runId: v.id("placeStoryRun"), step: storyStepValidator },
   returns: v.null(),
   handler: async (ctx, { runId, step }) => {
     const run = await ctx.db.get("placeStoryRun", runId);
     if (run === null || run.steps.length >= MAX_STEPS) return null;
-    await ctx.db.patch("placeStoryRun", runId, { steps: [...run.steps, step] });
+    await ctx.db.patch("placeStoryRun", runId, { steps: [...run.steps, withoutHealth(step)] });
     return null;
   },
 });
@@ -599,7 +613,7 @@ export const stewardPanel = query({
         placeSlug: place.slug,
         placeNames: await named(place),
         status: run.status,
-        steps: run.steps,
+        steps: run.steps.map(withoutHealth),
         ...(run.writer === undefined ? {} : { writer: run.writer }),
         ...(run.checker === undefined ? {} : { checker: run.checker }),
         ...(run.published === undefined ? {} : { published: run.published }),
