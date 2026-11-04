@@ -9,6 +9,7 @@ import {
   namesPlace,
   normaliseWhitespace,
   isBareFact,
+  listingSharesName,
   postHasAdMarker,
   type MentionKind,
   type RejectReason,
@@ -88,6 +89,18 @@ export function postContext(post: CheckedPost): string {
 }
 
 /**
+ * Whether the post names the place: anywhere in its words, or through the listing it is tagged with
+ * sharing the place's name (listingSharesName), which a review of 福壽 under that listing's name does
+ * though it never says 福壽 itself.
+ */
+export function postNamesPlace(post: CheckedPost, placeNames: readonly string[]): boolean {
+  return (
+    namesPlace(postContext(post), placeNames) ||
+    (post.locationName !== undefined && listingSharesName(post.locationName, placeNames))
+  );
+}
+
+/**
  * Code checks what the model claims (Meta's "verifiable agents"): the evidence must be in the post
  * (its text, title or location tag) and the quote in its text, word for word apart from whitespace,
  * or nothing the model said is trusted. Then checks that need no model: the post names the place
@@ -125,7 +138,7 @@ export function decideMention(
   });
   if ((evidence && !isVerbatim(postContext(post), evidence)) || (quote && !isVerbatim(text, quote)))
     return reject("unverifiable");
-  if (!namesPlace(postContext(post), placeNames)) return reject("place_not_named");
+  if (!postNamesPlace(post, placeNames)) return reject("place_not_named");
   if (adMarker || reported.kind === "ad_or_sponsored") return reject("sponsored");
   if (reported.aboutThisPlace === "no") return reject("not_about_place");
   if (reported.aboutThisPlace === "unsure") return reject("unsure_about_place");

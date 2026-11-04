@@ -237,6 +237,20 @@ describe("normalise", () => {
       expect(judgeListing(listing("カクウの門", 900), planned(names, pin))).toBe("wrong_listing");
     });
 
+    it("takes a listing that only shares a shorter name when it is at the same door", () => {
+      const names = ["中華菜館 架空"];
+      expect(judgeListing(listing("架空", 9), planned(names, pin))).toBeNull();
+      expect(judgeListing(listing("架空 本店", 26), planned(names, pin))).toBeNull();
+      expect(judgeListing(listing("架空", 150), planned(names, pin))).toBe("wrong_listing");
+      // A district or a building nearby is not the shop.
+      expect(judgeListing(listing("中華街", 20), planned(["老架 中華街店"], pin))).toBe(
+        "wrong_listing",
+      );
+      expect(judgeListing(listing("カクウプラザ 本館", 20), planned(names, pin))).toBe(
+        "wrong_listing",
+      );
+    });
+
     it("takes a listing further off only when it holds the whole name as a word", () => {
       const names = ["架空屋"];
       expect(
