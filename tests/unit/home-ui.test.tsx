@@ -66,6 +66,8 @@ for (const locale of ["ja", "en"] as const) {
       <HomeView locale={locale} region={region} model={model} category="cafe" search="coffee" />,
     );
     expect(filtered).toContain('data-category="cafe" aria-pressed="true"');
+    // Without a row size, a wide window's grid row grows with the list and stretches the map.
+    expect(filtered).toContain("lg:grid-rows-[minmax(0,1fr)]");
     expect(filtered).toContain(`aria-label="${m.clearSearch}"`);
     const real = render(
       <HomeView locale={locale} region={region} model={toHomeModel([landmark], locale, region)} />,
@@ -136,6 +138,31 @@ for (const locale of ["ja", "en"] as const) {
     expect(withLatest.indexOf('id="latest-stories"')).toBeLessThan(
       withLatest.indexOf('role="status"'),
     );
+    const found = render(
+      <HomeView
+        locale={locale}
+        region={region}
+        model={model}
+        latest={[
+          {
+            kind: "post",
+            id: "p3",
+            placeSlug: "cat-cafe",
+            placeNames: names,
+            text: "架空の話です。",
+            lang: "ja",
+            platform: "web",
+            sharedBy: "Fictional blogger",
+            found: true,
+            translations: [{ lang: "en", text: "A made-up story." }],
+            addedAt: 1,
+          },
+        ]}
+      />,
+    );
+    expect(found.includes("A made-up story.")).toBe(locale === "en");
+    expect(found.includes('data-badge="machine-translation"')).toBe(locale === "en");
+    expect(found).toContain("架空の話です。");
     const searching = render(
       <HomeView locale={locale} region={region} model={model} latest={latest} search="cat" />,
     );

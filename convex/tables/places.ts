@@ -260,5 +260,11 @@ export const placeTables = {
     .index("by_status_and_lastCheckedAt", ["status", "lastCheckedAt"])
     .index("by_status_and_sharedAt", ["status", "sharedAt"])
     .index("by_status_and_origin_and_sharedAt", ["status", "origin", "sharedAt"])
+    .index("by_status_and_origin_and_foundKind_and_sharedAt", [
+      "status",
+      "origin",
+      "foundKind",
+      "sharedAt",
+    ])
     .index("by_addedBy", ["addedBy"]),
 };

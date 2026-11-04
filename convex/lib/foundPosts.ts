@@ -1,6 +1,22 @@
 import type { Doc, Id } from "../_generated/dataModel";
-import type { MutationCtx } from "../_generated/server";
-import { dropCheck } from "./translationChecks";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { dropCheck, isExcerptHeld } from "./translationChecks";
+
+/**
+ * Translations made from the quote as it stands now; one made from an earlier quote is left out, and
+ * so is one the translation check holds back (the card then shows the quote alone).
+ */
+export async function excerptTranslations(ctx: QueryCtx, source: Doc<"source">) {
+  const rows = await ctx.db
+    .query("sourceExcerptTranslation")
+    .withIndex("by_sourceId_and_lang", (q) => q.eq("sourceId", source._id))
+    .take(8);
+  const shown: { lang: string; text: string }[] = [];
+  for (const row of rows)
+    if (row.sourceText === source.excerpt && !(await isExcerptHeld(ctx, row)))
+      shown.push({ lang: row.lang, text: row.text });
+  return shown;
+}
 
 /**
  * Takes a found post's words out of its candidate and marks it hidden, so it is never linked again.
