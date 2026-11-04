@@ -7,15 +7,12 @@ import {
   ABOUT_ANSWERS,
   authorKey,
   contactIn,
-  DUPLICATE_QUOTE_SIMILARITY,
-  gramSimilarity,
+  CopyIndex,
   guessLang,
-  mayBeCopies,
   MENTION_KINDS,
   mentionCanonicalUrl,
   namesPlace,
   quoteFingerprint,
-  quoteGrams,
   TEXT_MAX,
   translationFits,
   type RejectReason,
@@ -55,8 +52,10 @@ const INGEST_MAX = 100;
  * The most shown quotes one region's copy check reads. At most MAX_FOUND_PER_PLACE (12) found posts
  * are live per place, so a region reaches this only with hundreds of places each holding a full set.
  * A row is a fingerprint of at most QUOTE_MAX characters, about 1 KB, so reading all of them stays
- * near 4 MB, well inside one mutation's read limit. Past it the check could not see every quote, so
- * it holds the post (attachError copy_check_full) rather than guess.
+ * near 4 MB, well inside one mutation's read limit. They are indexed once per mutation (CopyIndex):
+ * at this bound, comparing a batch of 100 posts with all of them took about 0.1 s and 25 MB in a
+ * benchmark, inside a mutation's 1 s and 64 MB. Past it the check could not see every quote, so it
+ * holds the post (attachError copy_check_full) rather than guess.
  */
 export const MAX_SHOWN_QUOTES = 4000;
 /** Attach failures that stay true until something else changes; a batch passes over them. */
@@ -439,12 +438,13 @@ async function placeNameValues(ctx: QueryCtx, placeId: Id<"place">): Promise<str
 type ShownQuotes = {
   /** False when the region holds more than MAX_SHOWN_QUOTES, so some were not read. */
   complete: boolean;
-  rows: { candidateId: Id<"mentionCandidate">; fingerprint: string; grams: number }[];
+  index: CopyIndex<Id<"mentionCandidate">>;
 };
 
 /**
  * Every quote shown, or shown and then hidden, in a region: read once per mutation through the
- * region and status index, then kept in `cache` for the other candidates the mutation attaches.
+ * region and status index and indexed by trigram, then kept in `cache` for the other candidates
+ * the mutation attaches.
  */
 async function shownQuotesIn(
   ctx: QueryCtx,
@@ -461,27 +461,20 @@ async function shownQuotesIn(
         .withIndex("by_regionId_and_status", (q) => q.eq("regionId", regionId).eq("status", status))
         .take(MAX_SHOWN_QUOTES + 1 - rows.length)),
     );
-  const shown = {
-    complete: rows.length <= MAX_SHOWN_QUOTES,
-    rows: rows.map(({ candidateId, fingerprint, grams }) => ({ candidateId, fingerprint, grams })),
-  };
+  const index = new CopyIndex<Id<"mentionCandidate">>();
+  for (const row of rows) index.add(row.candidateId, row.fingerprint);
+  const shown = { complete: rows.length <= MAX_SHOWN_QUOTES, index };
   cache.set(regionId, shown);
   return shown;
 }
 
 /**
  * Whether the quote is a copy of one shown (or shown and hidden) anywhere in the region: the same
- * words posted again, perhaps with a few changed, are spam, not another person's story. Compared by
- * the trigrams of their fingerprints; a quote whose length rules out a match is skipped unread.
+ * words posted again, perhaps with a few changed or with new text around them, are spam, not
+ * another person's story. Compared by trigram containment (COPY_CONTAINMENT) with every one.
  */
 function copiesShownQuote(shown: ShownQuotes, candidate: Doc<"mentionCandidate">, quote: string) {
-  const grams = quoteGrams(quoteFingerprint(quote));
-  return shown.rows.some(
-    (row) =>
-      row.candidateId !== candidate._id &&
-      mayBeCopies(grams.size, row.grams) &&
-      gramSimilarity(grams, quoteGrams(row.fingerprint)) >= DUPLICATE_QUOTE_SIMILARITY,
-  );
+  return shown.index.copyOf(quoteFingerprint(quote), candidate._id) !== undefined;
 }
 
 /**
@@ -602,8 +595,7 @@ async function attachCandidate(
     attachError: undefined,
   });
   // The trigger has stored the quote; the next candidate in this mutation must see it too.
-  const fingerprint = quoteFingerprint(quote);
-  shown.rows.push({ candidateId: candidate._id, fingerprint, grams: quoteGrams(fingerprint).size });
+  shown.index.add(candidate._id, quoteFingerprint(quote));
   await writeAudit(ctx, {
     actorKind: "person",
     actorPersonId: steward._id,
