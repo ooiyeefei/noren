@@ -552,7 +552,7 @@ describe("the check action", () => {
     for (const call of checker.doGenerateCalls) {
       expect(call.toolChoice).toEqual({ type: "tool", toolName: "report_check" });
       expect(call.responseFormat).toBeUndefined();
-      expect(call.maxOutputTokens).toBe(1000);
+      expect(call.maxOutputTokens).toBe(3000);
     }
     const sent = JSON.stringify(translator.doGenerateCalls[0]!.prompt);
     expect(sent).toContain("doNotAdd");
@@ -604,6 +604,35 @@ describe("the check action", () => {
   });
 
   describe("a found post's quote", () => {
+    it("whose check could not run is queued again, and a statement's is left to the steward", async () => {
+      const s = await setup();
+      const checker = toolModel([() => ({ faithful: true, added: [], missing: [] })]);
+      models(checker, translatorModel(FAITHFUL));
+      const sourceId = await s.foundQuote();
+      await s.saveQuote(sourceId, FAITHFUL);
+      await s.save(FAITHFUL);
+      const rows = await s.checks();
+      await s.b.t.run(async (ctx) => {
+        for (const row of rows)
+          await ctx.db.patch("translationCheck", row._id, {
+            status: "unavailable",
+            error: "mock error",
+          });
+      });
+      expect(
+        await s.b.t.mutation(internal.translationChecks.recheckUnavailableExcerpts, {}),
+      ).toEqual({ queued: 1 });
+      await runScheduled(s.b);
+      const after = await s.checks();
+      expect(after.find((row) => row.subject === "excerpt")).toMatchObject({ status: "passed" });
+      expect(after.find((row) => row.subject !== "excerpt")).toMatchObject({
+        status: "unavailable",
+      });
+      expect(
+        await s.b.t.mutation(internal.translationChecks.recheckUnavailableExcerpts, {}),
+      ).toEqual({ queued: 0 });
+    });
+
     it("is checked as public words with no consent, while the statements' consent gate stays as it is", async () => {
       const s = await setup();
       // The owner agreed to a text that does not name Modal: their statement is not sent.
