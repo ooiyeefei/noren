@@ -6,7 +6,6 @@ import {
   instagram,
   instagramKeyword,
   judgeListing,
-  NAMED_PLACE_M,
   plainText,
   reddit,
   tiktok,
@@ -251,27 +250,15 @@ describe("normalise", () => {
       );
     });
 
-    it("takes a listing further off only when it holds the whole name as a word", () => {
-      const names = ["架空屋"];
-      expect(
-        judgeListing(listing("カステラ本家 架空屋 長崎本店", 1_276), planned(names, pin)),
-      ).toBeNull();
-      // Too far for any name.
-      expect(
-        judgeListing(listing("架空屋 長崎本店", NAMED_PLACE_M + 500), planned(names, pin)),
-      ).toBe("wrong_listing");
-      // The name inside a longer katakana word is another name.
-      expect(
-        judgeListing(listing("ネオ·プレイステスビオス壱番館", 1_949), planned(["テスビ"], pin)),
-      ).toBe("wrong_listing");
-      // A different name that looks alike.
-      expect(judgeListing(listing("ベルビュー出島", 1_087), planned(["ラ ベルヴュー"], pin))).toBe(
+    it("takes no listing over 300 m away, whatever its name", () => {
+      // A branch, or a shop of exactly this name: each has its own entry on the map.
+      expect(judgeListing(listing("架空屋 本店", 301), planned(["架空屋"], pin))).toBe(
         "wrong_listing",
       );
-      // Two characters or fewer never count that far off.
-      expect(judgeListing(listing("架空 本店", 1_000), planned(["架空"], pin))).toBe(
-        "wrong_listing",
-      );
+      expect(
+        judgeListing(listing("カステラ本家 架空屋 長崎本店", 1_276), planned(["架空屋"], pin)),
+      ).toBe("wrong_listing");
+      expect(judgeListing(listing("架空屋", 959), planned(["架空屋"], pin))).toBe("wrong_listing");
     });
 
     it("lets position decide when the place has a one-character name", () => {
