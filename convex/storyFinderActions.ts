@@ -9,10 +9,10 @@ import { createMentionChecker, describeCheckFailure } from "../src/lib/story-fin
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
-/** Candidates per scheduled action: a dozen checks of up to two minutes fit in its ten. */
-const CHECK_BATCH = 12;
+/** Candidates per scheduled action: 32 checks of up to two minutes, eight at a time, fit in its ten. */
+const CHECK_BATCH = 32;
 /** Posts checked at the same time within a batch. */
-const PARALLEL = 3;
+const PARALLEL = 8;
 /** Posts one linking call considers, and how many such calls the end of a run makes at most. */
 const ATTACH_LIMIT = 100;
 const ATTACH_ROUNDS = 20;

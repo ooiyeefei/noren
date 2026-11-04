@@ -496,7 +496,7 @@ describe("what the public sees", () => {
     const sources = anonymous[0] as Awaited<
       ReturnType<typeof w.b.t.query<typeof api.sources.listForPlace>>
     >;
-    expect(sources).toHaveLength(2);
+    expect(sources).toHaveLength(1);
     const google = sources.find((s) => s.adapter === "google_maps_link")!;
     expect(google).toMatchObject({
       foundInPublicPost: true,
@@ -544,7 +544,7 @@ describe("what the public sees", () => {
       }),
     ]);
     const onThePage = await w.b.t.query(api.sources.listForPlace, { placeId: w.placeId });
-    expect(onThePage).toHaveLength(2);
+    expect(onThePage).toHaveLength(1);
   });
 
   it("a machine translation of the quote is shown only while it matches the quote", async () => {
@@ -1506,6 +1506,33 @@ describe("repairListings", () => {
         }),
       ),
     ).toBe("invalid_input");
+  });
+});
+
+describe("found Instagram and Facebook posts", () => {
+  it("get no card on the page, and stay live for the story agent to read and cite", async () => {
+    const w = await world();
+    await w.ingest([w.candidate(posts.instagram)]);
+    const [row] = await w.rows();
+    const { sourceId } = await w.record(row!._id, {});
+    expect(await w.b.t.query(api.sources.listForPlace, { placeId: w.placeId })).toEqual([]);
+    const latest = await w.b.t.query(api.stories.latest, { regionId: "nagasaki" });
+    expect(latest.filter((entry) => entry.found)).toEqual([]);
+    const source = await w.b.t.run((ctx) => ctx.db.get("source", sourceId!));
+    expect(source?.status).toBe("live");
+  });
+
+  it("leave a found Google review its card", async () => {
+    const w = await world();
+    await w.ingest([
+      w.candidate({
+        platform: "google_reviews",
+        url: "https://www.google.com/maps/reviews/data=mock9",
+      }),
+    ]);
+    const [row] = await w.rows();
+    await w.record(row!._id, {});
+    expect(await w.b.t.query(api.sources.listForPlace, { placeId: w.placeId })).toHaveLength(1);
   });
 });
 
