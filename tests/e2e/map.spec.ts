@@ -7,6 +7,15 @@ for (const locale of ["ja", "en"] as const) {
   test.describe(`/${locale} map`, () => {
     test.skip(process.env.E2E_SKIP_MAP === "1", "map checks disabled: WebGL unavailable");
 
+    test("the map fits the screen on a wide window", async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto(`/${locale}`);
+      const canvas = page.locator("canvas.maplibregl-canvas");
+      await expect(canvas).toBeVisible({ timeout: 20_000 });
+      const box = await canvas.boundingBox();
+      expect(box!.height).toBeLessThanOrEqual(800);
+    });
+
     test("the map draws", async ({ page }) => {
       const offending: string[] = [];
       page.on("console", (message) => {

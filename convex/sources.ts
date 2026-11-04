@@ -17,8 +17,7 @@ import { internalMutation, mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
 import { limitContribution } from "./lib/rateLimit";
 import { isRegionLocale, regionConfig } from "./lib/region";
-import { eraseFoundPost } from "./lib/foundPosts";
-import { isExcerptHeld } from "./lib/translationChecks";
+import { eraseFoundPost, excerptTranslations } from "./lib/foundPosts";
 import { literals, sourceStatusValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
 
@@ -107,22 +106,6 @@ async function sourceView(
     addedAt: source._creationTime,
     countsVisits: countsVisits(place, source),
   };
-}
-
-/**
- * Translations made from the quote as it stands now; one made from an earlier quote is left out, and
- * so is one the translation check holds back (the card then shows the quote alone).
- */
-async function excerptTranslations(ctx: QueryCtx, source: Doc<"source">) {
-  const rows = await ctx.db
-    .query("sourceExcerptTranslation")
-    .withIndex("by_sourceId_and_lang", (q) => q.eq("sourceId", source._id))
-    .take(8);
-  const shown: { lang: string; text: string }[] = [];
-  for (const row of rows)
-    if (row.sourceText === source.excerpt && !(await isExcerptHeld(ctx, row)))
-      shown.push({ lang: row.lang, text: row.text });
-  return shown;
 }
 
 async function loadSource(ctx: QueryCtx, sourceId: Id<"source">) {
