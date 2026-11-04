@@ -288,6 +288,31 @@ describe("placeStories runs", () => {
     expect(panel.runs[0]).toMatchObject({ runId, status: "queued" });
   });
 
+  it("never repeats words about someone's health in a run's log", async () => {
+    const b = await setup();
+    const runId = await b.startRun();
+    const step = (words: string) => ({ at: 1, kind: "citation_rejected" as const, words, detail: "x" });
+    await b.t.mutation(internal.placeStories.addStep, { runId, step: step("店主は入院中です") });
+    await b.run_((ctx) =>
+      ctx.db.patch("placeStoryRun", runId, {
+        steps: [step("先代は亡くなりました"), step("店主は入院中です"), step("黒電話が現役です")],
+      }),
+    );
+    const panel = await b.as("synthetic-steward").query(api.placeStories.stewardPanel, {});
+    expect(panel.runs[0]!.steps.map(({ words }) => words)).toEqual(["…", "…", "黒電話が現役です"]);
+  });
+
+  it("stores no words about someone's health when a step is logged", async () => {
+    const b = await setup();
+    const runId = await b.startRun();
+    await b.t.mutation(internal.placeStories.addStep, {
+      runId,
+      step: { at: 1, kind: "citation_rejected", words: "店主は入院中です" },
+    });
+    const run = await b.run_((ctx) => ctx.db.get("placeStoryRun", runId));
+    expect(run!.steps[0]!.words).toBe("…");
+  });
+
   it("starts a batch only on places with enough posts and no story", async () => {
     const b = await setup();
     await b.post("google_reviews", { n: 1 });
