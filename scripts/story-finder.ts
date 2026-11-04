@@ -36,6 +36,8 @@ collect
   --limit 20               Places to search for (with --skip-searched: places not searched yet).
   --category a,b           Only these categories (places-to-visit categories only).
   --bbox w,s,e,n           Only places inside this box.
+  --places <file>          Only these places: a text file of slugs, one per line; a # starts a
+                           comment. --limit defaults to all of them.
   --per-place 5            Posts or reviews asked for per place.
   --batch-size 20          Places per actor run, where the actor allows several.
   --budget-usd 20          Stop before any run that could take the spend past this.
@@ -83,10 +85,19 @@ export type Flags = {
   requeue: boolean;
   from?: string;
   ids?: string;
+  places?: string;
   prod: boolean;
   deployment?: string;
   envFile?: string;
 };
+
+/** A text file of one value per line, where a # starts a comment. */
+async function readListFile(path: string): Promise<string[]> {
+  return (await readFile(path, "utf8"))
+    .split("\n")
+    .map((line) => line.replace(/#.*$/, "").trim())
+    .filter(Boolean);
+}
 
 function positive(flag: string, value: string, { integer = true } = {}): number {
   const number = Number(value);
@@ -190,6 +201,9 @@ export function parseFlags(argv: readonly string[]): Flags {
           break;
         case "--ids":
           flags.ids = value;
+          break;
+        case "--places":
+          flags.places = value;
           break;
         case "--from":
           flags.from = value;
@@ -328,10 +342,7 @@ export async function runStoryFinder(
   }
   if (flags.command === "hide") {
     options.log({ target });
-    const ids = (await readFile(resolve(options.cwd, flags.ids!), "utf8"))
-      .split("\n")
-      .map((line) => line.replace(/#.*$/, "").trim())
-      .filter(Boolean);
+    const ids = await readListFile(resolve(options.cwd, flags.ids!));
     let hidden = 0;
     for (let i = 0; i < ids.length; i += 50) {
       const done = (await convex("storyFinder:hideMany", {
@@ -374,11 +385,15 @@ export async function runStoryFinder(
     await rename(`${path}.partial`, path);
     return path;
   };
+  const slugs = flags.places
+    ? new Set(await readListFile(resolve(options.cwd, flags.places)))
+    : undefined;
   const collectFlags: CollectFlags = {
     steward: flags.steward,
     regionId: flags.region,
     platforms: flags.platforms,
-    limit: flags.limit ?? 20,
+    limit: flags.limit ?? slugs?.size ?? 20,
+    ...(slugs ? { slugs } : {}),
     categories: flags.categories,
     bbox: flags.bbox,
     budgetUsd: flags.budgetUsd,
