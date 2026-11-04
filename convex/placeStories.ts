@@ -168,27 +168,50 @@ export const enqueue = internalMutation({
   },
 });
 
-/** Takes a story off its page, for one a person read and found not worth telling. */
+/**
+ * Takes a story off its page and keeps the place off the ready list, for one a person read and found
+ * not worth telling, or a place they don't want the agent writing about. With offerAgain the place goes
+ * back on the ready list instead.
+ */
 export const withdraw = internalMutation({
-  args: { stewardPersonId: v.id("person"), placeId: v.id("place"), reason: v.string() },
-  returns: v.object({ withdrawn: v.boolean() }),
-  handler: async (ctx, { stewardPersonId, placeId, reason }) => {
+  args: {
+    stewardPersonId: v.id("person"),
+    placeId: v.id("place"),
+    reason: v.string(),
+    offerAgain: v.optional(v.boolean()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { stewardPersonId, placeId, reason, offerAgain }) => {
     const steward = await batchSteward(ctx, stewardPersonId);
     const story = await ctx.db
       .query("placeStory")
       .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
       .first();
-    if (story === null) return { withdrawn: false };
-    await ctx.db.delete("placeStory", story._id);
+    const now = Date.now();
+    if (offerAgain) {
+      if (story !== null) await ctx.db.delete("placeStory", story._id);
+    } else if (story !== null) {
+      await ctx.db.patch("placeStory", story._id, { withdrawnAt: now });
+    } else {
+      await ctx.db.insert("placeStory", {
+        placeId,
+        sentences: [],
+        postsRead: 0,
+        writer: "",
+        checker: "",
+        publishedAt: now,
+        withdrawnAt: now,
+      });
+    }
     await writeAudit(ctx, {
       actorKind: "person",
       actorPersonId: steward._id,
       action: "story_agent.withdrawn",
       targetType: "place",
       targetId: placeId,
-      diff: { reason },
+      diff: { reason, offerAgain: offerAgain ?? false },
     });
-    return { withdrawn: true };
+    return null;
   },
 });
 
@@ -401,7 +424,7 @@ export const forPlace = query({
       .query("placeStory")
       .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
       .first();
-    if (story === null) return null;
+    if (story === null || story.withdrawnAt !== undefined) return null;
     const sentences = [];
     const notes = [];
     const numbered = new Map<string, number>();
