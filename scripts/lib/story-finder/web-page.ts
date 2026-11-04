@@ -417,6 +417,51 @@ export function htmlText(html: string): string {
     .join("\n");
 }
 
+/** Where `html` has a `<name ...> ... </name>` block, cut out; one linear pass, no backtracking. */
+function dropBlocks(html: string, open: string, close: string): string {
+  // ASCII-only lower case keeps every index the same (toLowerCase can change a string's length).
+  const lower = html.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+  const parts: string[] = [];
+  let at = 0;
+  for (;;) {
+    const start = lower.indexOf(open, at);
+    if (start === -1) break;
+    parts.push(html.slice(at, start), " ");
+    const end = lower.indexOf(close, start + open.length);
+    // An unclosed block runs to the end of the page, as a browser reads it.
+    if (end === -1) return parts.join("");
+    const tagEnd = lower.indexOf(">", end);
+    at = tagEnd === -1 ? html.length : tagEnd + 1;
+  }
+  parts.push(html.slice(at));
+  return parts.join("");
+}
+
+const BLOCK_TAGS =
+  /<\/?(?:p|div|li|ul|ol|dl|dt|dd|h[1-6]|blockquote|section|article|header|footer|nav|aside|main|form|table|tr|td|th|figure|figcaption|address|details|summary|pre|hr|title)\b[^<>]*>/gi;
+
+/**
+ * A page's text for the ad screen (hasAdMarker), which must see all of it: only scripts, styles and
+ * comments are left out, so a disclosure in a footer, a side bar or a menu is read (htmlText drops
+ * those, and the stored window comes from htmlText). Inline tags go without leaving a space, so
+ * <b>プロモーション</b>を含みます still reads as one phrase; block tags and <br> end the line. Every
+ * step is linear in the page's size.
+ */
+export function htmlScreenText(html: string): string {
+  let body = dropBlocks(html, "<!--", "-->");
+  body = dropBlocks(body, "<script", "</script");
+  body = dropBlocks(body, "<style", "</style");
+  body = body
+    .replace(/<br\b[^<>]*>/gi, "\n")
+    .replace(BLOCK_TAGS, "\n")
+    .replace(/<[^<>]*>/g, "");
+  return decodeEntities(body)
+    .split("\n")
+    .map((line) => line.replace(/[ \t\u00a0\u3000]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
 /**
  * The part of a page around the first mention of the place, at most TEXT_MAX characters
  * (storedPostText, the window storyFinder.ingest keeps too); null when the page never names it.
@@ -536,16 +581,16 @@ export function createPageReader(
     const { response } = result;
     if (response.status !== 200) return { ok: false, reason: "http" };
     if (!/html/i.test(response.contentType)) return { ok: false, reason: "not_html" };
-    const page = htmlText(response.body);
-    const text = textAroundPlace(page, names);
+    const text = textAroundPlace(htmlText(response.body), names);
     if (text === null) return { ok: false, reason: "no_mention" };
     const published = Date.parse(metaContent(response.body, "article:published_time") ?? "");
     return {
       ok: true,
       url: result.url.href,
       text,
-      // From the whole page: the label may be at its top or bottom, outside `text`.
-      ...(hasAdMarker(page) ? { adMarker: true } : {}),
+      // From the whole page, footer and side bars included: the label may be at its top or bottom,
+      // outside `text`, in a part htmlText leaves out.
+      ...(hasAdMarker(htmlScreenText(response.body)) ? { adMarker: true } : {}),
       author: metaContent(response.body, "author") ?? metaContent(response.body, "og:site_name"),
       ...(Number.isFinite(published) ? { publishedAt: published } : {}),
     };
