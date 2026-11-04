@@ -1,6 +1,15 @@
 import { BranchIndex, isGenericBase, type BranchRecord } from "./branch";
-import { keyLength } from "./names";
-import { isLocalMultiBranch, JAPAN_NOTABLE, LOCAL_BRANCH_LIMIT, type Prefecture } from "./local";
+import { keyedName, keyLength, startsWithBrandKey } from "./names";
+import {
+  isFlagshipName,
+  isLocalMultiBranch,
+  isNagasakiBorn,
+  JAPAN_NOTABLE,
+  LOCAL_BRANCH_LIMIT,
+  nagasakiShare,
+  type PlaceCounts,
+  type Prefecture,
+} from "./local";
 import { BrandMatcher, type NsiBrand } from "./nsi";
 
 /** Places a base name must be shared by before the branch pattern calls it a chain. */
@@ -28,8 +37,18 @@ export type PublicPlace = {
   protectedBy: string[];
 };
 
-/** Places of a base name outside Nagasaki prefecture, found by the Japan-wide check of Overture. */
-export type JapanEvidence = ReadonlyMap<string, { outside: number }>;
+/**
+ * What the Japan-wide check of Overture found for a base name: branches with a suffix outside Nagasaki
+ * prefecture, and in the prefecture but outside the snapshot's box. The last is unset in evidence
+ * written before the Nagasaki-born rule, which then cannot apply.
+ */
+export type BaseEvidence = { outside: number; nagasaki?: number };
+/** The same for a brand of the Name Suggestion Index, by every name it goes by. */
+export type BrandEvidence = { elsewhere: number; nagasaki: number };
+export type JapanEvidence = {
+  bases: ReadonlyMap<string, BaseEvidence>;
+  brands?: ReadonlyMap<string, BrandEvidence>;
+};
 
 export type SignalKind = "brand_list" | "branch_pattern" | "overture_brand";
 
@@ -43,6 +62,13 @@ export type Signal = {
 
 export type Decision = "hide" | "spare" | "protected";
 
+/**
+ * Why a place is spared: a local multi-branch place (the branch pattern alone, fewer than five, only
+ * in Nagasaki), a business born in Nagasaki (the prefecture holds 30% or more of its places in Japan),
+ * or a flagship (the name marks the head shop).
+ */
+export type SpareRule = "local_multi_branch" | "nagasaki_born" | "flagship";
+
 export type PlaceMatch = {
   placeId: string;
   name: string;
@@ -51,15 +77,20 @@ export type PlaceMatch = {
   decision: Decision;
   /** For a spared or protected place, why. */
   note?: string;
+  /** For a spared place, the rules that spare it. The signals are what would have hidden it. */
+  spareRules?: SpareRule[];
   /** The branch pattern found it only because of the Japan-wide count (fewer than three places in the snapshot). */
   japanWideOnly?: boolean;
 };
 
 export type ChainPlan = {
   matches: PlaceMatch[];
-  /** Every base name the rules looked at, for the Japan-wide check of Overture. */
-  evidenceRequest: { key: string; base: string }[];
-  /** Requested base names with no Japan-wide count in the evidence. */
+  /** Every base name and matched brand the rules looked at, for the Japan-wide check of Overture. */
+  evidenceRequest: {
+    bases: { key: string; base: string }[];
+    brands: { id: string; name: string; keys: string[] }[];
+  };
+  /** Requested base names and brands with no Japan-wide count in the evidence. */
   missingEvidence: number;
   /** Number of public places matched by each brand, so over-matching brands stand out. */
   perBrand: { id: string; name: string; path: string; places: number }[];
@@ -101,6 +132,9 @@ export function planChains(inputs: PlanInputs): ChainPlan {
   const byGers = new Map(records.map((record, position) => [record.id, position]));
   const matches: PlaceMatch[] = [];
   const requested = new Map<string, string>();
+  const requestedBrands = new Map<string, { id: string; name: string; keys: string[] }>();
+  const keyedRecords = records.map((record) => keyedName(record.name));
+  const brandCounts = new Map<string, PlaceCounts | null>();
   const perBrand = new Map<string, { id: string; name: string; path: string; places: number }>();
 
   const reading = (
@@ -110,7 +144,7 @@ export function planChains(inputs: PlanInputs): ChainPlan {
   ): Reading & { hasSuffix: boolean } => {
     const group = index.group(key);
     const members = (group?.members ?? []).map((member) => index.records[member]!);
-    const outside = evidence?.get(key)?.outside ?? 0;
+    const outside = evidence?.bases.get(key)?.outside ?? 0;
     return {
       key,
       base,
@@ -125,12 +159,52 @@ export function planChains(inputs: PlanInputs): ChainPlan {
     };
   };
 
+  /**
+   * Nagasaki's branches and the rest of Japan's for a base name, or null without a Japan-wide count.
+   * Branches are the places whose name carries a branch suffix, on both sides: a bare name elsewhere is
+   * as often an unrelated shop of the same name.
+   */
+  const baseCounts = (key: string): PlaceCounts | null => {
+    const found = evidence?.bases.get(key);
+    if (found?.nagasaki === undefined) return null;
+    const branches = (index.group(key)?.members ?? []).filter(
+      (member) => index.chosenBase(member).suffix !== null,
+    );
+    const other = branches.filter((member) => index.records[member]!.prefecture === "other").length;
+    return { nagasaki: branches.length - other + found.nagasaki, elsewhere: other + found.outside };
+  };
+  /** The same for a brand, by every name it goes by. */
+  const brandCountsOf = (brand: NsiBrand): PlaceCounts | null => {
+    const cached = brandCounts.get(brand.id);
+    if (cached !== undefined) return cached;
+    const found = evidence?.brands?.get(brand.id);
+    let counts: PlaceCounts | null = null;
+    if (found) {
+      counts = { nagasaki: found.nagasaki, elsewhere: found.elsewhere };
+      keyedRecords.forEach((keyed, position) => {
+        if (index.isDouble(position)) return;
+        if (!brand.keys.some((key) => startsWithBrandKey(keyed, key))) return;
+        if (records[position]!.prefecture === "other") counts!.elsewhere++;
+        else counts!.nagasaki++;
+      });
+    }
+    brandCounts.set(brand.id, counts);
+    return counts;
+  };
+  const percent = (counts: PlaceCounts) => Math.round(nagasakiShare(counts) * 100);
+
   for (const place of places) {
     const category = place.category;
     if (category === undefined) continue;
     const signals: Signal[] = [];
 
     const brand = matcher.match(place.names, category);
+    if (brand)
+      requestedBrands.set(brand.brand.id, {
+        id: brand.brand.id,
+        name: brand.brand.displayName,
+        keys: [...brand.brand.keys],
+      });
     if (brand)
       signals.push({
         kind: "brand_list",
@@ -207,11 +281,56 @@ export function planChains(inputs: PlanInputs): ChainPlan {
         signals: [local.signal],
         decision: "spare",
         note: local.note,
+        spareRules: ["local_multi_branch"],
       });
       continue;
     }
     if (signals.length === 0) continue;
     const protectedPlace = place.protectedBy.length > 0;
+
+    // Two more reasons to spare what the signals would hide. A business born in Nagasaki: every
+    // signal rests on a name of which Nagasaki prefecture holds 30% or more in Japan, so even a brand
+    // of the Name Suggestion Index gives way (it lists some regional makers). A flagship: the name
+    // marks the head shop. A signal that rests on no name (the Overture brand field) never qualifies.
+    const spareRules: SpareRule[] = [];
+    const spareNotes: string[] = [];
+    if (!protectedPlace) {
+      const families = signals.map((signal) => {
+        if (signal.kind === "brand_list" && brand)
+          return { label: brand.brand.displayName, counts: brandCountsOf(brand.brand) };
+        if (signal.kind === "branch_pattern" && found)
+          return { label: found.base, counts: baseCounts(found.key) };
+        return { label: signal.detail, counts: null };
+      });
+      if (families.every((family) => family.counts !== null && isNagasakiBorn(family.counts))) {
+        spareRules.push("nagasaki_born");
+        spareNotes.push(
+          `Nagasaki-born: ${families
+            .map(
+              (family) =>
+                `${family.counts!.nagasaki} of the ${family.counts!.nagasaki + family.counts!.elsewhere} places or branches named "${family.label}" in Japan are in Nagasaki prefecture (${percent(family.counts!)}%)`,
+            )
+            .join("; ")}`,
+        );
+      }
+      const flagship = place.names.find(isFlagshipName);
+      if (flagship !== undefined) {
+        spareRules.push("flagship");
+        spareNotes.push(`flagship: "${flagship}" names the head shop`);
+      }
+    }
+    if (spareRules.length > 0) {
+      matches.push({
+        placeId: place.id,
+        name: primaryName(place),
+        category,
+        signals,
+        decision: "spare",
+        note: spareNotes.join("; "),
+        spareRules,
+      });
+      continue;
+    }
     matches.push({
       placeId: place.id,
       name: primaryName(place),
@@ -237,15 +356,20 @@ export function planChains(inputs: PlanInputs): ChainPlan {
     }
   }
 
-  const evidenceRequest = [...requested]
-    .map(([key, base]) => ({ key, base }))
-    .sort((a, b) => a.key.localeCompare(b.key));
+  const evidenceRequest = {
+    bases: [...requested]
+      .map(([key, base]) => ({ key, base }))
+      .sort((a, b) => a.key.localeCompare(b.key)),
+    brands: [...requestedBrands.values()].sort((a, b) => a.id.localeCompare(b.id)),
+  };
+  const missingEvidence = evidence
+    ? evidenceRequest.bases.filter((item) => !evidence.bases.has(item.key)).length +
+      evidenceRequest.brands.filter((item) => !evidence.brands?.has(item.id)).length
+    : evidenceRequest.bases.length + evidenceRequest.brands.length;
   return {
     matches,
     evidenceRequest,
-    missingEvidence: evidence
-      ? evidenceRequest.filter((item) => !evidence.has(item.key)).length
-      : evidenceRequest.length,
+    missingEvidence,
     perBrand: [...perBrand.values()].sort(
       (a, b) => b.places - a.places || a.id.localeCompare(b.id),
     ),

@@ -87,10 +87,19 @@ describe("readEvidence", () => {
   it("reads the counts, and reads a missing file as no evidence", async () => {
     await write({
       release: "2026-10-21.0",
-      bases: { みもざ: { base: "ミモザ", outside: 7, examples: [] } },
+      bases: {
+        みもざ: { base: "ミモザ", outside: 7, nagasakiOutsideBox: 2, examples: [] },
+        // Written before the Nagasaki-born rule: no Nagasaki count, which stays unset, not zero.
+        ひまわり: { base: "ヒマワリ", outside: 1, examples: [] },
+      },
+      brands: {
+        "mimosa-1": { name: "ミモザ", elsewhere: 40, nagasakiOutsideBox: 3, examples: [] },
+      },
     });
     const { evidence } = await readEvidence(join(cwd, "evidence.json"), "2026-10-21.0");
-    expect(evidence?.get("みもざ")).toEqual({ outside: 7 });
+    expect(evidence?.bases.get("みもざ")).toEqual({ outside: 7, nagasaki: 2 });
+    expect(evidence?.bases.get("ひまわり")).toEqual({ outside: 1 });
+    expect(evidence?.brands?.get("mimosa-1")).toEqual({ elsewhere: 40, nagasaki: 3 });
     expect((await readEvidence(join(cwd, "absent.json"), "2026-10-21.0")).evidence).toBeUndefined();
   });
 

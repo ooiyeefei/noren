@@ -64,10 +64,10 @@ export const GENERIC_SUFFIXES: ReadonlySet<string> = new Set([
 
 /**
  * The area part of a Japanese branch suffix: "長与駅前店" gives "長与駅前", "大浦支店" gives "大浦" and
- * "2号店" gives "2号". Empty for a bare "支店" or "本店".
+ * "2号店" gives "2号". Empty for a bare "支店", "本店" or "総本店".
  */
 export function areaOf(suffix: string): string {
-  return keyedName(suffix.replace(/(支店|本店|店)$/u, "")).key;
+  return keyedName(suffix.replace(/(総本店|支店|本店|店)$/u, "")).key;
 }
 
 /** The area with a trailing 駅前 or 駅 taken off, so "長与駅前店" counts as a branch in 長与. */
