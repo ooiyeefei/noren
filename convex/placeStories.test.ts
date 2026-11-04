@@ -367,6 +367,29 @@ describe("placeStories runs", () => {
     ).toEqual({ started: 0 });
   });
 
+  it("takes an earlier story off the page when a later run finds nothing to tell", async () => {
+    const b = await setup();
+    const sourceId = await b.post("google_reviews", { n: 1 });
+    await b.post("web", { n: 2 });
+    const first = await b.startRun();
+    await b.begin(first);
+    await b.save(first, [String(sourceId)]);
+    expect(await b.t.query(api.placeStories.forPlace, { placeId: b.placeId })).not.toBeNull();
+
+    const second = await b.startRun();
+    await b.begin(second);
+    await b.t.mutation(internal.placeStories.saveStory, {
+      runId: second,
+      sentences: [],
+      postsRead: 2,
+    });
+    expect((await b.run_((ctx) => ctx.db.get("placeStoryRun", second)))?.status).toBe("nothing");
+    expect(await b.t.query(api.placeStories.forPlace, { placeId: b.placeId })).toBeNull();
+    expect(
+      await b.t.mutation(internal.placeStories.enqueue, { stewardPersonId: b.steward, limit: 5 }),
+    ).toEqual({ started: 0 });
+  });
+
   it("publishes again when a later run writes a withdrawn place's story", async () => {
     const b = await setup();
     const sourceId = await b.post("google_reviews");
