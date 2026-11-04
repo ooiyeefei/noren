@@ -17,7 +17,7 @@ import { internalMutation, mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
 import { limitContribution } from "./lib/rateLimit";
 import { isRegionLocale, regionConfig } from "./lib/region";
-import { isExcerptHeld } from "./lib/translationChecks";
+import { eraseFoundQuote, isExcerptHeld } from "./lib/translationChecks";
 import { literals, sourceStatusValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
 
@@ -270,6 +270,7 @@ export const remove = mutation({
       }
     }
     await ctx.db.patch("source", sourceId, { status: "hidden" });
+    await eraseFoundQuote(ctx, source);
     if (person.role === "steward" && source.addedBy !== person._id) {
       await writeAudit(ctx, {
         actorKind: "person",
@@ -376,6 +377,7 @@ export const recordCheck = internalMutation({
       ...(result === "gone" ? { status: "gone" as const } : {}),
     });
     if (result === "gone") {
+      await eraseFoundQuote(ctx, source);
       await writeAudit(ctx, {
         actorKind: "system",
         action: "source.gone",

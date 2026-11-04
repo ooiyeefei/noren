@@ -75,6 +75,8 @@ export const publicMessages = defineMessages({
     privacy:
       "読み込むと、そのサービスがCookieを設定したり、閲覧したことを把握したりする場合があります。",
     originals: "すべての投稿に、元の投稿へのリンクを付けています。",
+    foundPosts:
+      "Noren は、場所について書かれた公開投稿を自ら探し、自動の確認で、話や役立つ情報を伝えるものを選んでいます。選んだ投稿については、280文字以内の引用と機械翻訳を保存し、投稿者をそのサービス上の表示名で記載し、元の投稿へリンクします。投稿を取り下げると、引用と翻訳は消去されます。",
     removal: "削除のご依頼先：{contact}",
     contactPending: "削除依頼の連絡先：未公表です。",
     operator: "運営者：{name}",
@@ -156,6 +158,8 @@ export const publicMessages = defineMessages({
     clickToLoad: "Nothing loads from a post platform until you press that post’s load button.",
     privacy: "The platform may then set cookies and see your visit.",
     originals: "Every post links to its original.",
+    foundPosts:
+      "Noren also looks for public posts about a place by itself, and an automatic check picks the ones that tell a story or a useful detail. For each it keeps a word-for-word quote of up to 280 characters and a machine translation, names the author as the platform shows them and links to the original. Taking a post down erases its quote and translation.",
     removal: "To ask for removal, contact: {contact}",
     contactPending: "Removal contact: not yet published.",
     operator: "Operator: {name}",

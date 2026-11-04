@@ -600,6 +600,7 @@ describe("the steward's page", () => {
     expect((await w.rows()).map((row) => row.status)).toEqual(["hidden", "hidden"]);
     const sourceId = (await w.rows())[0]!.sourceId!;
     expect((await w.b.t.run((ctx) => ctx.db.get("source", sourceId)))!.status).toBe("hidden");
+    expect((await w.rows()).map((row) => row.text)).toEqual(["", ""]);
     // The attach no longer sees them.
     expect(
       await w.b.t.mutation(internal.storyFinder.attachAcceptedBatch, {
@@ -607,6 +608,65 @@ describe("the steward's page", () => {
         limit: 10,
       }),
     ).toEqual({ attached: 0, considered: 0 });
+  });
+
+  describe("taking a found post down erases its quote and translations", () => {
+    async function linked() {
+      const w = await world();
+      await w.ingest([w.candidate(posts.google)]);
+      const [row] = await w.rows();
+      const { sourceId } = await w.record(row!._id, {});
+      await w.b.t.run((ctx) =>
+        ctx.db.insert("sourceExcerptTranslation", {
+          sourceId: sourceId!,
+          lang: "en",
+          text: "A made-up translation.",
+          sourceText: QUOTE,
+          origin: "machine",
+          modelVersion: "mock/translator",
+        }),
+      );
+      const held = () =>
+        w.b.t.run(async (ctx) => ({
+          source: await ctx.db.get("source", sourceId!),
+          translations: await ctx.db.query("sourceExcerptTranslation").collect(),
+        }));
+      expect((await held()).source!.excerpt).toBe(QUOTE);
+      expect((await held()).translations).toHaveLength(1);
+      return { w, row: row!, sourceId: sourceId!, held };
+    }
+    const erased = (state: { source: unknown; translations: unknown[] }) => {
+      expect(state.source).toMatchObject({ foundKind: "story" });
+      expect((state.source as { excerpt?: string }).excerpt).toBeUndefined();
+      expect((state.source as { excerptLang?: string }).excerptLang).toBeUndefined();
+      expect(state.translations).toEqual([]);
+    };
+
+    it("by the steward's hide", async () => {
+      const { w, row, held } = await linked();
+      await w.b.as("steward").mutation(api.storyFinder.hide, { candidateId: row._id });
+      erased(await held());
+      expect((await w.rows())[0]!.text).toBe("");
+    });
+
+    it("by removing the source", async () => {
+      const { w, sourceId, held } = await linked();
+      await w.b.as("steward").mutation(api.sources.remove, { sourceId });
+      erased(await held());
+    });
+
+    it("when the original is found to be gone", async () => {
+      const { w, sourceId, held } = await linked();
+      await w.b.t.mutation(internal.sources.recordCheck, { sourceId, result: "gone" });
+      erased(await held());
+    });
+
+    it("a hidden post's quote still keeps a copy of it out", async () => {
+      const { w, row } = await linked();
+      await w.b.as("steward").mutation(api.storyFinder.hide, { candidateId: row._id });
+      const shown = await w.b.t.run((ctx) => ctx.db.query("shownQuote").collect());
+      expect(shown).toEqual([expect.objectContaining({ status: "hidden" })]);
+    });
   });
 
   it("starting a check needs the model setting and a real steward", async () => {
