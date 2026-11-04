@@ -300,7 +300,7 @@ describe("the checker on the wire", () => {
         },
       ],
     });
-    expect(body.max_tokens).toBe(1000);
+    expect(body.max_tokens).toBe(3000);
     expect(body.messages[0]).toMatchObject({ role: "system" });
     expect(body.messages[0].content.startsWith("Reasoning strength: low")).toBe(true);
     expect(body.messages[1].content).toContain(UNFAITHFUL);
