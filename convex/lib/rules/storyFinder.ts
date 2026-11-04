@@ -51,8 +51,14 @@ export function registerStoryFinderRules(triggers: Triggers<DataModel>) {
   triggers.register("mentionCandidate", async (_ctx, change) => {
     const candidate = change.newDoc;
     if (candidate === null) return;
-    if (candidate.status === "attached" && candidate.sourceId === undefined)
-      throw violation("mention_attached_has_source", "an attached candidate names its source");
+    if (
+      candidate.status === "attached" &&
+      (candidate.sourceId === undefined || candidate.attachedAt === undefined)
+    )
+      throw violation(
+        "mention_attached_has_source",
+        "an attached candidate names its source and when it was attached",
+      );
     if (candidate.status === "rejected" && candidate.reason === undefined)
       throw violation("mention_rejected_has_reason", "a rejected candidate says why");
   });

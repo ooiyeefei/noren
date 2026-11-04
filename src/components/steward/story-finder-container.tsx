@@ -28,6 +28,7 @@ export function StoryFinderContainer({ locale, region }: { locale: Locale; regio
     author: row.author,
     postedAt: row.postedAt,
     checkedAt: row.checkedAt,
+    attachedAt: row.attachedAt,
     status: row.status,
     reason: row.reason,
     attachError: row.attachError,
@@ -45,9 +46,9 @@ export function StoryFinderContainer({ locale, region }: { locale: Locale; regio
       accepted={overview.accepted.map(toRow)}
       rejected={overview.rejected.map(toRow)}
       {...state}
-      onCheck={() =>
+      onCheck={(attach) =>
         void run("check", async () => {
-          const { scheduled } = await requestCheck({});
+          const { scheduled } = await requestCheck({ attach });
           return format(m.checkStarted, { count: String(scheduled) });
         })
       }

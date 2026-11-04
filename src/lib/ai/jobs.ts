@@ -1,4 +1,10 @@
-import type { ClaimExtractor, ExtractedClaim, Transcriber, Translator } from "../ports/index";
+import type {
+  ClaimExtractor,
+  ExtractedClaim,
+  Transcriber,
+  Translator,
+  TranslatorInputKind,
+} from "../ports/index";
 import { getRegionConfig } from "../region/registry";
 import { anchorClaims } from "./claim-extractor";
 import { aiConfig, type AiModelConfig, type TranscriptionConfig } from "./config";
@@ -140,6 +146,8 @@ export async function translateJob(
     listUntranslated(): Promise<{ claimId: string; text: string; from: string; to: string }[]>;
     placeNames(): Promise<{ lang: string; value: string; isPrimary: boolean }[]>;
     makeTranslator(config: AiModelConfig): Translator;
+    /** What the items are (default "claim"); a found post's quote is "public_post_quote". */
+    inputKind?: TranslatorInputKind;
     saveMachineTranslation(args: {
       claimId: string;
       lang: string;
@@ -184,7 +192,7 @@ export async function translateJob(
             {
               from,
               to,
-              inputKind: "claim",
+              inputKind: deps.inputKind ?? "claim",
               glossary: placeGlossary(names, from, to),
             },
           );

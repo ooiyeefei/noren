@@ -1,10 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EmbedView, type EmbedSourceView } from "@/components/embeds/embed-view";
+import { checkDate } from "@/components/place/check-state";
 import { quoted } from "@/components/embeds/quoted";
 import { LatestStories } from "@/components/public/latest-stories";
 import { toEmbedSource } from "@/components/public/mapping";
 import { StoryFinderView, type StoryFinderProps } from "@/components/steward/story-finder-view";
+import { format } from "@/lib/i18n";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { publicMessages } from "@/lib/i18n/messages/public";
 import { storyFinderMessages } from "@/lib/i18n/messages/story-finder";
@@ -142,6 +144,7 @@ const row = (overrides: Partial<StoryFinderProps["attached"][number]> = {}) => (
   sourceHidden: false,
   ...overrides,
 });
+const SHOWN_AT = Date.UTC(2026, 10, 4, 3);
 const props = (locale: "ja" | "en"): StoryFinderProps => ({
   locale,
   counts: [
@@ -149,9 +152,12 @@ const props = (locale: "ja" | "en"): StoryFinderProps => ({
     { status: "rejected", platform: "google_reviews", count: 2 },
     { status: "pending", platform: "instagram", count: 4 },
   ],
-  attached: [row()],
-  accepted: [],
-  rejected: [row({ id: "c2", status: "rejected", reason: "unverifiable", kind: "story" })],
+  attached: [row({ attachedAt: SHOWN_AT })],
+  accepted: [row({ id: "c3", status: "accepted", attachError: "author_limit" })],
+  rejected: [
+    row({ id: "c2", status: "rejected", reason: "unverifiable", kind: "story" }),
+    row({ id: "c4", status: "rejected", reason: "place_not_named", kind: "story" }),
+  ],
   onCheck: () => {},
   onAttach: () => {},
   onHide: () => {},
@@ -169,6 +175,11 @@ describe("the steward's story finder page", () => {
       expect(html).toMatch(/<td[^>]*>5<\/td>/);
       for (const label of [
         m.check,
+        m.checkOnly,
+        m.linkedIntro,
+        format(m.shownOn, { date: checkDate(SHOWN_AT, locale) }),
+        m.author_limit,
+        m.place_not_named,
         m.attach,
         m.linkedTitle,
         m.rejectedTitle,
@@ -177,7 +188,8 @@ describe("the steward's story finder page", () => {
         m.instagram,
       ])
         expect(html).toContain(encoded(label));
-      expect(html.match(new RegExp(`>${encoded(m.hide)}<`, "g"))).toHaveLength(1);
+      // Hide on the linked post and the held one; a rejected post has nothing to hide.
+      expect(html.match(new RegExp(`>${encoded(m.hide)}<`, "g"))).toHaveLength(2);
       expect(html).toContain('rel="noopener noreferrer nofollow"');
     },
   );

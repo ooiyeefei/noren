@@ -103,7 +103,11 @@ export interface Transcriber {
   transcribe(audio: Uint8Array, options: { language: string }): Promise<Transcription>;
 }
 
-export const TRANSLATOR_INPUT_KINDS = ["claim", "note", "live_chunk"] as const;
+/**
+ * public_post_quote: the short verbatim quote of a public post the story finder found and the owner
+ * chose to show (2026-11-04). It is a stranger's words, so it is translated as untrusted data.
+ */
+export const TRANSLATOR_INPUT_KINDS = ["claim", "note", "live_chunk", "public_post_quote"] as const;
 export type TranslatorInputKind = (typeof TRANSLATOR_INPUT_KINDS)[number];
 export type TranslationItem = { itemId: string; text: string };
 export type TranslatedItem = TranslationItem & { modelVersion: string };
@@ -118,7 +122,8 @@ export type TranslationOptions = {
 };
 export type TranslationResult = { ok: true; items: TranslatedItem[] } | Refusal;
 
-/** Translates eligible consented text only; refuses other kinds, never platform content.
+/** Translates eligible consented text only; refuses other kinds. The only platform content is a
+ * found post's short quote (public_post_quote), which the owner chose to show.
  * Callers verify consent and eligibility; output stays labelled machine until human confirmation.
  */
 export interface Translator {
