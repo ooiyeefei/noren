@@ -32,6 +32,7 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
   const args = place ? { placeId: place._id } : "skip";
   const sources = useQuery(api.sources.listForPlace, args);
   const stories = useQuery(api.stories.listForPlace, args);
+  const placeStory = useQuery(api.placeStories.forPlace, args);
   const page = useQuery(api.pages.getPublished, args);
   const { isLoading, isAuthenticated } = useConvexAuth();
   const confirm = useMutation(api.checks.confirm);
@@ -71,6 +72,7 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
       place={place}
       sources={sources}
       stories={stories}
+      placeStory={placeStory ?? undefined}
       page={page}
       checks={checks}
       story={story}

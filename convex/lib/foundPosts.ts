@@ -47,9 +47,34 @@ export async function eraseCandidate(
 }
 
 /**
+ * A story's sentences rest on the words they cite, so a post coming off the page takes out every
+ * sentence citing it, and the place's run logs, which can quote it.
+ */
+async function eraseFromPlaceStory(ctx: MutationCtx, source: Doc<"source">) {
+  const story = await ctx.db
+    .query("placeStory")
+    .withIndex("by_placeId", (q) => q.eq("placeId", source.placeId))
+    .first();
+  if (story !== null) {
+    const sentences = story.sentences.filter(
+      ({ citations }) => !citations.some(({ sourceId }) => sourceId === source._id),
+    );
+    if (sentences.length === 0) await ctx.db.delete("placeStory", story._id);
+    else if (sentences.length < story.sentences.length)
+      await ctx.db.patch("placeStory", story._id, { sentences });
+  }
+  const runs = await ctx.db
+    .query("placeStoryRun")
+    .withIndex("by_placeId", (q) => q.eq("placeId", source.placeId))
+    .take(50);
+  for (const run of runs)
+    if (run.steps.length > 0) await ctx.db.patch("placeStoryRun", run._id, { steps: [] });
+}
+
+/**
  * Erases what Noren holds of a found post's words once it comes off the page, however it did: the
- * source's quote, every translation and its check, and the candidate's text. Does nothing to a
- * member's post, whose note is the member's own words.
+ * source's quote, every translation and its check, the candidate's text, and any story sentence
+ * citing it. Does nothing to a member's post, whose note is the member's own words.
  */
 export async function eraseFoundPost(
   ctx: MutationCtx,
@@ -66,6 +91,7 @@ export async function eraseFoundPost(
     await ctx.db.delete("sourceExcerptTranslation", translation._id);
   }
   await ctx.db.patch("source", source._id, { excerpt: undefined, excerptLang: undefined });
+  await eraseFromPlaceStory(ctx, source);
   const candidate = await ctx.db
     .query("mentionCandidate")
     .withIndex("by_sourceId", (q) => q.eq("sourceId", source._id))
