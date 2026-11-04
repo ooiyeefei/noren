@@ -104,8 +104,6 @@ export const storyFinderTables = {
     status: v.union(v.literal("attached"), v.literal("hidden")),
     /** The quote reduced to its letters and digits (quoteFingerprint). */
     fingerprint: v.string(),
-    /** How many distinct character trigrams the fingerprint has (quoteGrams). */
-    grams: v.number(),
   })
     .index("by_regionId_and_status", ["regionId", "status"])
     .index("by_candidateId", ["candidateId"]),

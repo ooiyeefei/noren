@@ -15,14 +15,15 @@ import {
   authorKey,
   capQuote,
   contactIn,
-  DUPLICATE_QUOTE_SIMILARITY,
+  COPY_CONTAINMENT,
+  CopyIndex,
   guessLang,
   hasAdMarker,
   isVerbatim,
-  mayBeCopies,
   namesPlace,
   normaliseWhitespace,
-  quoteSimilarity,
+  quoteContainment,
+  quoteFingerprint,
   registrableHost,
   textWeight,
   translationFits,
@@ -183,6 +184,15 @@ describe("decideMention: checks that need no model", () => {
     ["予約は長崎カフェ.jpで", "url"],
     ["See mock.xn--p1ai today", "url"],
     ["ｍｏｃｋ－ｃａｆｅ．ｊｐで予約", "url"],
+    // The dots IDNA reads as ".", between ASCII labels: ideographic, fullwidth, halfwidth.
+    ["mock-cafe。jpで予約", "url"],
+    ["mock-cafe．jpで予約", "url"],
+    ["mock-cafe｡jpで予約", "url"],
+    ["mock-cafe 。 com で予約", "url"],
+    ["www。mock-cafe。com", "url"],
+    // A last label in any script after a real dot.
+    ["詳しくは架空珈琲.みんなを見てね", "url"],
+    ["予約は架空.コムから", "url"],
     // Dots spelled out to get past a filter.
     ["mock-cafe dot com で予約", "url"],
     ["mock-cafe (dot) com で予約", "url"],
@@ -192,8 +202,11 @@ describe("decideMention: checks that need no model", () => {
     ["mock-cafe . jp で予約", "url"],
     ["mock-cafeドットcomで予約", "url"],
     ["mock-cafe（ドット）comで予約", "url"],
+    ["mock-cafe[。]com で予約", "url"],
+    ["架空珈琲（。）みんなで予約", "url"],
     ["hxxps://mock-cafe/booking", "url"],
     ["問い合わせは mock@example.com まで。", "email"],
+    ["問い合わせは mock@example。com まで。", "email"],
     ["電話は 095-000-0000 です。", "phone"],
     ["電話は０９５（０００）００００です。", "phone"],
     ["Call +81 95 000 0000 today.", "phone"],
@@ -223,33 +236,123 @@ describe("decideMention: checks that need no model", () => {
       expect(contactIn(quote), quote).toBeNull();
   });
 
+  it("Japanese sentence ends are not domains, though IDNA reads the same dots as one", () => {
+    for (const quote of [
+      "「ありがとう。また来ます」と店主に言いました。",
+      "ありがとう．また来ます。",
+      "ありがとう｡また来ます｡",
+      // An ASCII word on one side only: the other side is a Japanese sentence.
+      "雰囲気の良いcafe。また行きたいです。",
+      "美味しかった。Googleで見つけました。",
+      // "ドット" is a word too: a polka-dot cup.
+      "このドット柄のカップが可愛いお店です。",
+      // "@" for "at": lunch at the station.
+      "ランチ@長崎駅前。美味しかった。",
+      "１．５km歩きました。No．1のナポリタン。",
+    ])
+      expect(contactIn(quote), quote).toBeNull();
+    // The price of letting that prose through: a Japanese domain written with "。" reads as two
+    // sentences and is not caught. Written with ".", it is (above).
+    expect(contactIn("架空珈琲。みんな")).toBeNull();
+  });
+
   it("errs towards refusing: text that only looks like an address costs the quote", () => {
     // Accepted false positives: a missing space after a full stop, a "dot com" in prose.
     expect(contactIn("The coffee was great.Will come back.")).toBe("url");
     expect(contactIn("It opened in the dot com years.")).toBe("url");
+    expect(contactIn("Thank you。See you again.")).toBe("url");
   });
+
+  const JA_QUOTE = "祖父の代から続く焙煎所で、毎朝豆を焼いています。港が見える窓際の席が人気です。";
+  const EN_QUOTE =
+    "Test Shop roasts its beans by hand every morning before the harbour ferries leave.";
 
   it("an edited copy of a quote is still a copy; a different story is not", () => {
-    const a = "祖父の代から続く焙煎所で、毎朝豆を焼いています。港が見える窓際の席が人気です。";
     // Other punctuation, spacing and width, and one word changed.
     const edited = "祖父の代から続く焙煎所で 毎朝豆を焼いています!! 港が見える窓辺の席が人気です";
-    const c = "昭和の喫茶店らしいナポリタンと、店主が描いた港の絵が迎えてくれます。";
-    expect(quoteSimilarity(a, edited)).toBeGreaterThanOrEqual(DUPLICATE_QUOTE_SIMILARITY);
-    expect(quoteSimilarity(a, c)).toBeLessThan(0.2);
-    const en = "Test Shop roasts its beans by hand every morning before the harbour ferries leave.";
+    const other = "昭和の喫茶店らしいナポリタンと、店主が描いた港の絵が迎えてくれます。";
+    expect(quoteContainment(JA_QUOTE, edited)).toBeGreaterThanOrEqual(COPY_CONTAINMENT);
+    expect(quoteContainment(JA_QUOTE, other)).toBeLessThan(0.2);
     const enEdited =
       "Test Shop roasts its beans by hand each morning, before the harbour ferries leave!";
-    expect(quoteSimilarity(en, enEdited)).toBeGreaterThanOrEqual(DUPLICATE_QUOTE_SIMILARITY);
+    expect(quoteContainment(EN_QUOTE, enEdited)).toBeGreaterThanOrEqual(COPY_CONTAINMENT);
     expect(
-      quoteSimilarity(en, "At Test Shop the owner keeps her grandfather's tin coffee scoop."),
+      quoteContainment(
+        EN_QUOTE,
+        "At Test Shop the owner keeps her grandfather's tin coffee scoop.",
+      ),
     ).toBeLessThan(0.3);
+    // Three words changed in a short quote still scores about 0.7, which is why the threshold is
+    // not set higher.
+    expect(
+      quoteContainment(
+        EN_QUOTE,
+        "Test Shop roasts the beans by hand each day before the harbour boats leave.",
+      ),
+    ).toBeGreaterThanOrEqual(COPY_CONTAINMENT);
   });
 
-  it("skips comparing quotes whose lengths rule out a copy", () => {
-    expect(mayBeCopies(100, 85)).toBe(true);
-    expect(mayBeCopies(85, 100)).toBe(true);
-    expect(mayBeCopies(100, 70)).toBe(false);
-    expect(mayBeCopies(0, 0)).toBe(false);
+  it("a copy with new text before and after it is still a copy, edited or not", () => {
+    const wrappedJa = `長崎旅行の二日目に寄りました。${JA_QUOTE}次は夜に行きたいと思います。おすすめです。`;
+    const wrappedEn = `We loved our trip! ${EN_QUOTE} Highly recommended to anyone visiting the city this autumn.`;
+    const wrappedAndEdited =
+      "Honestly? Test Shop roasts its beans by hand each morning, before the harbour ferries leave!! Go early, it fills up fast with locals and tourists.";
+    expect(quoteContainment(JA_QUOTE, wrappedJa)).toBe(1);
+    expect(quoteContainment(wrappedEn, EN_QUOTE)).toBe(1);
+    expect(quoteContainment(EN_QUOTE, wrappedAndEdited)).toBeGreaterThan(0.85);
+  });
+
+  it("two people's own short quotes about one shop, sharing its name, are not copies", () => {
+    for (const [a, b] of [
+      [
+        "架空珈琲 試験堂の店主は、今も一杯ずつ手で豆を挽いています。",
+        "架空珈琲 試験堂の二階の窓から、港に入るフェリーが見えました。",
+      ],
+      [
+        "架空珈琲 試験堂は昭和三十年から続く焙煎所で、とても雰囲気が良かったです。",
+        "架空珈琲 試験堂のナポリタンはとても美味しくて、量も多かったです。",
+      ],
+      [
+        "Fictional Test Coffee House has the best cinnamon toast in town.",
+        "Fictional Test Coffee House stays open late on Friday nights.",
+      ],
+      // The closest pair found: the name and a stock phrase in common, about 0.57.
+      [
+        "Test Shop is a lovely little place, the owner was so kind to us.",
+        "Test Shop is a lovely little place with a view of the harbour.",
+      ],
+    ] as const)
+      expect(quoteContainment(a, b), `${a} / ${b}`).toBeLessThan(COPY_CONTAINMENT);
+  });
+
+  it("errs towards refusing: a short quote that is mostly another's stock phrase is a copy", () => {
+    // About 0.66: the name and "is a lovely little place" are two thirds of the shorter quote.
+    expect(
+      quoteContainment(
+        "Test Shop is a lovely little place, the owner was kind.",
+        "Test Shop is a lovely little place with a view of the harbour.",
+      ),
+    ).toBeGreaterThanOrEqual(COPY_CONTAINMENT);
+  });
+
+  it("CopyIndex compares a quote with every indexed one, whatever their lengths", () => {
+    const index = new CopyIndex<string>();
+    index.add("ja", quoteFingerprint(JA_QUOTE));
+    index.add("short", quoteFingerprint("Test Shop stays open late on Friday nights."));
+    index.add(
+      "long",
+      quoteFingerprint(`We loved our trip! ${EN_QUOTE} Go early, it fills up fast.`),
+    );
+    // A new quote wrapping an indexed one, and a new quote cut from a longer indexed one.
+    expect(index.copyOf(quoteFingerprint(`長崎で。${JA_QUOTE}また行きます。`))).toBe("ja");
+    expect(index.copyOf(quoteFingerprint(EN_QUOTE))).toBe("long");
+    // A quote is not a copy of itself, and a different quote about the shop is not a copy.
+    expect(index.copyOf(quoteFingerprint(JA_QUOTE), "ja")).toBeUndefined();
+    expect(
+      index.copyOf(quoteFingerprint("Test Shop has the best cinnamon toast in town.")),
+    ).toBeUndefined();
+    expect(index.copyOf("")).toBeUndefined();
+    expect(new CopyIndex<string>().copyOf(quoteFingerprint(EN_QUOTE))).toBeUndefined();
   });
 
   describe("authorKey: only identifiers the platform vouches for", () => {

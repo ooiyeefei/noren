@@ -2,7 +2,7 @@
 import { MockLanguageModelV4 } from "ai/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as languageModels from "../src/lib/ai/claim-extractor";
-import { quoteFingerprint, quoteGrams, textWeight } from "../src/lib/story-finder/mention";
+import { quoteFingerprint, textWeight } from "../src/lib/story-finder/mention";
 import { addPerson, addPlace, addSource, errorCode, newBackend } from "../tests/convex/fixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -675,6 +675,43 @@ describe("checks that do not depend on the model", () => {
     expect((await w.rows())[1]).toMatchObject({ reason: "duplicate_quote" });
   });
 
+  it("a copy wrapped in new text is refused; another person's short quote about the shop is not", async () => {
+    const w = await world();
+    const original =
+      "Test Shop roasts its beans by hand every morning before the harbour ferries leave.";
+    const wrapped = `We loved our trip! ${original} Highly recommended to anyone visiting this autumn.`;
+    const own = "Test Shop has the best cinnamon toast in town, and the owner is kind.";
+    const another = "Test Shop stays open late on Friday nights, with jazz records playing.";
+    const reddit = (id: string, author: string, text: string) =>
+      w.candidate(
+        { platform: "reddit", url: `https://www.reddit.com/r/mocktravel/comments/${id}/post/` },
+        { text: `${MARKER} ${text}`, authorHandle: author, authorUrl: undefined },
+      );
+    await w.ingest([
+      reddit("mock11", "u/one", original),
+      reddit("mock12", "u/two", wrapped),
+      reddit("mock13", "u/three", own),
+      reddit("mock14", "u/four", another),
+    ]);
+    const rows = await w.rows();
+    const byText = (text: string) => rows.find((row) => row.text === `${MARKER} ${text}`)!;
+    // Checked without linking, then linked in one batch: each must see the ones linked before it.
+    for (const quote of [original, wrapped, own, another])
+      await w.record(byText(quote)._id, { evidence: "Test Shop", quote }, false);
+    expect(
+      await w.b.t.mutation(internal.storyFinder.attachAcceptedBatch, {
+        stewardPersonId: w.steward,
+        limit: 10,
+      }),
+    ).toEqual({ attached: 3, considered: 4 });
+    const after = await w.rows();
+    const statusOf = (text: string) => after.find((row) => row.text === `${MARKER} ${text}`);
+    expect(statusOf(original)).toMatchObject({ status: "attached" });
+    expect(statusOf(wrapped)).toMatchObject({ status: "rejected", reason: "duplicate_quote" });
+    expect(statusOf(own)).toMatchObject({ status: "attached" });
+    expect(statusOf(another)).toMatchObject({ status: "attached" });
+  });
+
   it("compares with every shown quote in the region, not only those sharing a start or end", async () => {
     const w = await world();
     const target = "Test Shop keeps the harbour pilots' old coffee tins on a shelf above the till.";
@@ -685,23 +722,19 @@ describe("checks that do not depend on the model", () => {
     // Thirty other quotes shown in the region, the copied one stored last.
     await w.b.t.run(async (ctx) => {
       for (let i = 0; i < 30; i++) {
-        const fingerprint = quoteFingerprint(`Test Shop story number ${i}: ${"xyz".repeat(i)}`);
         await ctx.db.insert("shownQuote", {
           regionId: "nagasaki",
           candidateId: await ctx.db.insert("mentionCandidate", stub(w, `seed${i}`)),
           status: "attached",
-          fingerprint,
-          grams: quoteGrams(fingerprint).size,
+          fingerprint: quoteFingerprint(`Test Shop story number ${i}: ${"xyz".repeat(i)}`),
         });
       }
       // Edited at both ends, so it shares neither its first nor its last words with the target.
-      const fingerprint = quoteFingerprint(copied);
       await ctx.db.insert("shownQuote", {
         regionId: "nagasaki",
         candidateId: await ctx.db.insert("mentionCandidate", stub(w, "seed-copy")),
         status: "hidden",
-        fingerprint,
-        grams: quoteGrams(fingerprint).size,
+        fingerprint: quoteFingerprint(copied),
       });
     });
     await w.ingest([w.candidate(posts.reddit, { text: `${MARKER} ${target}` })]);
@@ -721,7 +754,6 @@ describe("checks that do not depend on the model", () => {
           candidateId,
           status: i % 2 ? "attached" : "hidden",
           fingerprint: `q${i}`,
-          grams: 1,
         });
     });
     await w.ingest([w.candidate(posts.reddit, { text: `${MARKER} ${EN_QUOTE}` })]);

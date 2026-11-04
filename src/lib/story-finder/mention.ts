@@ -178,15 +178,41 @@ export function namesPlace(text: string, names: readonly string[]): boolean {
 /** A domain label in any script, internationalised names included. */
 const LABEL = String.raw`[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?`;
 /**
- * A domain's last label: ASCII, starting with a letter and ending with one (so at least two
+ * A domain's last label in ASCII: starting with a letter and ending with one (so at least two
  * letters: "e.g", "1.5km" and "ver.2" are not domains), or punycode (xn--...). Any such label counts,
  * not a list of known ones, since new top-level domains appear all the time.
  */
-const TOP_LABEL = String.raw`(?:xn--[a-z0-9-]+|[a-z][a-z0-9-]*[a-z])`;
-/** A dot, or a dot spelled out to get past a filter: " . ", "(dot)", "[.]", "{dot}", " dot ", "ドット". */
-const DOT = String.raw`(?:\.|\s+\.\s+|\s*[(\[{<]\s*(?:\.|dot|ドット|点)\s*[)\]}>]\s*|\s+dot\s+|\s*ドット\s*)`;
+const ASCII_TOP_LABEL = String.raw`(?:xn--[a-z0-9-]+|[a-z][a-z0-9-]*[a-z])`;
+/** A last label in any script, as in 例え.みんな: two or more letters. */
+const ANY_TOP_LABEL = String.raw`(?:${ASCII_TOP_LABEL}|\p{L}{2,})`;
+/** A dot in brackets, written to get past a filter: "(dot)", "[.]", "{。}", "（ドット）". */
+const BRACKETED_DOT = String.raw`\s*[(\[{<]\s*(?:\.|。|dot|ドット|点)\s*[)\]}>]\s*`;
+/**
+ * A dot spelled out in running text: " . ", " dot ", "ドット". These are also ordinary words (a
+ * "ドット柄" cup is a polka-dot one), so the label after them must be ASCII to count.
+ */
+const SPELLED_DOT = String.raw`(?:\s+\.\s+|\s+dot\s+|\s*ドット\s*)`;
 /** label.label, however the dot is written; the top label may be followed by any non-ASCII text. */
-const DOMAIN = new RegExp(`${LABEL}${DOT}${TOP_LABEL}(?![a-z0-9-])`, "iu");
+const DOMAIN = new RegExp(
+  `${LABEL}(?:(?:\\.|${BRACKETED_DOT})${ANY_TOP_LABEL}|${SPELLED_DOT}${ASCII_TOP_LABEL})(?![a-z0-9-])`,
+  "iu",
+);
+/** The dots IDNA treats as ".": ideographic, fullwidth and halfwidth ideographic full stops. */
+const IDNA_DOTS = /[。．｡]/gu;
+/**
+ * One of those dots between ASCII domain characters, as in "example。com". Japanese prose ends its
+ * sentences with "。" between Japanese words (「ありがとう。また来ます」), which is left alone.
+ */
+const ASCII_IDNA_DOT = /(?<=[a-z0-9])\s*。\s*(?=[a-z0-9])/giu;
+
+/**
+ * The copy of a quote that contact checks read: NFKC (fullwidth letters and digits become ASCII),
+ * with an IDNA dot between ASCII labels read as ".". The fullwidth "．" is made "。" first, since
+ * NFKC alone would make it an ASCII dot even between Japanese words, where it ends a sentence.
+ */
+function detectionCopy(quote: string): string {
+  return quote.replace(IDNA_DOTS, "。").normalize("NFKC").replace(ASCII_IDNA_DOT, ".");
+}
 
 /**
  * What in a quote would let a post advertise or reach someone through Noren: a web address (any
@@ -195,7 +221,7 @@ const DOMAIN = new RegExp(`${LABEL}${DOT}${TOP_LABEL}(?![a-z0-9-])`, "iu");
  * refusing: a quote that only looks like it has an address is dropped, which costs one quote.
  */
 export function contactIn(quote: string): "url" | "email" | "phone" | "handle" | null {
-  const text = quote.normalize("NFKC");
+  const text = detectionCopy(quote);
   if (/[^\s@]+@[^\s@]+\.[^\s@]+/u.test(text)) return "email";
   if (/[a-z][a-z0-9+.-]*:\/\/|www\./iu.test(text) || DOMAIN.test(text)) return "url";
   if (/(?:^|[^\p{L}\p{N}_])@[\p{L}\p{N}_.]{2,}/u.test(text)) return "handle";
@@ -259,32 +285,80 @@ export function quoteGrams(fingerprint: string): Set<string> {
   return grams;
 }
 
-/** The Jaccard index of two trigram sets, 0 to 1. */
-export function gramSimilarity(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
-  if (!a.size || !b.size) return 0;
+/**
+ * The share of the smaller trigram set that the other set holds too (containment), 0 to 1. A copy
+ * keeps most of its trigrams through small edits and however much new text is put around it, so it
+ * scores high; two people's own quotes about one place share its name and a few common phrases,
+ * which is a small part of either.
+ */
+export function gramContainment(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+  const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+  if (!small.size) return 0;
   let shared = 0;
-  for (const gram of a) if (b.has(gram)) shared++;
-  return shared / (a.size + b.size - shared);
+  for (const gram of small) if (large.has(gram)) shared++;
+  return shared / small.size;
 }
 
-/** How much two quotes overlap: the Jaccard index of their fingerprints' trigrams, 0 to 1. */
-export function quoteSimilarity(a: string, b: string): number {
-  return gramSimilarity(quoteGrams(quoteFingerprint(a)), quoteGrams(quoteFingerprint(b)));
+/** How much of the shorter quote's fingerprint the other quote holds too, 0 to 1. */
+export function quoteContainment(a: string, b: string): number {
+  return gramContainment(quoteGrams(quoteFingerprint(a)), quoteGrams(quoteFingerprint(b)));
 }
 
 /**
- * Quotes at least this similar are copies: the same words posted again with small edits (a changed
- * word, other punctuation, spacing or width), which survive in most trigrams of the fingerprint.
+ * Quotes with at least this containment are copies: the same words posted again, edited a little
+ * or wrapped in new text. Tests hold edited and wrapped copies above it, and two different quotes
+ * about one shop, sharing its name, below it.
  */
-export const DUPLICATE_QUOTE_SIMILARITY = 0.8;
+export const COPY_CONTAINMENT = 0.6;
 
 /**
- * Whether two trigram sets of these sizes could reach the copy threshold at all: the Jaccard index
- * is at most the smaller size over the larger, so a quote much shorter or longer is skipped unread.
+ * Shown quotes indexed by trigram, so a new quote is compared with all of them in one pass over its
+ * own trigrams. Containment has no bound by length (a short quote may sit wholly inside a long one),
+ * so no quote can be skipped for its size; the index keeps the comparison cheap instead: one count
+ * per shared trigram, then one check per indexed quote.
  */
-export function mayBeCopies(gramsA: number, gramsB: number): boolean {
-  const [small, large] = gramsA < gramsB ? [gramsA, gramsB] : [gramsB, gramsA];
-  return large > 0 && small / large >= DUPLICATE_QUOTE_SIMILARITY;
+export class CopyIndex<K> {
+  private readonly gramIds = new Map<string, number>();
+  /** For each trigram id, the indexed quotes holding it. */
+  private readonly postings: number[][] = [];
+  private readonly keys: K[] = [];
+  private readonly sizes: number[] = [];
+
+  /** Indexes a quote's fingerprint (quoteFingerprint) under its key. */
+  add(key: K, fingerprint: string): void {
+    const quote = this.keys.length;
+    const grams = quoteGrams(fingerprint);
+    this.keys.push(key);
+    this.sizes.push(grams.size);
+    for (const gram of grams) {
+      let id = this.gramIds.get(gram);
+      if (id === undefined) {
+        id = this.postings.length;
+        this.gramIds.set(gram, id);
+        this.postings.push([]);
+      }
+      this.postings[id]?.push(quote);
+    }
+  }
+
+  /** The key of an indexed quote, other than `except`, that this one copies or is a copy of. */
+  copyOf(fingerprint: string, except?: K): K | undefined {
+    const grams = quoteGrams(fingerprint);
+    if (!grams.size) return undefined;
+    const shared = new Int32Array(this.keys.length);
+    for (const gram of grams) {
+      const id = this.gramIds.get(gram);
+      for (const quote of id === undefined ? [] : (this.postings[id] ?? []))
+        shared[quote] = (shared[quote] ?? 0) + 1;
+    }
+    for (let quote = 0; quote < this.keys.length; quote++) {
+      const smaller = Math.min(grams.size, this.sizes[quote] ?? 0);
+      const key = this.keys[quote];
+      if (smaller > 0 && key !== except && (shared[quote] ?? 0) / smaller >= COPY_CONTAINMENT)
+        return key;
+    }
+    return undefined;
+  }
 }
 
 /**
