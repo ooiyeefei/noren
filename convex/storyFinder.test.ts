@@ -759,6 +759,8 @@ describe("the steward's page", () => {
   });
 
   it("lists the most recently shown posts first", async () => {
+    // A function's clock never runs behind the last commit, so start before the times set below.
+    vi.setSystemTime(Date.UTC(2026, 10, 4, 8));
     const w = await world();
     await w.ingest([w.candidate(posts.google), w.candidate(posts.instagram, { text: IG_TEXT })]);
     const [google, instagram] = await w.rows();
