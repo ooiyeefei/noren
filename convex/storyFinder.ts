@@ -2,7 +2,7 @@ import { paginationOptsValidator } from "convex/server";
 import { v, type Infer } from "convex/values";
 import { describeSource } from "../src/lib/adapters";
 import { aiConfig } from "../src/lib/ai/config";
-import { decideMention, postContext, reportMentionSchema } from "../src/lib/story-finder/decide";
+import { decideMention, postNamesPlace, reportMentionSchema } from "../src/lib/story-finder/decide";
 import {
   ABOUT_ANSWERS,
   authorKey,
@@ -11,7 +11,6 @@ import {
   guessLang,
   MENTION_KINDS,
   mentionCanonicalUrl,
-  namesPlace,
   isBareFact,
   postHasAdMarker,
   quoteFingerprint,
@@ -559,7 +558,7 @@ async function attachCandidate(
   // Checks that need no model, all of which must pass before anything is shown, so a post that
   // talked the model round still cannot publish an address, a copy or a flood.
   const quote = candidate.verdict.quote;
-  if (!namesPlace(postContext(candidate), await placeNameValues(ctx, place._id)))
+  if (!postNamesPlace(candidate, await placeNameValues(ctx, place._id)))
     return await reject("place_not_named");
   // The collector's flag from the whole page, or a label in the stored text.
   if (postHasAdMarker(candidate)) return await reject("sponsored");

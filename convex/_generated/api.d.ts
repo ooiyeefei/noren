@@ -22,6 +22,7 @@ import type * as lib_audit from "../lib/audit.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_claimEffects from "../lib/claimEffects.js";
 import type * as lib_errors from "../lib/errors.js";
+import type * as lib_foundPosts from "../lib/foundPosts.js";
 import type * as lib_gate from "../lib/gate.js";
 import type * as lib_mapCopies from "../lib/mapCopies.js";
 import type * as lib_mock from "../lib/mock.js";
@@ -83,6 +84,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/claimEffects": typeof lib_claimEffects;
   "lib/errors": typeof lib_errors;
+  "lib/foundPosts": typeof lib_foundPosts;
   "lib/gate": typeof lib_gate;
   "lib/mapCopies": typeof lib_mapCopies;
   "lib/mock": typeof lib_mock;
