@@ -11,6 +11,8 @@ Locked by the owner (2026-10-29):
 4. Invite-only until the legal pack exists.
 5. Stories, not scores.
 
+On 4 November 2026 the owner changed 1 and 2 for public posts found about a place: see FR-034 in `specs/001-noren-mvp/spec.md`.
+
 Name: Noren (product). Backlane is the phase 2 AI walking companion; Footnote is the citation under every sentence.
 
 Open: operator of record (who is named legally), domain and trademark check for Noren, live-captions provider bake-off.
@@ -157,7 +159,7 @@ Demo bar for the programme team: at least three real place pages with owner-conf
 
 ## 12. Not in the MVP
 
-Ratings or scores of any kind; scraping or Apify lanes; capacity controls for owners; native apps; paid plans; public API; federation; chat Q&A over pages; Perspective API; storing any platform content.
+Ratings or scores of any kind; scraping or Apify lanes; capacity controls for owners; native apps; paid plans; public API; federation; chat Q&A over pages; Perspective API; storing any platform content. FR-034 changed the scraping, Apify and stored-content items on 4 November 2026.
 
 ## 13. Open items
 
