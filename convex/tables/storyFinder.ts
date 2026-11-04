@@ -47,6 +47,12 @@ export const storyFinderTables = {
     /** The place the post is tagged with: Google's own name for it, an Instagram location. */
     locationName: v.optional(v.string()),
     langGuess: v.optional(v.string()),
+    /**
+     * True when the whole post carried an ad label, found by the collector before the text was cut
+     * to the stored window (which can leave a page's top or bottom label out). The check and the
+     * attach reject a flagged post as sponsored.
+     */
+    adMarker: v.optional(v.boolean()),
     searchedFor: v.string(),
     query: v.string(),
     actorId: v.string(),

@@ -70,7 +70,10 @@ export type SavedRun = {
     hitUrl?: string;
     query: string;
     title?: string;
+    /** The part of the page around the place's name; the whole page is not kept. */
     text: string;
+    /** True when the whole page carried an ad label (the page reader checks it before cutting). */
+    adMarker?: boolean;
     author?: string;
     publishedAt?: number;
   }[];
@@ -235,6 +238,7 @@ async function readPages(
       query: hit.planned.query,
       title: hit.title,
       text: page.text,
+      ...(page.adMarker ? { adMarker: true } : {}),
       author: page.author,
       publishedAt: page.publishedAt,
     });
