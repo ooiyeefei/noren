@@ -59,6 +59,9 @@ export const publicMessages = defineMessages({
     storyPolicy:
       "店主の話は、お店を営む本人が確認した後に掲載され、同意の撤回により非表示にできます。訪れた人が共有した話や投稿は、その人の名前とともに掲載され、本人がいつでも削除できます。",
     osmLicence: "データはOpen Database License（ODbL）で利用できます。",
+    overtureData:
+      "一部の場所は、Overture Maps Foundation（overturemaps.org）のオープンな場所データからも載せています。このデータは複数の提供元から集められており、提供元ごとにライセンスが異なります。",
+    overtureTransformed: "Foursquareのデータは、Overtureのスキーマに変換されています。",
     posts: "クリエイターが紹介した投稿",
     location: "所在地：緯度 {lat}、経度 {lng}",
     noPin: "この場所のピンはまだありません。",
@@ -136,6 +139,9 @@ export const publicMessages = defineMessages({
     storyPolicy:
       "An owner's story appears only after the person who runs the place confirms it, and can be withdrawn. Stories and posts visitors share appear with their name, and they can remove them at any time.",
     osmLicence: "The data is available under the Open Database License (ODbL).",
+    overtureData:
+      "Some places are also listed from open places data of the Overture Maps Foundation (overturemaps.org). Overture gathers it from several providers, and the data of each provider keeps its own licence.",
+    overtureTransformed: "Foursquare data was transformed to the Overture schema.",
     posts: "Posts shared by creators",
     location: "Location: latitude {lat}, longitude {lng}",
     noPin: "This place has no pin yet.",
