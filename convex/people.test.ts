@@ -233,3 +233,17 @@ describe("people.bootstrapSteward", () => {
     expect(await roleOf(id)).toBe("business_owner");
   });
 });
+
+describe("setDisplayName", () => {
+  it("changes the shown name and refuses an email address", async () => {
+    const { t, signUp } = backend();
+    const personId = await signUp("user_fictional");
+    await t.mutation(internal.people.setDisplayName, { personId, displayName: " Aiko Tanaka " });
+    expect((await t.run((ctx) => ctx.db.get("person", personId)))?.displayName).toBe("Aiko Tanaka");
+    expect(
+      await errorCode(
+        t.mutation(internal.people.setDisplayName, { personId, displayName: "aiko@example.test" }),
+      ),
+    ).toBe("invalid_input");
+  });
+});

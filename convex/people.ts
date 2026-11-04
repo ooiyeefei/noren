@@ -126,3 +126,29 @@ export const bootstrapSteward = internalMutation({
     return null;
   },
 });
+
+/**
+ * Sets the name shown beside what a person shares, from the CLI: `npx convex run people:setDisplayName`.
+ * A sign-in that carries no name leaves the fallback, and it stays until someone changes it here.
+ */
+export const setDisplayName = internalMutation({
+  args: { personId: v.id("person"), displayName: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { personId, displayName: input }) => {
+    const displayName = input.trim();
+    if (!displayName || displayName.length > 80 || displayName.includes("@")) {
+      throw appError("invalid_input", "a display name is 1 to 80 characters and not an email address");
+    }
+    const person = await ctx.db.get("person", personId);
+    if (person === null) throw appError("not_found", "no such person");
+    await ctx.db.patch("person", personId, { displayName });
+    await writeAudit(ctx, {
+      actorKind: "system",
+      action: "person.set_display_name",
+      targetType: "person",
+      targetId: personId,
+      diff: { displayName: { from: person.displayName, to: displayName } },
+    });
+    return null;
+  },
+});
