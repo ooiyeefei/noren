@@ -41,6 +41,7 @@ import type * as links from "../links.js";
 import type * as mapCopies from "../mapCopies.js";
 import type * as openText from "../openText.js";
 import type * as osmSeed from "../osmSeed.js";
+import type * as overtureSeed from "../overtureSeed.js";
 import type * as pages from "../pages.js";
 import type * as people from "../people.js";
 import type * as places from "../places.js";
@@ -94,6 +95,7 @@ declare const fullApi: ApiFromModules<{
   mapCopies: typeof mapCopies;
   openText: typeof openText;
   osmSeed: typeof osmSeed;
+  overtureSeed: typeof overtureSeed;
   pages: typeof pages;
   people: typeof people;
   places: typeof places;

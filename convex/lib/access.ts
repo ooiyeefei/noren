@@ -9,15 +9,27 @@ import { canReadPlace, type Viewer } from "./visibility";
 
 export type { Viewer } from "./visibility";
 
+/**
+ * Whether the place was listed from open map data: an OSM reference under ODbL, or an Overture
+ * reference under the licence of its source dataset. Such a listing is public before launch and is
+ * never counted as a place a person made by hand.
+ */
 export async function isOpenListing(ctx: QueryCtx, placeId: Id<"place">): Promise<boolean> {
-  const refs = await ctx.db
+  const osm = await ctx.db
     .query("placeExternalRef")
     .withIndex("by_placeId_and_provider_and_ref", (q) =>
       q.eq("placeId", placeId).eq("provider", "osm"),
     )
     .filter((q) => q.eq(q.field("licence"), "ODbL-1.0"))
     .take(1);
-  return refs.length > 0;
+  if (osm.length > 0) return true;
+  const overture = await ctx.db
+    .query("placeExternalRef")
+    .withIndex("by_placeId_and_provider_and_ref", (q) =>
+      q.eq("placeId", placeId).eq("provider", "overture"),
+    )
+    .take(1);
+  return overture.length > 0;
 }
 
 export function publicStoriesAllowed(place: Pick<Doc<"place">, "isMock" | "regionId">): boolean {

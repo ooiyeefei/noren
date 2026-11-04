@@ -1,4 +1,5 @@
 import { v, type Infer } from "convex/values";
+import { MAP_PLACE_LIMIT } from "../src/lib/domain/constants";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import {
@@ -173,8 +174,6 @@ async function detail(ctx: QueryCtx, viewer: Viewer, place: Doc<"place"> | null)
     })),
   };
 }
-
-const MAP_PLACE_LIMIT = 4000;
 
 export const listForMap = query({
   args: { regionId: v.string(), category: v.optional(v.string()) },
