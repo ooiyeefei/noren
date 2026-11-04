@@ -51,6 +51,7 @@ export const REJECT_REASONS = [
   // Checks made by code alone, whatever the model said:
   "place_not_named",
   "quote_has_contact",
+  "quote_about_health",
   "duplicate_quote",
   "quote_too_long",
   "bare_fact",
@@ -551,6 +552,17 @@ function detectionCopy(quote: string): string {
     .replace(HARD_IDNA_DOTS, ".")
     .normalize("NFKC")
     .replace(IDEOGRAPHIC_DOT_BEFORE_ASCII, ".");
+}
+
+const HEALTH =
+  /体調不良|体調を崩|入院|闘病|病気|亡くな|他界|逝去|余命|\billness\b|\bill\b|\bsick\b|passed away|\bdied\b|\bcancer\b/iu;
+
+/**
+ * Whether a quote speaks of someone's health or death. Whoever wrote it, kindly or not, a page must
+ * not tell strangers that a private person is ill. It errs towards refusing, which costs one quote.
+ */
+export function aboutHealth(quote: string): boolean {
+  return HEALTH.test(quote.normalize("NFKC"));
 }
 
 /**
