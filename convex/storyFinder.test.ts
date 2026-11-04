@@ -2,7 +2,12 @@
 import { MockLanguageModelV4 } from "ai/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as languageModels from "../src/lib/ai/claim-extractor";
-import { quoteFingerprint, textWeight } from "../src/lib/story-finder/mention";
+import {
+  quoteFingerprint,
+  storedPostText,
+  TEXT_MAX,
+  textWeight,
+} from "../src/lib/story-finder/mention";
 import { addPerson, addPlace, addSource, errorCode, newBackend } from "../tests/convex/fixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -240,6 +245,33 @@ describe("ingest", () => {
       "invalid_input",
     );
     expect(await w.rows()).toHaveLength(0);
+  });
+
+  it("keeps a long post's text around the place's name, and checks the quote against what it kept", async () => {
+    const w = await world();
+    // The only sentence of its kind comes first; the place is named after 9000 characters.
+    const first = "冒頭にだけある架空の一文で、保存される範囲の外にあります。";
+    const text = `${first}${"架空の旅行記の前置きです。".repeat(700)}${MARKER} ${QUOTE} ${"架空の後書きです。".repeat(300)}`;
+    await w.ingest([w.candidate(posts.reddit, { text })]);
+    const [row] = await w.rows();
+    // The same cut the collector makes, so text it already cut is kept as it is.
+    expect(row!.text).toBe(storedPostText(text, ["テスト店", "Test Shop"]));
+    expect(row!.text.length).toBeLessThanOrEqual(TEXT_MAX);
+    expect(row!.text).toContain(QUOTE);
+    expect(row!.text).not.toContain(first);
+    // A quote from the cut-off opening is not in the stored text, so it is not verifiable.
+    expect(await w.record(row!._id, { quote: first })).toEqual({ status: "rejected" });
+    expect((await w.rows())[0]).toMatchObject({ reason: "unverifiable" });
+    // The same post again, with the quote from the window, is shown.
+    const again = await w.ingest([
+      w.candidate(
+        { platform: "reddit", url: "https://www.reddit.com/r/mocktravel/comments/mock21/long/" },
+        { text },
+      ),
+    ]);
+    expect(again.inserted).toBe(1);
+    const second = (await w.rows()).find((r) => r.status === "pending")!;
+    expect(await w.record(second._id, {})).toMatchObject({ status: "attached" });
   });
 });
 

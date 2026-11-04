@@ -167,12 +167,65 @@ export function hasAdMarker(text: string): boolean {
 /** Whether a text names the place by one of its names, in any language or script (ignoring width,
  * case and spaces). Names shorter than two characters are too ambiguous to count. */
 export function namesPlace(text: string, names: readonly string[]): boolean {
-  const norm = (value: string) => value.normalize("NFKC").replace(/\s+/gu, "").toLowerCase();
-  const haystack = norm(text);
+  const haystack = foldForNames(text);
   return names.some((name) => {
-    const needle = norm(name);
+    const needle = foldForNames(name);
     return needle.length >= 2 && haystack.includes(needle);
   });
+}
+
+/** Text as namesPlace compares it: NFKC, no spaces, lower case. */
+function foldForNames(value: string): string {
+  return value.normalize("NFKC").replace(/\s+/gu, "").toLowerCase();
+}
+
+/**
+ * Where the place is first named in `text`, matched as namesPlace matches (width, case and spaces
+ * ignored, each character folded on its own); -1 when no name of two or more characters is found.
+ */
+export function firstMention(text: string, names: readonly string[]): number {
+  const needles = names.map(foldForNames).filter((needle) => needle.length >= 2);
+  if (!needles.length) return -1;
+  let folded = "";
+  const origin: number[] = [];
+  let index = 0;
+  for (const char of text) {
+    const part = foldForNames(char);
+    for (let i = 0; i < part.length; i++) origin.push(index);
+    folded += part;
+    index += char.length;
+  }
+  let first = -1;
+  for (const needle of needles) {
+    const at = folded.indexOf(needle);
+    const start = at === -1 ? -1 : (origin[at] ?? -1);
+    if (start !== -1 && (first === -1 || start < first)) first = start;
+  }
+  return first;
+}
+
+const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
+
+/**
+ * A post's text as it is stored and checked: trimmed, at most `max` characters. A longer text keeps
+ * a window around the first mention of the place (a third of the window before it), so the mention
+ * is never cut off; one that never names the place keeps its start. Its result is returned unchanged
+ * when passed in again, so the collector and storyFinder.ingest both apply it and agree: the
+ * collector to keep each candidate small enough to send, the server to bound what it stores. The
+ * check reads the stored text, so a quote must be in this window to pass.
+ */
+export function storedPostText(text: string, names: readonly string[], max = TEXT_MAX): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  const mention = firstMention(trimmed, names);
+  let start =
+    mention === -1 ? 0 : Math.min(Math.max(0, mention - Math.floor(max / 3)), trimmed.length - max);
+  let end = start + max;
+  // Never split a character outside the Basic Multilingual Plane (an emoji, a rare kanji).
+  if (isLowSurrogate(trimmed.charCodeAt(start))) start++;
+  if (isHighSurrogate(trimmed.charCodeAt(end - 1))) end--;
+  return trimmed.slice(start, end).trim();
 }
 
 /** A domain label in any script, internationalised names included. */
@@ -197,21 +250,27 @@ const DOMAIN = new RegExp(
   `${LABEL}(?:(?:\\.|${BRACKETED_DOT})${ANY_TOP_LABEL}|${SPELLED_DOT}${ASCII_TOP_LABEL})(?![a-z0-9-])`,
   "iu",
 );
-/** The dots IDNA treats as ".": ideographic, fullwidth and halfwidth ideographic full stops. */
-const IDNA_DOTS = /[。．｡]/gu;
 /**
- * One of those dots between ASCII domain characters, as in "example。com". Japanese prose ends its
- * sentences with "。" between Japanese words (「ありがとう。また来ます」), which is left alone.
+ * The fullwidth "．" and halfwidth "｡" full stops, which IDNA reads as ".": a dot wherever they are,
+ * since prose almost never ends a sentence with them.
  */
-const ASCII_IDNA_DOT = /(?<=[a-z0-9])\s*。\s*(?=[a-z0-9])/giu;
+const HARD_IDNA_DOTS = /[．｡]/gu;
+/**
+ * The ideographic full stop "。", which IDNA also reads as ".", where it joins a label (letters or
+ * digits in any script) to an ASCII one, as in "example。com" or "長崎カフェ。jp". Between Japanese
+ * words it ends a sentence (「ありがとう。また来ます」) and is left alone.
+ */
+const IDEOGRAPHIC_DOT_BEFORE_ASCII = /(?<=[\p{L}\p{N}])\s*。\s*(?=[a-z0-9])/giu;
 
 /**
  * The copy of a quote that contact checks read: NFKC (fullwidth letters and digits become ASCII),
- * with an IDNA dot between ASCII labels read as ".". The fullwidth "．" is made "。" first, since
- * NFKC alone would make it an ASCII dot even between Japanese words, where it ends a sentence.
+ * with the IDNA dots above read as ".". "｡" is made "." before NFKC, which would make it "。".
  */
 function detectionCopy(quote: string): string {
-  return quote.replace(IDNA_DOTS, "。").normalize("NFKC").replace(ASCII_IDNA_DOT, ".");
+  return quote
+    .replace(HARD_IDNA_DOTS, ".")
+    .normalize("NFKC")
+    .replace(IDEOGRAPHIC_DOT_BEFORE_ASCII, ".");
 }
 
 /**
@@ -285,37 +344,44 @@ export function quoteGrams(fingerprint: string): Set<string> {
   return grams;
 }
 
-/**
- * The share of the smaller trigram set that the other set holds too (containment), 0 to 1. A copy
- * keeps most of its trigrams through small edits and however much new text is put around it, so it
- * scores high; two people's own quotes about one place share its name and a few common phrases,
- * which is a small part of either.
- */
-export function gramContainment(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
-  const [small, large] = a.size <= b.size ? [a, b] : [b, a];
-  if (!small.size) return 0;
-  let shared = 0;
-  for (const gram of small) if (large.has(gram)) shared++;
-  return shared / small.size;
-}
-
-/** How much of the shorter quote's fingerprint the other quote holds too, 0 to 1. */
-export function quoteContainment(a: string, b: string): number {
-  return gramContainment(quoteGrams(quoteFingerprint(a)), quoteGrams(quoteFingerprint(b)));
-}
-
-/**
- * Quotes with at least this containment are copies: the same words posted again, edited a little
- * or wrapped in new text. Tests hold edited and wrapped copies above it, and two different quotes
- * about one shop, sharing its name, below it.
- */
+/** Copies by containment: at least this share of the smaller quote's trigrams in the other. */
 export const COPY_CONTAINMENT = 0.6;
+/** Copies by the Jaccard index (shared over all distinct trigrams of both). */
+export const COPY_JACCARD = 0.8;
+/** Containment is used only when the smaller quote has at least this many trigrams ... */
+export const CONTAINMENT_MIN_GRAMS = 20;
+/** ... and at least this share of the larger one's. */
+export const CONTAINMENT_MIN_RATIO = 0.5;
+
+/**
+ * Whether two quotes with these trigram counts, sharing `shared` trigrams, are copies. Containment
+ * (shared over the smaller set) catches a copy edited a little or with some new text around it, but
+ * a short quote, or one much shorter than the other, sits inside genuine longer stories too (a shown
+ * 「架空楼のちゃんぽん」 is in every story that mentions the dish), so for those only the Jaccard index
+ * counts: nearly the same words, nearly the same length. Either way the smaller must be at least
+ * half the larger, so a pair further apart is never a copy.
+ */
+export function isCopy(shared: number, sizeA: number, sizeB: number): boolean {
+  const small = Math.min(sizeA, sizeB);
+  const large = Math.max(sizeA, sizeB);
+  if (small === 0) return false;
+  if (small >= CONTAINMENT_MIN_GRAMS && small / large >= CONTAINMENT_MIN_RATIO)
+    return shared / small >= COPY_CONTAINMENT;
+  return shared / (sizeA + sizeB - shared) >= COPY_JACCARD;
+}
+
+/** Whether two quotes are copies (isCopy on their fingerprints' trigrams). */
+export function quotesAreCopies(a: string, b: string): boolean {
+  const gramsA = quoteGrams(quoteFingerprint(a));
+  const gramsB = quoteGrams(quoteFingerprint(b));
+  let shared = 0;
+  for (const gram of gramsA) if (gramsB.has(gram)) shared++;
+  return isCopy(shared, gramsA.size, gramsB.size);
+}
 
 /**
  * Shown quotes indexed by trigram, so a new quote is compared with all of them in one pass over its
- * own trigrams. Containment has no bound by length (a short quote may sit wholly inside a long one),
- * so no quote can be skipped for its size; the index keeps the comparison cheap instead: one count
- * per shared trigram, then one check per indexed quote.
+ * own trigrams (isCopy): one count per shared trigram, then one check per indexed quote.
  */
 export class CopyIndex<K> {
   private readonly gramIds = new Map<string, number>();
@@ -352,9 +418,8 @@ export class CopyIndex<K> {
         shared[quote] = (shared[quote] ?? 0) + 1;
     }
     for (let quote = 0; quote < this.keys.length; quote++) {
-      const smaller = Math.min(grams.size, this.sizes[quote] ?? 0);
       const key = this.keys[quote];
-      if (smaller > 0 && key !== except && (shared[quote] ?? 0) / smaller >= COPY_CONTAINMENT)
+      if (key !== except && isCopy(shared[quote] ?? 0, grams.size, this.sizes[quote] ?? 0))
         return key;
     }
     return undefined;

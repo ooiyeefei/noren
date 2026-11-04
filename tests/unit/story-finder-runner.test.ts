@@ -1,4 +1,8 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { TEXT_MAX, type MentionCandidate } from "../../src/lib/story-finder/mention";
 import { createCliRunner } from "../../scripts/lib/convex-run";
 import {
   Budget,
@@ -9,6 +13,8 @@ import {
 } from "../../scripts/lib/story-finder/apify";
 import {
   collect,
+  INGEST_MAX_BYTES,
+  ingestBatches,
   replay,
   summarisePlan,
   type CollectFlags,
@@ -173,8 +179,12 @@ describe("collect", () => {
     expect([...saved.keys()]).toEqual([
       "plan.json",
       "raw/facebook-mockrun1.json",
+      "places.json",
       "candidates/facebook-mockrun1.json",
     ]);
+    expect(saved.get("places.json")).toMatchObject({
+      places: { "fictional-place-1": ["facebook"] },
+    });
     const raw = saved.get("raw/facebook-mockrun1.json") as SavedRun;
     expect(raw.items).toHaveLength(60);
     expect(raw.run.queries[0]!.slug).toBe("fictional-place-1");
@@ -287,6 +297,268 @@ describe("collect", () => {
   });
 });
 
+/** The bytes of one storyFinder:ingest call's arguments, as convex-run sends them. */
+const argBytes = (args: Record<string, unknown>) => Buffer.byteLength(JSON.stringify(args));
+const ingestCalls = (calls: { fn: string; args: Record<string, unknown> }[]) =>
+  calls.filter((call) => call.fn === "storyFinder:ingest");
+/** A made-up page about fictional place 1, longer than TEXT_MAX, naming it after 9000 characters. */
+const longPage = (i: number) =>
+  `${"架空のブログの前置きです。".repeat(700)}架空の店1についてのテスト用の記事${i}。${"二階から港が見えます。".repeat(200)}`;
+
+function webRun(slugs: string[]): PlannedRun {
+  return {
+    platform: "web",
+    actorId: "apify/google-search-scraper",
+    input: {},
+    queries: slugs.map((slug, i) => ({
+      placeId: `oldid${i}`,
+      slug,
+      query: `"架空の店${i + 1}" 長崎 ブログ`,
+      searchedFor: `架空の店${i + 1}`,
+      names: [`架空の店${i + 1}`],
+      pin: null,
+    })),
+    estimatedUsd: 0.01,
+    maxTotalChargeUsd: 0.5,
+    maxItems: 5,
+  };
+}
+
+describe("ingest batches (spawn E2BIG)", () => {
+  const candidate = (text: string, title?: string): MentionCandidate => ({
+    placeId: "mockplace1",
+    platform: "web",
+    url: "https://blog.example.com/a",
+    canonicalUrl: "https://blog.example.com/a",
+    text,
+    ...(title ? { title } : {}),
+    searchedFor: "架空の店1",
+    query: "架空の店1 長崎",
+    actorId: "mock/actor",
+    runId: "mockrun1",
+    collectionId: "mock-collection-1",
+  });
+
+  it("keeps every call's arguments under the byte limit, and refuses one too large alone", () => {
+    const pages = Array.from({ length: 30 }, (_, i) =>
+      candidate(`${"架".repeat(TEXT_MAX - 3)}${i}`),
+    );
+    const huge = candidate("架空の店1", "題".repeat(40_000));
+    const { batches, tooLarge } = ingestBatches(STEWARD, [
+      ...pages.slice(0, 15),
+      huge,
+      ...pages.slice(15),
+    ]);
+    expect(tooLarge).toBe(1);
+    expect(batches.flat()).toEqual(pages);
+    for (const batch of batches)
+      expect(argBytes({ stewardPersonId: STEWARD, candidates: batch })).toBeLessThanOrEqual(
+        INGEST_MAX_BYTES,
+      );
+    // About 24 KB each: three to a call, not fifty.
+    expect(batches.map((batch) => batch.length)).toEqual([3, 3, 3, 3, 3, 3, 3, 3, 3, 3]);
+    // Small candidates still go fifty at a time.
+    expect(
+      ingestBatches(
+        STEWARD,
+        Array.from({ length: 60 }, () => candidate("架空の店1")),
+      ).batches.map((batch) => batch.length),
+    ).toEqual([50, 10]);
+  });
+
+  it("collect cuts long web pages around the place and sends them in byte-sized calls", async () => {
+    const { convex, calls } = fakeConvex(places.slice(0, 1));
+    const { apify } = fakeApify(0.01, () => [
+      {
+        searchQuery: { term: '"架空の店1" 長崎 ブログ' },
+        organicResults: [
+          ...Array.from({ length: 12 }, (_, i) => ({
+            url: `https://blog${i}.example.com/a`,
+            title: "Mock",
+          })),
+          // A search result whose title alone is past the limit.
+          { url: "https://blog-huge.example.com/a", title: "題".repeat(40_000) },
+        ],
+      },
+    ]);
+    const readPage = vi.fn(async (url: string) => ({
+      ok: true as const,
+      url,
+      text: longPage(Number(new URL(url).hostname.replace(/\D/g, "") || 99)),
+    }));
+    const result = await collect(flags({ platforms: ["web"], perPlace: 20, budgetUsd: 1 }), {
+      convex,
+      apify,
+      readPage,
+      save: async (name) => name,
+      log: () => {},
+    });
+    const ingests = ingestCalls(calls);
+    expect(ingests.length).toBeGreaterThan(1);
+    for (const call of ingests) {
+      expect(argBytes(call.args)).toBeLessThanOrEqual(INGEST_MAX_BYTES);
+      for (const sent of call.args.candidates as MentionCandidate[]) {
+        expect(sent.text.length).toBeLessThanOrEqual(TEXT_MAX);
+        expect(sent.text).toContain("架空の店1についてのテスト用の記事");
+      }
+    }
+    expect(ingests.flatMap((call) => call.args.candidates as unknown[])).toHaveLength(12);
+    expect(result).toMatchObject({ candidates: 13, inserted: 12, tooLarge: 1 });
+  });
+
+  it("replay --sources web sends only web runs, through the same cut and batches", async () => {
+    const web: SavedRun = {
+      version: 1,
+      savedAt: "2026-11-04T00:00:00.000Z",
+      collectionId: "mock-collection-9",
+      run: webRun(["fictional-place-1"]),
+      apifyRun: { id: "mockweb", status: "SUCCEEDED", costUsd: 0.01 },
+      items: [],
+      pages: Array.from({ length: 8 }, (_, i) => ({
+        url: `https://blog${i}.example.com/a`,
+        query: '"架空の店1" 長崎 ブログ',
+        title: "Mock",
+        text: longPage(i),
+      })),
+    };
+    const facebook: SavedRun = {
+      ...web,
+      run: {
+        ...web.run,
+        platform: "facebook",
+        queries: [{ ...web.run.queries[0]!, query: "架空の店1 長崎" }],
+      },
+      apifyRun: { id: "mockfb", status: "SUCCEEDED", costUsd: 0.03 },
+      items: [{ url: "https://www.facebook.com/mockpage/posts/9", text: "架空の店1のテスト投稿" }],
+      pages: undefined,
+    };
+    const { convex, calls } = fakeConvex();
+    const result = await replay(
+      [facebook, web],
+      { steward: STEWARD, regionId: "nagasaki", platforms: ["web"] },
+      { convex, log: () => {} },
+    );
+    expect(result).toMatchObject({ files: 1, filesOtherPlatforms: 1, candidates: 8, inserted: 8 });
+    const sent = ingestCalls(calls).flatMap((call) => {
+      expect(argBytes(call.args)).toBeLessThanOrEqual(INGEST_MAX_BYTES);
+      return call.args.candidates as MentionCandidate[];
+    });
+    expect(sent.every((c) => c.platform === "web" && c.text.length <= TEXT_MAX)).toBe(true);
+    expect(sent[0]!.placeId).toBe("mockplace1");
+  });
+});
+
+describe("--skip-searched", () => {
+  const five: FinderPlace[] = [1, 2, 3, 4, 5].map((n) => ({
+    ...places[0]!,
+    placeId: `mockplace${n}`,
+    slug: `fictional-place-${n}`,
+    names: [{ lang: "ja", script: "kanji", value: `架空の店${n}`, isPrimary: true }],
+  }));
+
+  it("leaves out each place on the platforms it was searched on, and --limit counts new places", async () => {
+    const { convex } = fakeConvex(five);
+    const { apify, started } = fakeApify(0.01);
+    const saved = new Map<string, unknown>();
+    await collect(
+      flags({
+        platforms: ["facebook", "web"],
+        limit: 2,
+        budgetUsd: 5,
+        searched: new Map([
+          // Searched on both: not a new place.
+          ["fictional-place-1", new Set(["facebook", "web"] as const)],
+          // Searched on Facebook only: still new, for the web.
+          ["fictional-place-2", new Set(["facebook"] as const)],
+        ]),
+      }),
+      {
+        convex,
+        apify,
+        readPage: vi.fn(),
+        save: async (name, data) => {
+          saved.set(name, data);
+          return name;
+        },
+        log: () => {},
+      },
+    );
+    const searchedOn = (platform: string) =>
+      started
+        .filter((run) => run.platform === platform)
+        .flatMap((run) => run.queries.map((q) => q.slug));
+    expect(searchedOn("facebook")).toEqual(["fictional-place-3"]);
+    expect(searchedOn("web")).toEqual(["fictional-place-2", "fictional-place-3"]);
+    // What this run searched, for the next --skip-searched.
+    expect(saved.get("places.json")).toEqual({
+      version: 1,
+      collectionId: "mock-collection-1",
+      places: { "fictional-place-3": ["facebook", "web"], "fictional-place-2": ["web"] },
+    });
+  });
+
+  describe("reading earlier runs", () => {
+    let cwd: string;
+    afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+
+    it("reads places.json, or an older run's raw results, and plans only places not searched", async () => {
+      const scratch = fileURLToPath(new URL("../../.scratch/", import.meta.url));
+      mkdirSync(scratch, { recursive: true });
+      cwd = mkdtempSync(join(scratch, "skip-searched-test-"));
+      const runs = join(cwd, ".scratch/story-finder");
+      // A run that wrote places.json.
+      mkdirSync(join(runs, "2026-11-05T00-00-00-000Z"), { recursive: true });
+      writeFileSync(
+        join(runs, "2026-11-05T00-00-00-000Z/places.json"),
+        JSON.stringify({ version: 1, collectionId: "x", places: { "fictional-place-1": ["web"] } }),
+      );
+      // An older run with raw results only, whose ingest failed: its web search still ran.
+      mkdirSync(join(runs, "2026-11-04T02-08-39-447Z/raw"), { recursive: true });
+      writeFileSync(
+        join(runs, "2026-11-04T02-08-39-447Z/raw/web-mockweb.json"),
+        JSON.stringify({
+          version: 1,
+          savedAt: "2026-11-04T02:30:00.000Z",
+          collectionId: "2026-11-04T02-08-39-447Z",
+          run: webRun(["fictional-place-2", "fictional-place-3"]),
+          apifyRun: { id: "mockweb", status: "SUCCEEDED", costUsd: 0.01 },
+          items: [],
+          pages: [],
+        } satisfies SavedRun),
+      );
+      writeFileSync(join(runs, ".collect.lock"), "");
+      const { convex } = fakeConvex(five);
+      const logs: unknown[] = [];
+      const result = await runStoryFinder(
+        [
+          "collect",
+          "--steward",
+          STEWARD,
+          "--sources",
+          "web",
+          "--limit",
+          "2",
+          "--skip-searched",
+          "--dry-run",
+        ],
+        {
+          cwd,
+          env: {},
+          now: () => 0,
+          loadEnvFile: vi.fn(),
+          convex,
+          log: (value) => logs.push(value),
+        },
+      );
+      expect(logs).toContainEqual({
+        skipSearched: { runs: 2, readFromRawResults: ["2026-11-04T02-08-39-447Z"], places: 3 },
+      });
+      expect(logs).toContainEqual(expect.objectContaining({ places: 2 }));
+      expect(result).toMatchObject({ byPlatform: { web: { searches: 2 } } });
+    });
+  });
+});
+
 describe("story-finder CLI", () => {
   it("parses flags and refuses bad ones", () => {
     expect(
@@ -325,6 +597,12 @@ describe("story-finder CLI", () => {
       ["scrape", "--steward", STEWARD],
     ])
       expect(() => parseFlags(argv), argv.join(" ")).toThrow();
+    expect(
+      parseFlags(["replay", "--steward", STEWARD, "--from", "x", "--sources", "web"]),
+    ).toMatchObject({ command: "replay", platforms: ["web"], from: "x" });
+    expect(parseFlags(["collect", "--steward", STEWARD, "--skip-searched"])).toMatchObject({
+      skipSearched: true,
+    });
   });
 
   it("a dry run plans and prices with no call to Apify and no token", async () => {
