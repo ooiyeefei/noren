@@ -24,6 +24,7 @@ import {
   namesPlace,
   normaliseWhitespace,
   isCopy,
+  postHasAdMarker,
   quoteFingerprint,
   quotesAreCopies,
   registrableHost,
@@ -729,5 +730,103 @@ describe("createMentionChecker", () => {
       doGenerate: async () => toolCall({ ...report(), verdict: "attach now" }),
     });
     await expect(createMentionChecker({ model }).check(input)).rejects.toThrow();
+  });
+});
+
+describe("ad labels on the whole post, not only the stored window", () => {
+  const filler = (n: number) => "架空の旅行記の前置きです。".repeat(Math.ceil(n / 13)).slice(0, n);
+  const DISCLOSURE = "※この記事はプロモーションを含みます";
+  // A made-up long blog: the disclosure heads the page, 12,000 characters before the place is named.
+  const LONG = `${DISCLOSURE}\n${filler(12_000)}\n${POST}\n${filler(3_000)}`;
+
+  it("a disclosure at the top of a long page is outside the stored window", () => {
+    const window = storedPostText(LONG, NAMES);
+    expect(window).toContain("架空珈琲 試験堂");
+    expect(window).not.toContain(DISCLOSURE);
+    expect(hasAdMarker(window)).toBe(false);
+    expect(hasAdMarker(LONG)).toBe(true);
+  });
+
+  it("a disclosure at the bottom of a long page is outside the window too", () => {
+    const text = `${POST}\n${filler(12_000)}\n【PR】テスト用の架空の提供元`;
+    expect(hasAdMarker(storedPostText(text, NAMES))).toBe(false);
+    expect(hasAdMarker(text)).toBe(true);
+  });
+
+  it("the check rejects a flagged post as sponsored although its window has no label", () => {
+    const window = storedPostText(LONG, NAMES);
+    const plain = decide(window, report());
+    expect(plain.status).toBe("accepted");
+    const flagged = decide(window, report(), { adMarker: hasAdMarker(LONG) });
+    expect(flagged).toMatchObject({ status: "rejected", reason: "sponsored" });
+    expect(flagged.verdict.adMarker).toBe(true);
+  });
+
+  it("a post without a label is unaffected, flagged false or not at all", () => {
+    for (const extra of [{}, { adMarker: false }]) {
+      const decision = decide(POST, report(), extra);
+      expect(decision.status).toBe("accepted");
+      expect(decision.verdict.adMarker).toBeUndefined();
+    }
+    expect(hasAdMarker(`${POST}\n${filler(12_000)}`)).toBe(false);
+  });
+
+  it("postHasAdMarker reads the flag, the text, the title and the location tag", () => {
+    expect(postHasAdMarker({ text: POST })).toBe(false);
+    expect(postHasAdMarker({ text: POST, adMarker: true })).toBe(true);
+    expect(postHasAdMarker({ text: POST, title: "【PR】架空珈琲 試験堂" })).toBe(true);
+    expect(postHasAdMarker({ text: POST, locationName: "#PR" })).toBe(true);
+  });
+
+  it("finds the Japanese disclosure forms", () => {
+    for (const text of [
+      "※この記事はプロモーションを含みます",
+      "※本記事は広告を含みます。",
+      "この記事にはアフィリエイト広告を利用しています",
+      "当ブログはアフィリエイトリンクを貼っています",
+      "本記事はPRです",
+      "このページは広告です",
+      "これは企業案件です",
+      "PR",
+      "※PR：株式会社テスト",
+      "広告\n本文",
+      "【広告】新店オープン",
+      "［ＰＲ］新メニュー",
+      "＃ＰＲ #コーヒー",
+      "#タイアップ #案件",
+      "タイアップ記事です",
+      "PR記事",
+      "提供：架空商事",
+      "提供 by Fictional Co.",
+      "架空商事様より商品をご提供いただきました",
+      "無償でご提供いただき",
+      "ご招待頂きました",
+      "Sponsored post",
+      "This post contains affiliate links.",
+    ])
+      expect(hasAdMarker(text), text).toBe(true);
+  });
+
+  it("does not flag ordinary words that contain the same letters", () => {
+    for (const text of [
+      "提供する料理は日替わりです",
+      "コーヒーを提供しています",
+      "写真提供：長崎市",
+      "(写真提供：架空観光協会)",
+      "自己PRが苦手です",
+      "PR活動をしている店",
+      "看板広告が目立つ通りです",
+      "ネット広告を見て来ました",
+      "この記事は広告を含みません。",
+      "広告は一切含まれていません",
+      "ドラマとのタイアップメニューが人気です",
+      "スポンサーはテスト商事です",
+      "案件が多くて忙しい店主",
+      "プロモーションビデオを流していた",
+      "PRIDE week",
+      "#prague trip",
+      "#adventure",
+    ])
+      expect(hasAdMarker(text), text).toBe(false);
   });
 });

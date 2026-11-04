@@ -5,7 +5,7 @@ import { isIP, type LookupFunction } from "node:net";
 import type { Readable } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { parseHttpUrl } from "../../../src/lib/adapters/url";
-import { storedPostText } from "../../../src/lib/story-finder/mention";
+import { hasAdMarker, storedPostText } from "../../../src/lib/story-finder/mention";
 import { namesPlace } from "./types";
 
 /** The robots.txt product token, and the User-Agent sent with it. */
@@ -433,7 +433,16 @@ export type PageReader = (
   url: string,
   names: readonly string[],
 ) => Promise<
-  | { ok: true; url: string; text: string; author?: string; publishedAt?: number }
+  | {
+      ok: true;
+      url: string;
+      /** The part of the page around the place's name (textAroundPlace), not the whole page. */
+      text: string;
+      /** True when the whole page, not only `text`, carried an ad label (hasAdMarker). */
+      adMarker?: boolean;
+      author?: string;
+      publishedAt?: number;
+    }
   | { ok: false; reason: Refusal }
 >;
 
@@ -527,13 +536,16 @@ export function createPageReader(
     const { response } = result;
     if (response.status !== 200) return { ok: false, reason: "http" };
     if (!/html/i.test(response.contentType)) return { ok: false, reason: "not_html" };
-    const text = textAroundPlace(htmlText(response.body), names);
+    const page = htmlText(response.body);
+    const text = textAroundPlace(page, names);
     if (text === null) return { ok: false, reason: "no_mention" };
     const published = Date.parse(metaContent(response.body, "article:published_time") ?? "");
     return {
       ok: true,
       url: result.url.href,
       text,
+      // From the whole page: the label may be at its top or bottom, outside `text`.
+      ...(hasAdMarker(page) ? { adMarker: true } : {}),
       author: metaContent(response.body, "author") ?? metaContent(response.body, "og:site_name"),
       ...(Number.isFinite(published) ? { publishedAt: published } : {}),
     };

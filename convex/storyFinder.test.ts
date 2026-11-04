@@ -372,6 +372,58 @@ describe("recordCheck", () => {
     });
   });
 
+  describe("an ad label outside the stored window", () => {
+    const DISCLOSURE = "※この記事はプロモーションを含みます";
+    const filler = "架空の旅行記の前置きです。".repeat(700);
+
+    it("is found on the whole text at ingest, so the check rejects the post as sponsored", async () => {
+      const w = await world();
+      const text = `${DISCLOSURE}\n${filler}${MARKER} ${QUOTE} ${"架空の後書きです。".repeat(300)}`;
+      await w.ingest([w.candidate(posts.reddit, { text })]);
+      const [row] = await w.rows();
+      expect(row!.text).not.toContain(DISCLOSURE);
+      expect(row!.text).toContain(QUOTE);
+      expect(row!.adMarker).toBe(true);
+      expect(await w.record(row!._id, {})).toEqual({ status: "rejected" });
+      const [checked] = await w.rows();
+      expect(checked).toMatchObject({ status: "rejected", reason: "sponsored" });
+      expect(await w.b.t.run((ctx) => ctx.db.query("source").take(10))).toHaveLength(0);
+    });
+
+    it("is rejected when the collector sent the flag with a window that has no label", async () => {
+      const w = await world();
+      await w.ingest([w.candidate(posts.reddit, { text: `${MARKER} ${QUOTE}`, adMarker: true })]);
+      const [row] = await w.rows();
+      expect(row!.adMarker).toBe(true);
+      await w.record(row!._id, {});
+      expect((await w.rows())[0]).toMatchObject({ status: "rejected", reason: "sponsored" });
+    });
+
+    it("is refused again at attach, for a post accepted before the flag was known", async () => {
+      const w = await world();
+      await w.ingest([w.candidate(posts.reddit, { text: `${MARKER} ${QUOTE}` })]);
+      const [row] = await w.rows();
+      expect(await w.record(row!._id, {}, false)).toEqual({ status: "accepted" });
+      await w.b.t.run((ctx) => ctx.db.patch("mentionCandidate", row!._id, { adMarker: true }));
+      expect(
+        await w.b.t.mutation(internal.storyFinder.attachAcceptedBatch, {
+          stewardPersonId: w.steward,
+          limit: 10,
+        }),
+      ).toEqual({ attached: 0, considered: 1 });
+      expect((await w.rows())[0]).toMatchObject({ status: "rejected", reason: "sponsored" });
+      expect(await w.b.t.run((ctx) => ctx.db.query("source").take(10))).toHaveLength(0);
+    });
+
+    it("leaves a post without a label alone: no flag stored, accepted and linked", async () => {
+      const w = await world();
+      await w.ingest([w.candidate(posts.reddit, { text: `${MARKER} ${filler}${QUOTE}` })]);
+      const [row] = await w.rows();
+      expect(row).not.toHaveProperty("adMarker");
+      expect(await w.record(row!._id, {})).toMatchObject({ status: "attached" });
+    });
+  });
+
   it("with attach off, an accepted post waits until the steward links it", async () => {
     const w = await world();
     await w.ingest([w.candidate(posts.reddit, { text: `${MARKER} ${EN_QUOTE}` })]);

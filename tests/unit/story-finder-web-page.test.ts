@@ -168,6 +168,36 @@ const METADATA = "169.254.169.254";
 const sentTo = (requests: { url: string; address: string }[], pattern: RegExp) =>
   requests.filter((request) => pattern.test(request.url) || pattern.test(request.address));
 
+describe("createPageReader: the ad screen sees the whole page", () => {
+  const DISCLOSURE = "※この記事はプロモーションを含みます";
+  const body = (before: string, after: string) =>
+    `<html><body><article>${before}<p>架空珈琲 試験堂に行きました。</p>${"<p>架空の旅行記の前置きです。</p>".repeat(900)}${after}</article></body></html>`;
+
+  it("flags a disclosure at the bottom of a long page that the returned text leaves out", async () => {
+    const net = fakeInternet({
+      "https://blog.example.com/long": html(body("", `<p>${DISCLOSURE}</p>`)),
+    });
+    const page = await net.read("https://blog.example.com/long", NAMES);
+    expect(page).toMatchObject({ ok: true, adMarker: true });
+    if (page.ok) expect(page.text).not.toContain(DISCLOSURE);
+  });
+
+  it("flags a disclosure at the top, before the place is named", async () => {
+    const net = fakeInternet({
+      "https://blog.example.com/top": html(body(`<p>${DISCLOSURE}</p>`, "")),
+    });
+    const page = await net.read("https://blog.example.com/top", NAMES);
+    expect(page).toMatchObject({ ok: true, adMarker: true });
+  });
+
+  it("sets no flag on a page without a label", async () => {
+    const net = fakeInternet({ "https://blog.example.com/plain": html(body("", "")) });
+    const page = await net.read("https://blog.example.com/plain", NAMES);
+    expect(page.ok).toBe(true);
+    if (page.ok) expect(page).not.toHaveProperty("adMarker");
+  });
+});
+
 describe("createPageReader", () => {
   it("reads an allowed page with a named User-Agent and no cookies, reading robots.txt once per origin", async () => {
     const net = fakeInternet({

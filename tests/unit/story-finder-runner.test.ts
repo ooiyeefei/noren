@@ -448,6 +448,85 @@ describe("ingest batches (spawn E2BIG)", () => {
   });
 });
 
+describe("replay sets the ad flag from the whole saved post", () => {
+  const DISCLOSURE = "※この記事はプロモーションを含みます";
+  const filler = "架空の旅行記の前置きです。".repeat(900);
+  const savedFacebook = (items: unknown[]): SavedRun => ({
+    version: 1,
+    savedAt: "2026-11-04T00:00:00.000Z",
+    collectionId: "mock-collection-9",
+    run: {
+      platform: "facebook",
+      actorId: "apify/facebook-search-scraper",
+      input: {},
+      queries: [
+        {
+          placeId: "oldid",
+          slug: "fictional-place-2",
+          query: "架空の店2 長崎",
+          searchedFor: "架空の店2",
+          names: ["架空の店2"],
+          pin: null,
+        },
+      ],
+      estimatedUsd: 0.03,
+      maxTotalChargeUsd: 0.039,
+      maxItems: 5,
+    },
+    apifyRun: { id: "mockrun9", status: "SUCCEEDED", costUsd: 0.03 },
+    items,
+  });
+  const sentCandidates = async (saved: SavedRun) => {
+    const { convex, calls } = fakeConvex();
+    await replay([saved], { steward: STEWARD, regionId: "nagasaki" }, { convex, log: () => {} });
+    return ingestCalls(calls).flatMap((call) => call.args.candidates as MentionCandidate[]);
+  };
+
+  it("flags a post whose disclosure the stored window leaves out, and leaves a plain post alone", async () => {
+    const sent = await sentCandidates(
+      savedFacebook([
+        {
+          url: "https://www.facebook.com/mockpage/posts/1",
+          text: `架空の店2のテスト投稿。${filler}${DISCLOSURE}`,
+        },
+        {
+          url: "https://www.facebook.com/mockpage/posts/2",
+          text: `架空の店2のテスト投稿。${filler}`,
+        },
+      ]),
+    );
+    expect(sent).toHaveLength(2);
+    expect(sent[0]!.text.length).toBeLessThanOrEqual(TEXT_MAX);
+    expect(sent[0]!.text).not.toContain(DISCLOSURE);
+    expect(sent[0]!.adMarker).toBe(true);
+    expect(sent[1]).not.toHaveProperty("adMarker");
+  });
+
+  it("carries the flag a web page was saved with, as its text is only the window", async () => {
+    const web: SavedRun = {
+      ...savedFacebook([]),
+      run: { ...webRun(["fictional-place-1"]) },
+      pages: [
+        {
+          url: "https://blog.example.com/a",
+          query: '"架空の店1" 長崎 ブログ',
+          title: "Mock",
+          text: "架空の店1に行きました。",
+          adMarker: true,
+        },
+        {
+          url: "https://blog.example.com/b",
+          query: '"架空の店1" 長崎 ブログ',
+          title: "Mock",
+          text: "架空の店1に行きました。",
+        },
+      ],
+    };
+    const sent = await sentCandidates(web);
+    expect(sent.map((c) => c.adMarker)).toEqual([true, undefined]);
+  });
+});
+
 describe("--skip-searched", () => {
   const five: FinderPlace[] = [1, 2, 3, 4, 5].map((n) => ({
     ...places[0]!,
