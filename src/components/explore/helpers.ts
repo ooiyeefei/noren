@@ -110,6 +110,22 @@ export function fitForFilter(
   return points.length > 0 ? { points } : null;
 }
 
+/** The corners of a neighbourhood's circle, so moving the map there frames all of it. */
+export function fitForNeighbourhood(neighbourhood: {
+  center: Position;
+  radiusMetres: number;
+}): MapFit {
+  const { center, radiusMetres } = neighbourhood;
+  const lat = radiusMetres / 111_320;
+  const lng = lat / Math.cos((center.lat * Math.PI) / 180);
+  return {
+    points: [
+      { lat: center.lat - lat, lng: center.lng - lng },
+      { lat: center.lat + lat, lng: center.lng + lng },
+    ],
+  };
+}
+
 // Pass a getter so even browsers that throw while accessing localStorage are safe.
 export function guideIsVisible(storage: () => Pick<Storage, "getItem">): boolean {
   try {

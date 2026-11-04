@@ -137,6 +137,56 @@
     "operatorName": "Noren, an open-source project run by Yee Fei",
     "launchPackComplete": false
   },
+  "neighbourhoods": [
+    {
+      "id": "nagasaki-station",
+      "names": { "ja": "長崎駅前", "en": "Nagasaki Station" },
+      "center": { "lat": 32.7525, "lng": 129.8705 },
+      "radiusMetres": 420
+    },
+    {
+      "id": "suwa",
+      "names": { "ja": "諏訪・桜町", "en": "Suwa" },
+      "center": { "lat": 32.7505, "lng": 129.8785 },
+      "radiusMetres": 430
+    },
+    {
+      "id": "dejima",
+      "names": { "ja": "出島", "en": "Dejima" },
+      "center": { "lat": 32.7437, "lng": 129.8728 },
+      "radiusMetres": 300
+    },
+    {
+      "id": "shinchi",
+      "names": { "ja": "新地中華街", "en": "Shinchi" },
+      "center": { "lat": 32.7415, "lng": 129.8755 },
+      "radiusMetres": 230
+    },
+    {
+      "id": "hamanomachi",
+      "names": { "ja": "浜町", "en": "Hamanomachi" },
+      "center": { "lat": 32.744, "lng": 129.8782 },
+      "radiusMetres": 250
+    },
+    {
+      "id": "shianbashi",
+      "names": { "ja": "思案橋", "en": "Shianbashi" },
+      "center": { "lat": 32.7422, "lng": 129.88 },
+      "radiusMetres": 230
+    },
+    {
+      "id": "teramachi",
+      "names": { "ja": "寺町", "en": "Teramachi" },
+      "center": { "lat": 32.7448, "lng": 129.8852 },
+      "radiusMetres": 380
+    },
+    {
+      "id": "oura",
+      "names": { "ja": "大浦・南山手", "en": "Oura" },
+      "center": { "lat": 32.7352, "lng": 129.8703 },
+      "radiusMetres": 480
+    }
+  ],
   "categories": [
     {
       "key": "restaurant",

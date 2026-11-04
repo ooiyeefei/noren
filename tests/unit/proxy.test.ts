@@ -53,4 +53,10 @@ describe("proxy", () => {
     await response;
     expect(auth.protect).toHaveBeenCalledOnce();
   });
+
+  it("sends signed-out visitors to the stamp book to sign in", async () => {
+    const { auth, response } = visit("/en/stamps", false);
+    await response;
+    expect(auth.protect).toHaveBeenCalledOnce();
+  });
 });

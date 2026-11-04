@@ -1,10 +1,20 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { neighbourhoodAt } from "../../src/lib/region/neighbourhoods";
+import { getRegionConfig } from "../../src/lib/region/registry";
 import { isSharedPublicly, isStoryShown } from "./access";
 
 export type MapCopies = Required<
   Pick<Doc<"place">, "mapNames" | "mapPin" | "hasPublishedPage" | "hasPeopleStories">
->;
+> & { neighbourhood: string | undefined };
+
+/** The neighbourhood a pin falls in. Undefined clears the copy, as for a place with no pin. */
+export function readNeighbourhood(
+  regionId: string,
+  pin: { lat: number; lng: number } | null,
+): string | undefined {
+  return pin === null ? undefined : neighbourhoodAt(getRegionConfig(regionId), pin)?.id;
+}
 
 export async function readMapNames(ctx: QueryCtx, placeId: Id<"place">) {
   const names = await ctx.db
@@ -70,9 +80,13 @@ export async function writeMapCopies(
 
 /** Through the gated `ctx.db`, so a backfill stops loudly at a row that breaks a place rule. */
 export async function refreshMapCopies(ctx: MutationCtx, placeId: Id<"place">): Promise<void> {
+  const place = await ctx.db.get("place", placeId);
+  if (place === null) return;
+  const mapPin = await readMapPin(ctx, placeId);
   await writeMapCopies(ctx.db, placeId, {
     mapNames: await readMapNames(ctx, placeId),
-    mapPin: await readMapPin(ctx, placeId),
+    mapPin,
+    neighbourhood: readNeighbourhood(place.regionId, mapPin),
     hasPublishedPage: await readHasPublishedPage(ctx, placeId),
     hasPeopleStories: await readHasPeopleStories(ctx, placeId),
   });
