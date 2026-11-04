@@ -82,7 +82,7 @@ Licence separation: OSM-derived rows (ODbL), Wikipedia text (CC BY-SA), municipa
 5. The owner sees the claims in Japanese as confirmation cards (Yes / Edit / Remove) and only confirmed claims move on.
 6. Translations are generated from the confirmed text and labelled.
 
-**5.4 Place page.** Composed from published claims. Each sentence carries claim IDs; a deterministic check (IDs exist, quote is a substring of the source span, no ID-less sentence) runs before an LLM entailment check from a different vendor; any failure goes to a steward queue. Embeds sit beside the story, with the author credit adjacent.
+**5.4 Place page.** Composed from published claims. Each sentence carries claim IDs; a deterministic check (IDs exist, quote is a substring of the source span, no ID-less sentence) runs, then a verbatim-only entailment check: a sentence passes only when it is exactly a cited claim's text. Any failure holds the sentence back from the page; it returns when a published claim supports it. The page composer is deterministic and uses no model; an LLM entailment check from a different vendor is planned, not built (task T072). Embeds sit beside the story, with the author credit adjacent.
 
 **5.5 Outbound click.** Every link to an original goes through a first-party redirect that increments an aggregate counter. Creators and owners see counts only. Mock-user activity is excluded.
 
