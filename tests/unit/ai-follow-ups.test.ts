@@ -1,5 +1,8 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
+import type { LanguageModel } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it } from "vitest";
+import { createMeta } from "../../src/lib/ai/meta";
 import {
   checkFollowUps,
   createFollowUpAgent,
@@ -168,5 +171,80 @@ describe("createFollowUpAgent", () => {
         createFollowUpAgent({ model }).suggest({ ...input, transcript: text }),
       ).rejects.toThrow("60000");
     expect(model.doGenerateCalls).toHaveLength(0);
+  });
+});
+
+describe("reasoning effort", () => {
+  const submitted = { questions: [raw()] };
+  async function requestBody(
+    makeModel: (fetch: typeof globalThis.fetch) => LanguageModel,
+    reply: unknown,
+  ) {
+    const bodies: Record<string, unknown>[] = [];
+    const fetch = (async (_url: unknown, init?: { body?: unknown }) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return Response.json(reply);
+    }) as typeof globalThis.fetch;
+    const questions = await createFollowUpAgent({ model: makeModel(fetch) }).suggest(input);
+    expect(questions).toHaveLength(1);
+    return bodies[0]!;
+  }
+
+  it("asks the model for low reasoning on every step", async () => {
+    const model = agentModel([
+      toolStep([{ name: "list_caution_topics", input: {} }]),
+      toolStep([{ name: "submit_questions", input: submitted }]),
+    ]);
+    await createFollowUpAgent({ model }).suggest(input);
+    expect(model.doGenerateCalls.map(({ reasoning }) => reasoning)).toEqual(["low", "low"]);
+  });
+  it("reaches Muse Spark as reasoning_effort low", async () => {
+    const body = await requestBody(
+      (fetch) => createMeta({ apiKey: "mock-key", fetch })("muse-spark-1.3"),
+      {
+        id: "mock",
+        created: 0,
+        model: "muse-spark-1.3",
+        choices: [
+          {
+            index: 0,
+            finish_reason: "tool_calls",
+            message: {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: "call_1",
+                  type: "function",
+                  function: { name: "submit_questions", arguments: JSON.stringify(submitted) },
+                },
+              ],
+            },
+          },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      },
+    );
+    expect(body.reasoning_effort).toBe("low");
+  });
+  it("reaches the Claude fallback as adaptive thinking at low effort", async () => {
+    const body = await requestBody(
+      (fetch) => createAnthropic({ apiKey: "mock-key", fetch })("claude-sonnet-5-5"),
+      {
+        id: "msg_mock",
+        type: "message",
+        role: "assistant",
+        model: "claude-sonnet-5-5",
+        content: [{ type: "tool_use", id: "toolu_1", name: "submit_questions", input: submitted }],
+        stop_reason: "tool_use",
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      },
+    );
+    expect(body.thinking).toMatchObject({ type: "adaptive" });
+    expect(body.output_config).toMatchObject({ effort: "low" });
+    // Sampling settings are refused with thinking on this model, and the agent sets none.
+    expect(body).not.toHaveProperty("temperature");
+    expect(body).not.toHaveProperty("top_p");
   });
 });

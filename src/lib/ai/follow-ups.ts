@@ -115,6 +115,10 @@ export function createFollowUpAgent(options: { model: LanguageModel; timeoutMs?:
       const agent = new ToolLoopAgent({
         model: options.model,
         maxRetries: 1,
+        // Sends reasoning_effort to Muse Spark (about 29 s against 46 s by default) and turns on
+        // adaptive thinking at low effort for Claude. The questions rest on quotes and tool
+        // lookups, so they need little deliberation.
+        reasoning: "low",
         instructions: `You help an interviewer who is recording the owner of a local place in ${languageName(input.language)}. Suggest up to ${MAX_QUESTIONS} short follow-up questions the interviewer can ask next, so the owner tells more in their own words.
 Each question either builds on something the owner said (copy those words, character for character, into quote) or asks about a caution topic no recorded claim covers yet (put its key in cautionType).
 Ask, never tell: no facts, places, opinions or recommendations of your own, and never suggest an answer.
