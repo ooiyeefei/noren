@@ -13,7 +13,7 @@ import {
   mentionCanonicalUrl,
   namesPlace,
   quoteFingerprint,
-  TEXT_MAX,
+  storedPostText,
   translationFits,
   type RejectReason,
 } from "../src/lib/story-finder/mention";
@@ -210,6 +210,7 @@ export const ingest = internalMutation({
     const totals = { inserted: 0, duplicate: 0, alreadyLinked: 0 };
     const skipped: { index: number; reason: string }[] = [];
     const places = new Map<Id<"place">, Doc<"place"> | null>();
+    const placeNames = new Map<Id<"place">, string[]>();
     for (const [index, candidate] of candidates.entries()) {
       if (!places.has(candidate.placeId))
         places.set(candidate.placeId, await ctx.db.get("place", candidate.placeId));
@@ -222,7 +223,10 @@ export const ingest = internalMutation({
         candidate.url,
         regionConfig(place.regionId).enabledSourceAdapters,
       );
-      const text = candidate.text.trim().slice(0, TEXT_MAX);
+      if (!placeNames.has(place._id))
+        placeNames.set(place._id, await placeNameValues(ctx, place._id));
+      // The same window the collector cut (a no-op on its text), so the mention is kept.
+      const text = storedPostText(candidate.text, placeNames.get(place._id) ?? []);
       if (canonicalUrl === null || candidate.url.length > 2048) {
         skipped.push({ index, reason: "invalid_url" });
         continue;
@@ -471,7 +475,7 @@ async function shownQuotesIn(
 /**
  * Whether the quote is a copy of one shown (or shown and hidden) anywhere in the region: the same
  * words posted again, perhaps with a few changed or with new text around them, are spam, not
- * another person's story. Compared by trigram containment (COPY_CONTAINMENT) with every one.
+ * another person's story. Compared with every one by isCopy (containment or Jaccard, by length).
  */
 function copiesShownQuote(shown: ShownQuotes, candidate: Doc<"mentionCandidate">, quote: string) {
   return shown.index.copyOf(quoteFingerprint(quote), candidate._id) !== undefined;

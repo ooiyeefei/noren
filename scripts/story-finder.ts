@@ -6,7 +6,14 @@ import { getRegionConfig } from "../src/lib/region/registry";
 import { MENTION_PLATFORMS, type MentionPlatform } from "../src/lib/story-finder/mention";
 import { createCliRunner, type ConvexRunner } from "./lib/convex-run";
 import { createApifyClient, type ApifyClient } from "./lib/story-finder/apify";
-import { collect, replay, type CollectFlags, type SavedRun } from "./lib/story-finder/runner";
+import {
+  collect,
+  replay,
+  searchedByRuns,
+  type CollectFlags,
+  type PlacesFile,
+  type SavedRun,
+} from "./lib/story-finder/runner";
 import { createPageReader, type PageReader } from "./lib/story-finder/web-page";
 
 const USAGE = `Usage: npx tsx scripts/story-finder.ts <command> [flags]
@@ -25,7 +32,7 @@ Common flags
 collect
   --region nagasaki        Region id.
   --sources a,b            Any of ${MENTION_PLATFORMS.join(", ")} (default: all).
-  --limit 20               Places to search for.
+  --limit 20               Places to search for (with --skip-searched: places not searched yet).
   --category a,b           Only these categories (places-to-visit categories only).
   --bbox w,s,e,n           Only places inside this box.
   --per-place 5            Posts or reviews asked for per place.
@@ -33,9 +40,13 @@ collect
   --budget-usd 20          Stop before any run that could take the spend past this.
   --timeout-secs 900       Longest a single actor run may take.
   --dry-run                Print the planned runs and their cost; makes no call to Apify.
+  --skip-searched          Leave out each place on the platforms an earlier collect searched it on
+                           (every .scratch/story-finder/<stamp>/places.json, or for an older run,
+                           the searches in its raw results).
 
 replay
   --from <folder>          A .scratch/story-finder/<stamp> folder from an earlier collect.
+  --sources a,b            Only the saved runs on these platforms (default: all).
 
 check
   --limit 500              Most staged posts to check in this request.
@@ -59,6 +70,7 @@ export type Flags = {
   budgetUsd: number;
   timeoutSecs: number;
   dryRun: boolean;
+  skipSearched: boolean;
   attach: boolean;
   from?: string;
   prod: boolean;
@@ -94,12 +106,14 @@ export function parseFlags(argv: readonly string[]): Flags {
     budgetUsd: 20,
     timeoutSecs: 900,
     dryRun: false,
+    skipSearched: false,
     attach: true,
     prod: false,
   };
   for (let i = 0; i < rest.length; i++) {
     const flag = rest[i]!;
     if (flag === "--dry-run") flags.dryRun = true;
+    else if (flag === "--skip-searched") flags.skipSearched = true;
     else if (flag === "--prod") flags.prod = true;
     else if (flag === "--no-attach") flags.attach = false;
     else {
@@ -181,21 +195,52 @@ export function parseFlags(argv: readonly string[]): Flags {
   return flags;
 }
 
-async function readSaved(folder: string): Promise<SavedRun[]> {
+async function readSavedRuns(folder: string): Promise<SavedRun[]> {
   const raw = resolve(folder, "raw");
-  const names = (await readdir(existsSync(raw) ? raw : folder))
-    .filter((name) => name.endsWith(".json"))
-    .sort();
+  const dir = existsSync(raw) ? raw : folder;
+  const names = (await readdir(dir)).filter((name) => name.endsWith(".json")).sort();
   const runs: SavedRun[] = [];
   for (const name of names) {
-    const saved = JSON.parse(
-      await readFile(resolve(existsSync(raw) ? raw : folder, name), "utf8"),
-    ) as SavedRun;
+    const saved = JSON.parse(await readFile(resolve(dir, name), "utf8")) as SavedRun;
     if (saved?.version === 1 && saved.run && Array.isArray(saved.items))
       runs.push({ ...saved, collectionId: saved.collectionId || basename(folder) });
   }
+  return runs;
+}
+
+async function readSaved(folder: string): Promise<SavedRun[]> {
+  const runs = await readSavedRuns(folder);
   if (!runs.length) throw new Error(`No saved runs in ${folder}`);
   return runs;
+}
+
+/**
+ * What every earlier collect under `root` searched: its places.json, or, for a run from before
+ * places.json was written, the searches in its saved raw results.
+ */
+async function readSearched(root: string, log: (value: unknown) => void) {
+  const runs: { places?: PlacesFile; saved?: SavedRun[] }[] = [];
+  const fromRaw: string[] = [];
+  const entries = existsSync(root) ? await readdir(root, { withFileTypes: true }) : [];
+  for (const entry of entries
+    .filter((e) => e.isDirectory())
+    .sort((a, b) => a.name.localeCompare(b.name))) {
+    const folder = resolve(root, entry.name);
+    const placesPath = resolve(folder, "places.json");
+    if (existsSync(placesPath)) {
+      const places = JSON.parse(await readFile(placesPath, "utf8")) as PlacesFile;
+      if (places?.version === 1 && places.places) {
+        runs.push({ places });
+        continue;
+      }
+    }
+    if (!existsSync(resolve(folder, "raw"))) continue;
+    runs.push({ saved: await readSavedRuns(folder) });
+    fromRaw.push(entry.name);
+  }
+  const searched = searchedByRuns(runs);
+  log({ skipSearched: { runs: runs.length, readFromRawResults: fromRaw, places: searched.size } });
+  return searched;
 }
 
 export async function runStoryFinder(
@@ -249,7 +294,7 @@ export async function runStoryFinder(
     options.log({ target });
     return await replay(
       await readSaved(resolve(options.cwd, flags.from!)),
-      { steward: flags.steward, regionId: flags.region },
+      { steward: flags.steward, regionId: flags.region, platforms: flags.platforms },
       {
         convex,
         log: options.log,
@@ -279,6 +324,9 @@ export async function runStoryFinder(
     timeoutSecs: flags.timeoutSecs,
     dryRun: flags.dryRun,
     collectionId: stamp,
+    ...(flags.skipSearched
+      ? { searched: await readSearched(resolve(options.cwd, ".scratch/story-finder"), options.log) }
+      : {}),
   };
   options.log({ target, dryRun: flags.dryRun });
   if (flags.dryRun)
