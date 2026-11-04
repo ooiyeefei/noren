@@ -26,6 +26,7 @@ async function setup() {
       status?: "attached" | "accepted";
       sourceStatus?: "live" | "hidden";
       n?: number;
+      kind?: "story" | "tip";
     } = {},
   ) =>
     await b.run(async (ctx) => {
@@ -62,6 +63,14 @@ async function setup() {
         status: options.status ?? "attached",
         sourceId,
         attachedAt: 1,
+        verdict: {
+          aboutThisPlace: "yes",
+          evidence: WORDS,
+          kind: options.kind ?? "story",
+          namesPrivatePeople: false,
+          quote: WORDS,
+          topics: [],
+        },
       });
       return sourceId;
     });
@@ -289,6 +298,51 @@ describe("placeStories runs", () => {
     expect(
       await b.t.mutation(internal.placeStories.enqueue, { stewardPersonId: b.steward, limit: 5 }),
     ).toEqual({ started: 1 });
+  });
+
+  it("leaves out a place whose posts are all tips", async () => {
+    const b = await setup();
+    await b.post("google_reviews", { n: 1, kind: "tip" });
+    await b.post("web", { n: 2, kind: "tip" });
+    const start = () =>
+      b.t.mutation(internal.placeStories.enqueue, { stewardPersonId: b.steward, limit: 5 });
+    expect(await start()).toEqual({ started: 0 });
+    await b.post("web", { n: 3, kind: "story" });
+    expect(await start()).toEqual({ started: 1 });
+  });
+
+  it("starts exactly the places it names, whatever their posts", async () => {
+    const b = await setup();
+    const other = await addPlace(b, { createdBy: b.steward, visibility: "public" });
+    const hidden = await addPlace(b, { createdBy: b.steward, visibility: "draft" });
+    expect(
+      await b.t.mutation(internal.placeStories.enqueue, {
+        stewardPersonId: b.steward,
+        limit: 5,
+        placeIds: [other, hidden],
+      }),
+    ).toEqual({ started: 1 });
+    const runs = await b.run_((ctx) => ctx.db.query("placeStoryRun").collect());
+    expect(runs.map(({ placeId }) => placeId)).toEqual([other]);
+  });
+
+  it("takes a story off the page when a steward withdraws it, and records why", async () => {
+    const b = await setup();
+    const sourceId = await b.post("google_reviews");
+    const runId = await b.startRun();
+    await b.begin(runId);
+    await b.save(runId, [String(sourceId)]);
+    const withdraw = () =>
+      b.t.mutation(internal.placeStories.withdraw, {
+        stewardPersonId: b.steward,
+        placeId: b.placeId,
+        reason: "nothing to retell",
+      });
+    expect(await withdraw()).toEqual({ withdrawn: true });
+    expect(await b.t.query(api.placeStories.forPlace, { placeId: b.placeId })).toBeNull();
+    expect(await withdraw()).toEqual({ withdrawn: false });
+    const audit = await b.run_((ctx) => ctx.db.query("auditLog").collect());
+    expect(audit.filter(({ action }) => action === "story_agent.withdrawn")).toHaveLength(1);
   });
 
   it("refuses a mock steward's batch and an oversized one", async () => {
