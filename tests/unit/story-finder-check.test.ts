@@ -15,6 +15,7 @@ import {
   authorKey,
   capQuote,
   contactIn,
+  isBareFact,
   CONTAINMENT_MIN_GRAMS,
   CopyIndex,
   firstMention,
@@ -987,5 +988,37 @@ describe("the kind rules the model is given", () => {
     expect(system).toContain(
       "The quote must be the sentence that carries the story or the detail itself",
     );
+  });
+});
+
+describe("isBareFact", () => {
+  it.each([
+    "試験県架空市試験町3-1",
+    "🏠 試験県架空市試験町3-1",
+    "📍架空市試験町15-5",
+    "住所：架空市試験町6-17",
+    "〒850-0000 架空市試験町7-4 試験ビル2F",
+    "11:00～22:00 (21:45オーダーストップ)",
+    "⏰ 14:00-23:30(日曜日 14:00-22:00)",
+    "⏰️ランチ 朝11時半〜昼3時（最終入店昼2時15分）",
+    "営業時間：１１：００－２１：００",
+    "Open 10:00-18:00",
+  ])("holds only what the map holds: %s", (quote) => {
+    expect(isBareFact(quote)).toBe(true);
+  });
+
+  it.each([
+    "支払いは、現金のみです",
+    "架空市内の老舗です。",
+    "思案橋の近く。",
+    "10時の開店前からお客さんが並びはじめ、30分で完売するという人気ぶり。",
+    "日曜日11:20頃行ったら10分ほど待ち",
+    "11時オープンに合わせ、10:30に並びました",
+    "ランチタイムの短い時間しか営業をしていないお店です。",
+    "架空市試験町6に行きました",
+    "最寄り駅から徒歩3分",
+    "1624年創業の老舗",
+  ])("says more than that: %s", (quote) => {
+    expect(isBareFact(quote)).toBe(false);
   });
 });
