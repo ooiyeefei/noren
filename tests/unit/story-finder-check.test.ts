@@ -240,6 +240,7 @@ describe("decideMention: checks that need no model", () => {
     "店内のartを手掛けるマスターは、現在体調不良で不在でした。",
     "去年、先代が亡くなったそうです。",
     "ご冥福をお祈りいたします。",
+    "店を支えた夫が死去した。",
     "体調が悪いのでしたら早く良くなっていただければと思います。",
     "The owner passed away last year.",
   ])("a quote about someone's health or death is never shown: %s", (quote) => {
