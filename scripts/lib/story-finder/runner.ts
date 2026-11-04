@@ -21,6 +21,8 @@ export type CollectFlags = {
   batchSize: number;
   timeoutSecs: number;
   dryRun: boolean;
+  /** This collect run's name (its scratch folder); the per-author limit counts within it. */
+  collectionId: string;
 };
 
 export type RunnerDeps = {
@@ -37,6 +39,8 @@ export type RunnerDeps = {
 export type SavedRun = {
   version: 1;
   savedAt: string;
+  /** The collect run it came from. */
+  collectionId: string;
   run: PlannedRun;
   apifyRun: Pick<ApifyRun, "id" | "status" | "usageTotalUsd" | "chargedEventCounts"> & {
     costUsd: number;
@@ -44,7 +48,10 @@ export type SavedRun = {
   items: unknown[];
   /** For web runs: what each result page said, read once. */
   pages?: {
+    /** Where the page was read, after any redirects. */
     url: string;
+    /** The search result's address. */
+    hitUrl?: string;
     query: string;
     title?: string;
     text: string;
@@ -140,7 +147,8 @@ async function readPages(
       continue;
     }
     pages.push({
-      url: hit.url,
+      url: page.url,
+      hitUrl: hit.url,
       query: hit.planned.query,
       title: hit.title,
       text: page.text,
@@ -154,17 +162,17 @@ async function readPages(
 
 /** The candidates a saved run yields; works the same on a fresh run and a replayed one. */
 export function candidatesFrom(saved: SavedRun): MentionCandidate[] {
+  const context = { runId: saved.apifyRun.id, collectionId: saved.collectionId };
   const collector = COLLECTORS[saved.run.platform];
-  if (saved.run.platform !== "web")
-    return collector.normalise(saved.items, saved.run, { runId: saved.apifyRun.id });
+  if (saved.run.platform !== "web") return collector.normalise(saved.items, saved.run, context);
   return (saved.pages ?? []).flatMap((page) => {
     const planned = saved.run.queries.find((q) => q.query === page.query);
     if (!planned) return [];
     const made = webCandidate(
-      { url: page.url, title: page.title, planned },
+      { url: page.hitUrl ?? page.url, title: page.title, planned },
       page,
       saved.run,
-      saved.apifyRun.id,
+      context,
     );
     return made ? [made] : [];
   });
@@ -228,6 +236,7 @@ export async function collect(flags: CollectFlags, deps: RunnerDeps) {
     const saved: SavedRun = {
       version: 1,
       savedAt: new Date().toISOString(),
+      collectionId: flags.collectionId,
       run,
       apifyRun: {
         id: finished.id,

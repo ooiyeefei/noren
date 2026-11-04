@@ -25,6 +25,7 @@ export type FoundRow = {
   author?: string;
   postedAt?: number;
   checkedAt?: number;
+  attachedAt?: number;
   status: MentionStatus;
   reason?: RejectReason;
   attachError?: string;
@@ -41,7 +42,7 @@ export type StoryFinderProps = ActionState & {
   attached: readonly FoundRow[];
   accepted: readonly FoundRow[];
   rejected: readonly FoundRow[];
-  onCheck: () => void;
+  onCheck: (attach: boolean) => void;
   onAttach: () => void;
   onHide: (id: string) => void;
 };
@@ -59,7 +60,8 @@ function attachErrorLabel(m: Messages, error: string) {
   return code === "already_linked" ||
     code === "place_full" ||
     code === "place_not_public" ||
-    code === "invalid_url"
+    code === "invalid_url" ||
+    code === "author_limit"
     ? m[code]
     : code;
 }
@@ -177,6 +179,8 @@ function Row({
             format(m.postedOn, { date: checkDate(row.postedAt, locale) }),
           row.checkedAt !== undefined &&
             format(m.checkedOn, { date: checkDate(row.checkedAt, locale) }),
+          row.attachedAt !== undefined &&
+            format(m.shownOn, { date: checkDate(row.attachedAt, locale) }),
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -244,15 +248,23 @@ export function StoryFinderView(props: StoryFinderProps) {
           <h2 className="text-[22px] font-bold">{m.counts}</h2>
           <Counts m={m} counts={counts} />
           <div className="flex flex-wrap gap-3">
-            <Button className={button} disabled={!!pending} onClick={onCheck}>
+            <Button className={button} disabled={!!pending} onClick={() => onCheck(true)}>
               {m.check}
+            </Button>
+            <Button
+              variant="outline"
+              className={button}
+              disabled={!!pending}
+              onClick={() => onCheck(false)}
+            >
+              {m.checkOnly}
             </Button>
             <Button variant="outline" className={button} disabled={!!pending} onClick={onAttach}>
               {m.attach}
             </Button>
           </div>
         </section>
-        {section(m.linkedTitle, attached, true)}
+        {section(m.linkedTitle, attached, true, m.linkedIntro)}
         {section(m.acceptedTitle, accepted, true)}
         {section(m.rejectedTitle, rejected, false, m.rejectedIntro)}
       </div>
