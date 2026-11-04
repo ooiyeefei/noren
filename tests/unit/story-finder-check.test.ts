@@ -15,16 +15,20 @@ import {
   authorKey,
   capQuote,
   contactIn,
-  COPY_CONTAINMENT,
+  CONTAINMENT_MIN_GRAMS,
   CopyIndex,
+  firstMention,
   guessLang,
   hasAdMarker,
   isVerbatim,
   namesPlace,
   normaliseWhitespace,
-  quoteContainment,
+  isCopy,
   quoteFingerprint,
+  quotesAreCopies,
   registrableHost,
+  storedPostText,
+  TEXT_MAX,
   textWeight,
   translationFits,
 } from "@/lib/story-finder/mention";
@@ -184,10 +188,14 @@ describe("decideMention: checks that need no model", () => {
     ["予約は長崎カフェ.jpで", "url"],
     ["See mock.xn--p1ai today", "url"],
     ["ｍｏｃｋ－ｃａｆｅ．ｊｐで予約", "url"],
-    // The dots IDNA reads as ".", between ASCII labels: ideographic, fullwidth, halfwidth.
-    ["mock-cafe。jpで予約", "url"],
+    // The dots IDNA reads as ".": fullwidth and halfwidth anywhere, ideographic before ASCII.
     ["mock-cafe．jpで予約", "url"],
     ["mock-cafe｡jpで予約", "url"],
+    ["長崎カフェ．jp", "url"],
+    ["架空珈琲．みんなで予約", "url"],
+    ["架空珈琲｡みんなで予約", "url"],
+    ["mock-cafe。jpで予約", "url"],
+    ["長崎カフェ。jpで予約", "url"],
     ["mock-cafe 。 com で予約", "url"],
     ["www。mock-cafe。com", "url"],
     // A last label in any script after a real dot.
@@ -207,6 +215,7 @@ describe("decideMention: checks that need no model", () => {
     ["hxxps://mock-cafe/booking", "url"],
     ["問い合わせは mock@example.com まで。", "email"],
     ["問い合わせは mock@example。com まで。", "email"],
+    ["mock@長崎．jp", "email"],
     ["電話は 095-000-0000 です。", "phone"],
     ["電話は０９５（０００）００００です。", "phone"],
     ["Call +81 95 000 0000 today.", "phone"],
@@ -228,7 +237,7 @@ describe("decideMention: checks that need no model", () => {
       "朝9:00から夜21:30まで。",
       "e.g. the roaster is old.",
       // Numbers with a decimal point, abbreviations and ordinary sentence ends are not domains.
-      "駅から1.5km、徒歩20分。No.1のナポリタン。",
+      "駅から1.5km、徒歩20分のNo.1のナポリタン。",
       "Ver.2 of the menu came out at 9.30am, i.e. early.",
       "The roaster is old. It still works. U.S. visitors love it.",
       "店主の話では、焙煎機は1962年製。今も毎朝動いている。",
@@ -238,21 +247,19 @@ describe("decideMention: checks that need no model", () => {
 
   it("Japanese sentence ends are not domains, though IDNA reads the same dots as one", () => {
     for (const quote of [
+      "ありがとう。また来ます",
       "「ありがとう。また来ます」と店主に言いました。",
-      "ありがとう．また来ます。",
-      "ありがとう｡また来ます｡",
-      // An ASCII word on one side only: the other side is a Japanese sentence.
+      // An ASCII word before "。" and a Japanese sentence after it.
       "雰囲気の良いcafe。また行きたいです。",
-      "美味しかった。Googleで見つけました。",
       // "ドット" is a word too: a polka-dot cup.
       "このドット柄のカップが可愛いお店です。",
       // "@" for "at": lunch at the station.
       "ランチ@長崎駅前。美味しかった。",
-      "１．５km歩きました。No．1のナポリタン。",
+      "駅から１．５km歩きました。",
     ])
       expect(contactIn(quote), quote).toBeNull();
-    // The price of letting that prose through: a Japanese domain written with "。" reads as two
-    // sentences and is not caught. Written with ".", it is (above).
+    // The price of letting that prose through: a Japanese domain written with "。" between
+    // Japanese labels reads as two sentences and is not caught. With "．" or ".", it is (above).
     expect(contactIn("架空珈琲。みんな")).toBeNull();
   });
 
@@ -261,6 +268,11 @@ describe("decideMention: checks that need no model", () => {
     expect(contactIn("The coffee was great.Will come back.")).toBe("url");
     expect(contactIn("It opened in the dot com years.")).toBe("url");
     expect(contactIn("Thank you。See you again.")).toBe("url");
+    // "。" before an ASCII word, and the rare "．" or "｡" used as a full stop.
+    expect(contactIn("美味しかった。Googleで見つけました。")).toBe("url");
+    expect(contactIn("徒歩20分。No.1のナポリタン。")).toBe("url");
+    expect(contactIn("ありがとう．また来ます。")).toBe("url");
+    expect(contactIn("ありがとう｡また来ます｡")).toBe("url");
   });
 
   const JA_QUOTE = "祖父の代から続く焙煎所で、毎朝豆を焼いています。港が見える窓際の席が人気です。";
@@ -270,36 +282,82 @@ describe("decideMention: checks that need no model", () => {
   it("an edited copy of a quote is still a copy; a different story is not", () => {
     // Other punctuation, spacing and width, and one word changed.
     const edited = "祖父の代から続く焙煎所で 毎朝豆を焼いています!! 港が見える窓辺の席が人気です";
-    const other = "昭和の喫茶店らしいナポリタンと、店主が描いた港の絵が迎えてくれます。";
-    expect(quoteContainment(JA_QUOTE, edited)).toBeGreaterThanOrEqual(COPY_CONTAINMENT);
-    expect(quoteContainment(JA_QUOTE, other)).toBeLessThan(0.2);
-    const enEdited =
-      "Test Shop roasts its beans by hand each morning, before the harbour ferries leave!";
-    expect(quoteContainment(EN_QUOTE, enEdited)).toBeGreaterThanOrEqual(COPY_CONTAINMENT);
+    expect(quotesAreCopies(JA_QUOTE, edited)).toBe(true);
     expect(
-      quoteContainment(
-        EN_QUOTE,
-        "At Test Shop the owner keeps her grandfather's tin coffee scoop.",
+      quotesAreCopies(
+        JA_QUOTE,
+        "昭和の喫茶店らしいナポリタンと、店主が描いた港の絵が迎えてくれます。",
       ),
-    ).toBeLessThan(0.3);
-    // Three words changed in a short quote still scores about 0.7, which is why the threshold is
-    // not set higher.
+    ).toBe(false);
     expect(
-      quoteContainment(
+      quotesAreCopies(
+        EN_QUOTE,
+        "Test Shop roasts its beans by hand each morning, before the harbour ferries leave!",
+      ),
+    ).toBe(true);
+    // Three words changed: containment about 0.7.
+    expect(
+      quotesAreCopies(
         EN_QUOTE,
         "Test Shop roasts the beans by hand each day before the harbour boats leave.",
       ),
-    ).toBeGreaterThanOrEqual(COPY_CONTAINMENT);
+    ).toBe(true);
+    expect(
+      quotesAreCopies(EN_QUOTE, "At Test Shop the owner keeps her grandfather's tin coffee scoop."),
+    ).toBe(false);
   });
 
   it("a copy with new text before and after it is still a copy, edited or not", () => {
-    const wrappedJa = `長崎旅行の二日目に寄りました。${JA_QUOTE}次は夜に行きたいと思います。おすすめです。`;
-    const wrappedEn = `We loved our trip! ${EN_QUOTE} Highly recommended to anyone visiting the city this autumn.`;
-    const wrappedAndEdited =
-      "Honestly? Test Shop roasts its beans by hand each morning, before the harbour ferries leave!! Go early, it fills up fast with locals and tourists.";
-    expect(quoteContainment(JA_QUOTE, wrappedJa)).toBe(1);
-    expect(quoteContainment(wrappedEn, EN_QUOTE)).toBe(1);
-    expect(quoteContainment(EN_QUOTE, wrappedAndEdited)).toBeGreaterThan(0.85);
+    // About as much new text as copied: the copy is still at least half of the post's quote.
+    expect(
+      quotesAreCopies(
+        JA_QUOTE,
+        `長崎旅行の二日目に寄りました。${JA_QUOTE}次は夜に行きたいと思います。`,
+      ),
+    ).toBe(true);
+    expect(
+      quotesAreCopies(`We loved our trip! ${EN_QUOTE} Highly recommended this autumn.`, EN_QUOTE),
+    ).toBe(true);
+    expect(
+      quotesAreCopies(
+        EN_QUOTE,
+        "Honestly? Test Shop roasts its beans by hand each morning, before the harbour ferries leave!! Go early, it fills up fast.",
+      ),
+    ).toBe(true);
+  });
+
+  it("a short shown quote does not make a longer story that contains it a copy", () => {
+    // Shown first: a dish name alone (7 trigrams) ...
+    const dish = "架空楼のちゃんぽん";
+    expect(
+      quotesAreCopies(
+        dish,
+        "架空楼のちゃんぽんは、創業者が留学生のために考えた料理だと店の人が教えてくれました。",
+      ),
+    ).toBe(false);
+    // ... or a sentence wholly inside a story more than twice as long.
+    const sentence = "架空楼のちゃんぽんは野菜がたっぷりで、スープがとても濃厚でした。";
+    expect(
+      quotesAreCopies(
+        sentence,
+        `長崎に来たら必ず寄る店です。${sentence}二階の窓からは港が見えて、昔の写真も飾ってあり、店の歴史を話してくれました。`,
+      ),
+    ).toBe(false);
+    // The same short words posted again are still a copy, by the Jaccard index.
+    expect(quotesAreCopies(dish, "架空楼の、ちゃんぽん！")).toBe(true);
+  });
+
+  it("isCopy: containment only for quotes long enough and close in length, else Jaccard", () => {
+    const min = CONTAINMENT_MIN_GRAMS;
+    // Containment 0.6 at the smallest size and ratio it applies to.
+    expect(isCopy(12, min, 2 * min)).toBe(true);
+    expect(isCopy(11, min, 2 * min)).toBe(false);
+    // Too short for containment: all of it shared but well under 0.8 Jaccard.
+    expect(isCopy(min - 1, min - 1, 2 * min)).toBe(false);
+    expect(isCopy(min - 1, min - 1, min)).toBe(true);
+    // Too far apart in length for containment: under half.
+    expect(isCopy(30, 30, 61)).toBe(false);
+    expect(isCopy(0, 0, 0)).toBe(false);
   });
 
   it("two people's own short quotes about one shop, sharing its name, are not copies", () => {
@@ -316,40 +374,37 @@ describe("decideMention: checks that need no model", () => {
         "Fictional Test Coffee House has the best cinnamon toast in town.",
         "Fictional Test Coffee House stays open late on Friday nights.",
       ],
-      // The closest pair found: the name and a stock phrase in common, about 0.57.
+      // The closest pair found: the name and a stock phrase in common, containment about 0.57.
       [
         "Test Shop is a lovely little place, the owner was so kind to us.",
         "Test Shop is a lovely little place with a view of the harbour.",
       ],
     ] as const)
-      expect(quoteContainment(a, b), `${a} / ${b}`).toBeLessThan(COPY_CONTAINMENT);
+      expect(quotesAreCopies(a, b), `${a} / ${b}`).toBe(false);
   });
 
   it("errs towards refusing: a short quote that is mostly another's stock phrase is a copy", () => {
-    // About 0.66: the name and "is a lovely little place" are two thirds of the shorter quote.
+    // Containment about 0.66: the name and "is a lovely little place" are two thirds of it.
     expect(
-      quoteContainment(
+      quotesAreCopies(
         "Test Shop is a lovely little place, the owner was kind.",
         "Test Shop is a lovely little place with a view of the harbour.",
       ),
-    ).toBeGreaterThanOrEqual(COPY_CONTAINMENT);
+    ).toBe(true);
   });
 
-  it("CopyIndex compares a quote with every indexed one, whatever their lengths", () => {
+  it("CopyIndex compares a quote with every indexed one by the same rule", () => {
     const index = new CopyIndex<string>();
     index.add("ja", quoteFingerprint(JA_QUOTE));
-    index.add("short", quoteFingerprint("Test Shop stays open late on Friday nights."));
-    index.add(
-      "long",
-      quoteFingerprint(`We loved our trip! ${EN_QUOTE} Go early, it fills up fast.`),
-    );
+    index.add("dish", quoteFingerprint("架空楼のちゃんぽん"));
+    index.add("long", quoteFingerprint(`We loved our trip! ${EN_QUOTE} Go early, it fills up.`));
     // A new quote wrapping an indexed one, and a new quote cut from a longer indexed one.
     expect(index.copyOf(quoteFingerprint(`長崎で。${JA_QUOTE}また行きます。`))).toBe("ja");
     expect(index.copyOf(quoteFingerprint(EN_QUOTE))).toBe("long");
-    // A quote is not a copy of itself, and a different quote about the shop is not a copy.
+    // A quote is not a copy of itself; a story containing the short dish name is not a copy.
     expect(index.copyOf(quoteFingerprint(JA_QUOTE), "ja")).toBeUndefined();
     expect(
-      index.copyOf(quoteFingerprint("Test Shop has the best cinnamon toast in town.")),
+      index.copyOf(quoteFingerprint("架空楼のちゃんぽんは、店の人が毎朝スープを仕込んでいます。")),
     ).toBeUndefined();
     expect(index.copyOf("")).toBeUndefined();
     expect(new CopyIndex<string>().copyOf(quoteFingerprint(EN_QUOTE))).toBeUndefined();
@@ -428,6 +483,59 @@ describe("decideMention: checks that need no model", () => {
       expect(reportMentionSchema.safeParse(bad).success, JSON.stringify(bad).slice(0, 60)).toBe(
         false,
       );
+  });
+});
+
+describe("storedPostText: the part of a post that is stored and checked", () => {
+  const filler = (n: number) => "架空の前置き。".repeat(Math.ceil(n / 7)).slice(0, n);
+
+  it("keeps a short text whole, trimmed", () => {
+    expect(storedPostText(`  ${POST}  `, NAMES)).toBe(POST);
+  });
+
+  it("keeps a window around the first mention when the text is long, so the name is not cut off", () => {
+    const text = `${filler(12_000)}架空珈琲 試験堂の話。${filler(5_000)}`;
+    const kept = storedPostText(text, NAMES);
+    expect(kept.length).toBeLessThanOrEqual(TEXT_MAX);
+    expect(kept).toContain("架空珈琲 試験堂の話。");
+    expect(namesPlace(kept, NAMES)).toBe(true);
+    // A third of the window comes before the name.
+    expect(kept.indexOf("架空珈琲")).toBeGreaterThan(TEXT_MAX / 4);
+    // Near the end of a text, the window still takes TEXT_MAX characters.
+    expect(storedPostText(`${filler(12_000)}架空珈琲 試験堂。`, NAMES)).toHaveLength(TEXT_MAX);
+  });
+
+  it("finds the name written another way: other width, spacing or case", () => {
+    const text = `${filler(9_000)}ＦＩＣＴＩＯＮＡＬ test coffee  house was here.`;
+    expect(firstMention(text, NAMES)).toBe(9_000);
+    expect(storedPostText(text, NAMES)).toContain("ＦＩＣＴＩＯＮＡＬ");
+    expect(firstMention("nothing about it", NAMES)).toBe(-1);
+    expect(firstMention("架空", ["架"])).toBe(-1);
+  });
+
+  it("keeps the start of a long text that never names the place", () => {
+    const text = `始まり。${filler(9_000)}`;
+    expect(storedPostText(text, NAMES)).toBe(text.slice(0, TEXT_MAX));
+  });
+
+  it("returns what it kept unchanged when applied again, as the collector and the server both do", () => {
+    for (const text of [
+      `${filler(12_000)}架空珈琲 試験堂の話。${filler(5_000)}`,
+      `始まり。${filler(9_000)}`,
+      POST,
+    ]) {
+      const kept = storedPostText(text, NAMES);
+      expect(storedPostText(kept, NAMES)).toBe(kept);
+      expect(storedPostText(kept, [])).toBe(kept);
+    }
+  });
+
+  it("never splits a character outside the Basic Multilingual Plane", () => {
+    const kept = storedPostText("𠮷".repeat(5_000), NAMES);
+    expect(kept.length).toBeLessThanOrEqual(TEXT_MAX);
+    expect(kept).toBe("𠮷".repeat(TEXT_MAX / 2));
+    const odd = storedPostText(`a${"𠮷".repeat(5_000)}`, NAMES);
+    expect(odd.isWellFormed()).toBe(true);
   });
 });
 

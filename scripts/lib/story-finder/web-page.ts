@@ -5,7 +5,7 @@ import { isIP, type LookupFunction } from "node:net";
 import type { Readable } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { parseHttpUrl } from "../../../src/lib/adapters/url";
-import { TEXT_MAX } from "../../../src/lib/story-finder/mention";
+import { storedPostText } from "../../../src/lib/story-finder/mention";
 import { namesPlace } from "./types";
 
 /** The robots.txt product token, and the User-Agent sent with it. */
@@ -418,19 +418,11 @@ export function htmlText(html: string): string {
 }
 
 /**
- * The part of a page around the first mention of the place, at most TEXT_MAX characters; null when
- * the page never names it.
+ * The part of a page around the first mention of the place, at most TEXT_MAX characters
+ * (storedPostText, the window storyFinder.ingest keeps too); null when the page never names it.
  */
 export function textAroundPlace(text: string, names: readonly string[]): string | null {
-  if (!namesPlace(text, names)) return null;
-  let first = text.length;
-  for (const name of names) {
-    const index = name.trim().length >= 2 ? text.indexOf(name.trim()) : -1;
-    if (index >= 0 && index < first) first = index;
-  }
-  if (first === text.length) first = 0;
-  const start = Math.max(0, first - Math.floor(TEXT_MAX / 3));
-  return text.slice(start, start + TEXT_MAX).trim();
+  return namesPlace(text, names) ? storedPostText(text, names) : null;
 }
 
 // ---------------------------------------------------------------------------------------------
