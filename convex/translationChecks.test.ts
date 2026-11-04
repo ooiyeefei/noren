@@ -109,6 +109,40 @@ async function setup() {
     (await b.t.run((ctx) => ctx.db.query("auditLog").collect())).filter(
       (row) => row.action === action,
     );
+  /** A found post on the place, its quote the same made-up words: a stranger's public post. */
+  let posts = 0;
+  const foundQuote = (options: { origin?: "story_finder" } = { origin: "story_finder" }) =>
+    b.run((ctx) =>
+      ctx.db.insert("source", {
+        placeId,
+        addedBy: steward,
+        platform: "web",
+        adapter: "link_card",
+        url: `https://blog.example.com/mock-entry-${++posts}`,
+        canonicalUrl: `https://blog.example.com/mock-entry-${posts}`,
+        status: "live",
+        isMock: true,
+        // Shown on the demo place, as a steward's demo source is.
+        demoConsentBy: steward,
+        demoConsentAt: Date.now(),
+        ...(options.origin ? { origin: options.origin, excerpt: ORIGINAL, excerptLang: "ja" } : {}),
+      }),
+    );
+  const saveQuote = (sourceId: Id<"source">, text: string) =>
+    b.t.mutation(internal.storyFinder.saveExcerptTranslation, {
+      sourceId,
+      lang: "en",
+      sourceText: ORIGINAL,
+      text,
+      modelVersion: "muse-spark-1.3",
+    });
+  const quoteTranslation = (sourceId: Id<"source">) =>
+    b.t.run((ctx) =>
+      ctx.db
+        .query("sourceExcerptTranslation")
+        .withIndex("by_sourceId_and_lang", (q) => q.eq("sourceId", sourceId).eq("lang", "en"))
+        .unique(),
+    );
   const setConsent = (patch: { textVersion?: string; withdrawnAt?: number }) =>
     b.run(async (ctx) => {
       const consent = await ctx.db
@@ -130,6 +164,9 @@ async function setup() {
     runs,
     record,
     audit,
+    foundQuote,
+    saveQuote,
+    quoteTranslation,
     asSteward: b.as("steward"),
   };
 }
@@ -564,6 +601,202 @@ describe("the check action", () => {
     await s.b.t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(RETRY_AFTER_MS), 10);
     expect(checker.doGenerateCalls).toHaveLength(4);
     expect((await s.checks()).map(({ status }) => status)).toEqual(["passed", "passed", "passed"]);
+  });
+
+  describe("a found post's quote", () => {
+    it("is checked as public words with no consent, while the statements' consent gate stays as it is", async () => {
+      const s = await setup();
+      // The owner agreed to a text that does not name Modal: their statement is not sent.
+      await s.setConsent({ textVersion: "draft-2" });
+      const checker = toolModel([() => ({ faithful: true, added: [], missing: [] })]);
+      models(checker, translatorModel(FAITHFUL));
+      await s.save(FAITHFUL);
+      expect(await s.checks()).toEqual([]);
+      // A stranger's public quote needs no consent: its translation is checked.
+      const sourceId = await s.foundQuote();
+      await s.saveQuote(sourceId, FAITHFUL);
+      expect(await s.checks()).toEqual([
+        expect.objectContaining({ subject: "excerpt", sourceId, status: "pending" }),
+      ]);
+      await runScheduled(s.b);
+      expect(checker.doGenerateCalls).toHaveLength(1);
+      const sent = JSON.stringify(checker.doGenerateCalls[0]!.prompt);
+      expect(sent).toContain(ORIGINAL);
+      expect(sent).toContain(FAITHFUL);
+      expect((await s.checks())[0]).toMatchObject({ status: "passed", attempts: 1 });
+      expect(await s.audit("source.translation_check")).toEqual([
+        expect.objectContaining({
+          targetType: "source",
+          targetId: sourceId,
+          actorKind: "ai",
+          modelVersion: SETTING,
+          diff: expect.objectContaining({ result: "passed", lang: "en" }),
+        }),
+      ]);
+      expect(await s.audit("claim.translation_check")).toEqual([]);
+      const [view] = await s.b.t.query(api.sources.listForPlace, { placeId: s.placeId });
+      expect(view!.excerptTranslations).toEqual([{ lang: "en", text: FAITHFUL }]);
+    });
+
+    it("only a post the story finder found and still shows is checked", async () => {
+      const s = await setup();
+      // A member's own link has no quote: nothing is translated or checked.
+      const member = await s.foundQuote({});
+      await s.saveQuote(member, FAITHFUL);
+      expect(await s.quoteTranslation(member)).toBeNull();
+      // A found post taken down after its check was queued: dropped when the run starts, unsent.
+      const checker = toolModel([() => ({ faithful: true, added: [], missing: [] })]);
+      const factory = models(checker, translatorModel(FAITHFUL));
+      const found = await s.foundQuote();
+      await s.saveQuote(found, FAITHFUL);
+      expect(await s.checks()).toHaveLength(1);
+      await s.b.run((ctx) => ctx.db.patch("source", found, { status: "hidden" }));
+      await runScheduled(s.b);
+      expect(factory).not.toHaveBeenCalled();
+      expect(checker.doGenerateCalls).toEqual([]);
+      expect(await s.checks()).toEqual([]);
+    });
+
+    it("unfaithful: translated again once as a stranger's quote with the lists, then held, and the card shows the quote alone", async () => {
+      const s = await setup();
+      const checker = toolModel([() => ({ faithful: false, added: ADDED, missing: MISSING })]);
+      const translator = translatorModel(STILL_UNFAITHFUL);
+      models(checker, translator);
+      const sourceId = await s.foundQuote();
+      await s.saveQuote(sourceId, UNFAITHFUL);
+      await runScheduled(s.b);
+      expect(checker.doGenerateCalls).toHaveLength(2);
+      expect(translator.doGenerateCalls).toHaveLength(1);
+      const sent = JSON.stringify(translator.doGenerateCalls[0]!.prompt);
+      expect(sent).toContain("untrusted data");
+      expect(sent).toContain("doNotAdd");
+      expect(sent).toContain(ADDED[0]);
+      expect(sent).toContain(MISSING[0]);
+      expect(await s.quoteTranslation(sourceId)).toMatchObject({
+        text: STILL_UNFAITHFUL,
+        modelVersion: "claude-sonnet-5-5",
+      });
+      expect((await s.checks())[0]).toMatchObject({
+        subject: "excerpt",
+        status: "held",
+        retranslated: true,
+        attempts: 2,
+        text: STILL_UNFAITHFUL,
+      });
+      expect(await s.audit("source.translate_machine")).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ diff: { lang: "en", retranslated: true } }),
+        ]),
+      );
+      expect(await s.audit("source.translation_check")).toEqual([
+        expect.objectContaining({ diff: expect.objectContaining({ result: "held" }) }),
+      ]);
+      // Held: the public card shows the quote in its own words, with no translation.
+      const [view] = await s.b.t.query(api.sources.listForPlace, { placeId: s.placeId });
+      expect(view).toMatchObject({ excerpt: ORIGINAL, excerptLang: "ja", excerptTranslations: [] });
+      expect(JSON.stringify(view)).not.toContain(STILL_UNFAITHFUL);
+    });
+
+    it("a re-translation that does not fit the quote is not saved, and the first is held", async () => {
+      const s = await setup();
+      const checker = toolModel([() => ({ faithful: false, added: ADDED, missing: MISSING })]);
+      // A made-up second attempt that adds a web address the quote never had.
+      models(checker, translatorModel(`${FAITHFUL} Book at mock-shop.example.com.`));
+      const sourceId = await s.foundQuote();
+      await s.saveQuote(sourceId, UNFAITHFUL);
+      await runScheduled(s.b);
+      expect(checker.doGenerateCalls).toHaveLength(1);
+      expect((await s.quoteTranslation(sourceId))?.text).toBe(UNFAITHFUL);
+      expect((await s.checks())[0]).toMatchObject({ status: "held", retranslated: false });
+      const [view] = await s.b.t.query(api.sources.listForPlace, { placeId: s.placeId });
+      expect(view!.excerptTranslations).toEqual([]);
+    });
+
+    it("the server refuses to save a re-translation that does not fit, whatever the translator did", async () => {
+      const s = await setup();
+      const sourceId = await s.foundQuote();
+      await s.saveQuote(sourceId, UNFAITHFUL);
+      const [item] = await s.b.t.mutation(internal.translationChecks.startBatch, {});
+      expect(
+        await s.record(item!.checkId, UNFAITHFUL, {
+          kind: "report",
+          faithful: false,
+          added: ADDED,
+          missing: MISSING,
+        }),
+      ).toBe("retranslate");
+      expect(
+        await s.b.t.mutation(internal.translationChecks.saveRetranslation, {
+          checkId: item!.checkId,
+          text: UNFAITHFUL,
+          newText: "x".repeat(500),
+          modelVersion: "claude-sonnet-5-5",
+        }),
+      ).toBe(false);
+      expect((await s.quoteTranslation(sourceId))?.text).toBe(UNFAITHFUL);
+      const [held] = await s.checks();
+      expect(held).toMatchObject({ status: "held", added: ADDED, missing: MISSING });
+      expect(held!.leaseUntil).toBeUndefined();
+      // Nothing is left pending, so the run schedules no further run for it.
+      await s.b.t.mutation(internal.translationChecks.finishRun, {});
+      const run = await s.b.t.run((ctx) => ctx.db.query("translationCheckRun").first());
+      expect(run?.scheduledId).toBeUndefined();
+    });
+
+    it("statements and quotes share one run: a sleeping endpoint gets one request and one wake", async () => {
+      const s = await setup();
+      let asleep = true;
+      const checker = toolModel([
+        () => {
+          if (asleep)
+            throw new APICallError({
+              message: "no upstreams available",
+              url: "https://mock.invalid/v1/chat/completions",
+              requestBodyValues: {},
+              statusCode: 503,
+            });
+          return { faithful: true, added: [], missing: [] };
+        },
+      ]);
+      models(checker, translatorModel(FAITHFUL));
+      await s.save(FAITHFUL);
+      await s.saveQuote(await s.foundQuote(), FAITHFUL);
+      const start = Date.now();
+      await runScheduled(s.b);
+      expect(checker.doGenerateCalls).toHaveLength(1);
+      const waiting = await s.checks();
+      expect(waiting.map(({ subject, status }) => [subject ?? "claim", status])).toEqual([
+        ["claim", "pending"],
+        ["excerpt", "pending"],
+      ]);
+      for (const { nextAttemptAt } of waiting) near(nextAttemptAt, start + RETRY_AFTER_MS);
+      expect((await s.runs()).filter(({ state }) => state.kind === "pending")).toHaveLength(1);
+      asleep = false;
+      await s.b.t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(RETRY_AFTER_MS), 10);
+      expect(checker.doGenerateCalls).toHaveLength(3);
+      expect((await s.checks()).map(({ status }) => status)).toEqual(["passed", "passed"]);
+    });
+
+    it("gives up after nine minutes like a statement's check; the translation stays shown", async () => {
+      const s = await setup();
+      const sourceId = await s.foundQuote();
+      await s.saveQuote(sourceId, FAITHFUL);
+      const start = Date.now();
+      const sleeping = { kind: "retry" as const, sent: true, error: "AI_APICallError HTTP 503: x" };
+      const [item] = await s.b.t.mutation(internal.translationChecks.startBatch, {});
+      expect(item).toMatchObject({
+        original: ORIGINAL,
+        originalLang: "ja",
+        inputKind: "public_post_quote",
+      });
+      expect(await s.record(item!.checkId, FAITHFUL, sleeping)).toBe("waiting");
+      vi.setSystemTime(start + GIVE_UP_AFTER_MS + 1000);
+      const [again] = await s.b.t.mutation(internal.translationChecks.startBatch, {});
+      expect(await s.record(again!.checkId, FAITHFUL, sleeping)).toBe("unavailable");
+      expect((await s.checks())[0]).toMatchObject({ status: "unavailable", attempts: 2 });
+      const [view] = await s.b.t.query(api.sources.listForPlace, { placeId: s.placeId });
+      expect(view!.excerptTranslations).toEqual([{ lang: "en", text: FAITHFUL }]);
+    });
   });
 
   describe("consent", () => {

@@ -175,21 +175,29 @@ export function namesPlace(text: string, names: readonly string[]): boolean {
   });
 }
 
-const TLDS =
-  "com|net|org|info|biz|jp|io|co|me|ly|app|dev|site|shop|store|online|xyz|tv|us|uk|link|page|blog|tokyo|nagasaki";
+/** A domain label in any script, internationalised names included. */
+const LABEL = String.raw`[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?`;
+/**
+ * A domain's last label: ASCII, starting with a letter and ending with one (so at least two
+ * letters: "e.g", "1.5km" and "ver.2" are not domains), or punycode (xn--...). Any such label counts,
+ * not a list of known ones, since new top-level domains appear all the time.
+ */
+const TOP_LABEL = String.raw`(?:xn--[a-z0-9-]+|[a-z][a-z0-9-]*[a-z])`;
+/** A dot, or a dot spelled out to get past a filter: " . ", "(dot)", "[.]", "{dot}", " dot ", "ドット". */
+const DOT = String.raw`(?:\.|\s+\.\s+|\s*[(\[{<]\s*(?:\.|dot|ドット|点)\s*[)\]}>]\s*|\s+dot\s+|\s*ドット\s*)`;
+/** label.label, however the dot is written; the top label may be followed by any non-ASCII text. */
+const DOMAIN = new RegExp(`${LABEL}${DOT}${TOP_LABEL}(?![a-z0-9-])`, "iu");
 
 /**
- * What in a quote would let a post advertise or reach someone through Noren: a web address, an
- * email address, a phone number or an @handle. A shown quote must carry none of them.
+ * What in a quote would let a post advertise or reach someone through Noren: a web address (any
+ * scheme, "www.", or anything shaped like a domain name, dots spelled out included), an email
+ * address, a phone number or an @handle. A shown quote must carry none of them. It errs towards
+ * refusing: a quote that only looks like it has an address is dropped, which costs one quote.
  */
 export function contactIn(quote: string): "url" | "email" | "phone" | "handle" | null {
   const text = quote.normalize("NFKC");
   if (/[^\s@]+@[^\s@]+\.[^\s@]+/u.test(text)) return "email";
-  if (
-    /https?:\/\/|www\./iu.test(text) ||
-    new RegExp(`\\b[a-z0-9][a-z0-9-]*\\.(?:${TLDS})(?![a-z0-9])`, "iu").test(text)
-  )
-    return "url";
+  if (/[a-z][a-z0-9+.-]*:\/\/|www\./iu.test(text) || DOMAIN.test(text)) return "url";
   if (/(?:^|[^\p{L}\p{N}_])@[\p{L}\p{N}_.]{2,}/u.test(text)) return "handle";
   // A Japanese number starts with 0 and has 10 or 11 digits; an international one starts with +.
   // Dates and years start with 1 or 2, so "1962-1975" or "2026-10-01" are not taken for one.
@@ -243,37 +251,113 @@ export function quoteFingerprint(quote: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
-/** How much two quotes overlap: the Jaccard index of their character trigrams, 0 to 1. */
-export function quoteSimilarity(a: string, b: string): number {
-  const grams = (text: string) => {
-    const fingerprint = quoteFingerprint(text);
-    const set = new Set<string>();
-    for (let i = 0; i + 3 <= fingerprint.length; i++) set.add(fingerprint.slice(i, i + 3));
-    if (set.size === 0 && fingerprint) set.add(fingerprint);
-    return set;
-  };
-  const x = grams(a);
-  const y = grams(b);
-  if (!x.size || !y.size) return 0;
+/** A fingerprint's distinct character trigrams (the whole fingerprint when it is shorter). */
+export function quoteGrams(fingerprint: string): Set<string> {
+  const grams = new Set<string>();
+  for (let i = 0; i + 3 <= fingerprint.length; i++) grams.add(fingerprint.slice(i, i + 3));
+  if (grams.size === 0 && fingerprint) grams.add(fingerprint);
+  return grams;
+}
+
+/** The Jaccard index of two trigram sets, 0 to 1. */
+export function gramSimilarity(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+  if (!a.size || !b.size) return 0;
   let shared = 0;
-  for (const gram of x) if (y.has(gram)) shared++;
-  return shared / (x.size + y.size - shared);
+  for (const gram of a) if (b.has(gram)) shared++;
+  return shared / (a.size + b.size - shared);
 }
 
-/** Quotes this similar to an attached one are copies (the same text posted again with small edits). */
-export const DUPLICATE_QUOTE_SIMILARITY = 0.6;
-
-/** The first and last characters of a quote's fingerprint, indexed to find copies of it cheaply. */
-export function quoteKeys(quote: string): { quoteHead: string; quoteTail: string } {
-  const fingerprint = quoteFingerprint(quote);
-  return { quoteHead: fingerprint.slice(0, 16), quoteTail: fingerprint.slice(-16) };
+/** How much two quotes overlap: the Jaccard index of their fingerprints' trigrams, 0 to 1. */
+export function quoteSimilarity(a: string, b: string): number {
+  return gramSimilarity(quoteGrams(quoteFingerprint(a)), quoteGrams(quoteFingerprint(b)));
 }
 
-/** Who wrote a post, as one key per platform, for the per-author limit. */
-export function authorKey(
-  platform: MentionPlatform,
-  author: { authorUrl?: string; authorHandle?: string; authorName?: string },
-): string {
-  const who = author.authorUrl ?? author.authorHandle ?? author.authorName ?? "unknown";
-  return `${platform}:${who.normalize("NFKC").trim().toLowerCase()}`.slice(0, 300);
+/**
+ * Quotes at least this similar are copies: the same words posted again with small edits (a changed
+ * word, other punctuation, spacing or width), which survive in most trigrams of the fingerprint.
+ */
+export const DUPLICATE_QUOTE_SIMILARITY = 0.8;
+
+/**
+ * Whether two trigram sets of these sizes could reach the copy threshold at all: the Jaccard index
+ * is at most the smaller size over the larger, so a quote much shorter or longer is skipped unread.
+ */
+export function mayBeCopies(gramsA: number, gramsB: number): boolean {
+  const [small, large] = gramsA < gramsB ? [gramsA, gramsB] : [gramsB, gramsA];
+  return large > 0 && small / large >= DUPLICATE_QUOTE_SIMILARITY;
+}
+
+/**
+ * Second-level labels under a country code that are public, so a site's own name is one level
+ * further down (example.co.jp, example.com.au). Japan's prefecture labels are public too
+ * (example.nagasaki.jp). This is a short stand-in for the Public Suffix List: where it misses a
+ * public label, sites under it share one host, which only makes the author limit stricter.
+ */
+const PUBLIC_SECOND_LEVEL = new Set(
+  (
+    "ac ad co com ed edu go gov gr lg ltd mil ne net or org plc sch nhs idv per asn id me nom " +
+    "info biz"
+  ).split(" "),
+);
+const JP_PREFECTURES = new Set(
+  (
+    "hokkaido aomori iwate miyagi akita yamagata fukushima ibaraki tochigi gunma saitama " +
+    "chiba tokyo kanagawa niigata toyama ishikawa fukui yamanashi nagano gifu shizuoka aichi " +
+    "mie shiga kyoto osaka hyogo nara wakayama tottori shimane okayama hiroshima yamaguchi " +
+    "tokushima kagawa ehime kochi fukuoka saga nagasaki kumamoto oita miyazaki kagoshima " +
+    "okinawa"
+  ).split(" "),
+);
+
+/**
+ * The registrable part of a host name: the name a site's owner registered, with every subdomain
+ * folded in (blog.example.co.jp and www.example.co.jp are both example.co.jp). Free blog hosts fold
+ * too (anyone.hatenablog.com is hatenablog.com): a new subdomain there costs nothing, so it must not
+ * count as a new author.
+ */
+export function registrableHost(hostname: string): string {
+  const labels = hostname.toLowerCase().replace(/\.$/, "").split(".").filter(Boolean);
+  if (labels.length <= 2) return labels.join(".");
+  const top = labels.at(-1)!;
+  const second = labels.at(-2)!;
+  const publicSecond =
+    top.length === 2 &&
+    (PUBLIC_SECOND_LEVEL.has(second) || (top === "jp" && JP_PREFECTURES.has(second)));
+  return labels.slice(publicSecond ? -3 : -2).join(".");
+}
+
+/** A profile address as one string: no scheme, www. or m., trailing slash or fragment; lower case. */
+function profileKey(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^(?:www|m)\./, "");
+    return `${host}${parsed.pathname.replace(/\/+$/, "")}${parsed.search}`.toLowerCase();
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+/**
+ * Who wrote a post, as one key per platform, for the per-run author limit. Only identifiers the
+ * platform itself vouches for count: for a web page, the registrable host it was served from (a page
+ * cannot claim another site's name); elsewhere the profile address or handle the platform reports.
+ * Never a free-text display name or a page's author or og: tags, which a post can set to anything:
+ * a post with no verified identity shares the platform's one "unknown" key.
+ */
+export function authorKey(candidate: {
+  platform: MentionPlatform;
+  canonicalUrl: string;
+  authorUrl?: string;
+  authorHandle?: string;
+}): string {
+  if (candidate.platform === "web") {
+    const parsed = parseHttpUrl(candidate.canonicalUrl);
+    return `web:${parsed.ok ? registrableHost(parsed.url.hostname) : "unknown"}`.slice(0, 300);
+  }
+  const who = candidate.authorUrl?.trim()
+    ? profileKey(candidate.authorUrl)
+    : candidate.authorHandle?.trim()
+      ? candidate.authorHandle.normalize("NFKC").trim().toLowerCase()
+      : "unknown";
+  return `${candidate.platform}:${who}`.slice(0, 300);
 }
