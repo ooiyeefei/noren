@@ -458,52 +458,6 @@ export function listingSharesName(listing: string, names: readonly string[]): bo
   );
 }
 
-const SEPARATOR_CHAR = /[\s()[\]{}<>「」『』【】〈〉《》〔〕・·/|,、:;-]/u;
-const KATAKANA_CHAR = /[\p{Script=Katakana}ー]/u;
-const LATIN_CHAR = /[\p{Script=Latin}\p{N}]/u;
-
-/** Two neighbouring characters that belong to one katakana or Latin word. */
-function sameWord(a: string | undefined, b: string | undefined): boolean {
-  if (a === undefined || b === undefined) return false;
-  return (
-    (KATAKANA_CHAR.test(a) && KATAKANA_CHAR.test(b)) || (LATIN_CHAR.test(a) && LATIN_CHAR.test(b))
-  );
-}
-
-/**
- * Whether a map listing's name holds one of the place's whole names (three characters or more) as
- * a word of its own: 福砂屋 is in 「カステラ本家 福砂屋 長崎本店」, but トレビ is not in
- * 「ネオ·プレイス長崎駅前トレビオス壱番館」, where it is the start of a longer katakana word. Kanji
- * names join compounds freely (中華料理四海樓), so only katakana and Latin edges are checked.
- */
-export function listingHoldsWholeName(listing: string, names: readonly string[]): boolean {
-  let folded = "";
-  const gapBefore: boolean[] = [];
-  let gap = true;
-  for (const char of listing.normalize("NFKC")) {
-    if (SEPARATOR_CHAR.test(char)) {
-      gap = true;
-      continue;
-    }
-    const part = foldForNames(char);
-    folded += part;
-    for (let i = 0; i < part.length; i++) gapBefore.push(i === 0 && gap);
-    gap = false;
-  }
-  return names.some((name) => {
-    const needle = foldForNames(name.replace(new RegExp(SEPARATOR_CHAR, "gu"), ""));
-    if (needle.length < NAME_PART_MIN) return false;
-    for (let at = folded.indexOf(needle); at !== -1; at = folded.indexOf(needle, at + 1)) {
-      const end = at + needle.length;
-      const leftOpen = gapBefore[at] || !sameWord(folded[at - 1], folded[at]);
-      const rightOpen =
-        end === folded.length || gapBefore[end] || !sameWord(folded[end - 1], folded[end]);
-      if (leftOpen && rightOpen) return true;
-    }
-    return false;
-  });
-}
-
 /**
  * Where the place is first named in `text`, matched as namesPlace matches (width, case, spaces and
  * old-form kanji ignored, each character folded on its own, whole names and their parts); -1 when

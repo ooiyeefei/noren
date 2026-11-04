@@ -1,6 +1,5 @@
 import {
   guessLang,
-  listingHoldsWholeName,
   listingNamesPlace,
   listingSharesName,
   mentionCanonicalUrl,
@@ -138,7 +137,11 @@ function placesWithName(places: readonly FinderPlace[], lang = "ja") {
 // review-scraped $0.0005, start $0.00005/GB; minimal maxTotalChargeUsd $0.50.
 // ---------------------------------------------------------------------------------------------
 
-/** A listing this close to our pin is the place if its name fits (listingNamesPlace). */
+/**
+ * A listing this close to our pin is the place if its name fits (listingNamesPlace). Further off it
+ * is not, whatever its name: a shop's other branches have their own entries on the map, so a far
+ * listing belongs to one of those.
+ */
 export const SAME_PLACE_M = 300;
 /**
  * A listing this close is also the place if it only shares a shorter name with ours
@@ -146,13 +149,6 @@ export const SAME_PLACE_M = 300;
  * short word is more likely another shop.
  */
 export const SHARED_NAME_M = 100;
-/**
- * A listing further than that, up to here, is still taken for the place when its name holds the
- * place's whole name as a word (listingHoldsWholeName): a pin on a shop's side street can be a few
- * hundred metres from the point Google gives its main store, but a different shop that merely
- * contains the name's letters (トレビ in トレビオス) is not.
- */
-export const NAMED_PLACE_M = 3000;
 
 /**
  * Whether the listing Google found is our place, and if it is, whether it is still open. A
@@ -174,10 +170,9 @@ export function judgeListing(
   else {
     const metres = distanceM(planned.pin, { lat, lng });
     isPlace =
-      metres <= SAME_PLACE_M
-        ? listingNamesPlace(name, planned.names) ||
-          (metres <= SHARED_NAME_M && listingSharesName(name, planned.names))
-        : metres <= NAMED_PLACE_M && listingHoldsWholeName(name, planned.names);
+      metres <= SAME_PLACE_M &&
+      (listingNamesPlace(name, planned.names) ||
+        (metres <= SHARED_NAME_M && listingSharesName(name, planned.names)));
   }
   if (!isPlace) return "wrong_listing";
   return item.permanentlyClosed === true ? "closed_listing" : null;
