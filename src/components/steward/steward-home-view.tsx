@@ -8,6 +8,7 @@ import type { PlaceKind, Visibility } from "@/lib/domain/constants";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { stewardMessages } from "@/lib/i18n/messages/steward";
 import { takedownsMessages } from "@/lib/i18n/messages/takedowns";
+import { storyFinderMessages } from "@/lib/i18n/messages/story-finder";
 import { candidateMessages } from "@/lib/i18n/messages/candidates";
 import { checkMessages } from "@/lib/i18n/messages/checks";
 import type { RegionConfig } from "@/lib/region/schema";
@@ -39,7 +40,15 @@ export function StewardNav({
   current,
 }: {
   locale: Locale;
-  current: "home" | "open-text" | "people" | "candidates" | "reports" | "takedowns" | "place-admin";
+  current:
+    | "home"
+    | "open-text"
+    | "people"
+    | "candidates"
+    | "reports"
+    | "takedowns"
+    | "story-finder"
+    | "place-admin";
 }) {
   const m = messagesFor(stewardMessages, locale);
   const links = [
@@ -53,6 +62,11 @@ export function StewardNav({
     },
     { page: "reports", path: "/reports", label: messagesFor(checkMessages, locale).reportsTitle },
     { page: "takedowns", path: "/takedowns", label: messagesFor(takedownsMessages, locale).title },
+    {
+      page: "story-finder",
+      path: "/story-finder",
+      label: messagesFor(storyFinderMessages, locale).title,
+    },
   ];
   return (
     <nav className="flex min-w-0 flex-wrap gap-2">

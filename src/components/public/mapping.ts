@@ -58,10 +58,12 @@ export type PageViewLike = {
   sentences: StorySentenceView[];
   claims: (Omit<StoryClaimView, "id"> & { _id: string })[];
 };
-export type SourceViewLike = Omit<EmbedSourceView, "id"> & {
+export type SourceViewLike = Omit<EmbedSourceView, "id" | "found"> & {
   _id: string;
   /** The member who linked it, once they agreed to show it with their name (FR-033). */
   sharedBy?: string;
+  /** The story finder found it in a public post; no member shared it. */
+  foundInPublicPost?: boolean;
   addedAt?: number;
   addedByMe?: boolean;
   /** Whether a visit to the original goes through /out and is counted (FR-024). */
@@ -82,11 +84,14 @@ export type LatestStoryLike = {
   id: string;
   placeSlug: string;
   placeNames: NameLike[];
-  /** A written story, or the member's own line about a post they shared. */
+  /** A written story, the member's own line about a post they shared, or a found post's quote. */
   text?: string;
   lang?: string;
   platform?: string;
+  /** The member who shared it, or a found post's author as the platform shows them. */
   sharedBy: string;
+  /** The story finder found it in a public post. */
+  found?: boolean;
   addedAt: number;
 };
 export type StoryFeedEntry = { id: string; addedAt: number; canRemove: boolean } & (
@@ -243,6 +248,14 @@ export function toEmbedSource(source: SourceViewLike): EmbedSourceView {
     creatorNote: source.creatorNote,
     noteLang: source.noteLang,
     isMock: source.isMock,
+    ...(source.foundInPublicPost
+      ? {
+          found: true,
+          excerpt: source.excerpt,
+          excerptLang: source.excerptLang,
+          excerptTranslations: source.excerptTranslations,
+        }
+      : {}),
   };
 }
 

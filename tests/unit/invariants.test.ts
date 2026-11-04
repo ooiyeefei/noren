@@ -70,9 +70,14 @@ const inheritsMockFlag = [
   "pageVersion",
   "pageSentence",
   "noteTranslation",
+  // From its source: only story finder sources on real places have one.
+  "sourceExcerptTranslation",
 ];
 const notPersonCreated = [
   "seedOsmCandidate",
+  // Public posts the story finder collected for real places only, and their counts.
+  "mentionCandidate",
+  "mentionCount",
   "openTextSnippet",
   "phraseCard",
   "takedownRequest",

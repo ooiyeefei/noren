@@ -2,6 +2,7 @@ import { platformName } from "@/components/embeds/platform-name";
 import { NorenTab } from "@/components/explore/noren-tab";
 import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { publicMessages } from "@/lib/i18n/messages/public";
+import { quoted } from "@/components/embeds/quoted";
 import { placeHeading, type LatestStoryLike, type PublicRegionProps } from "./mapping";
 
 /** FR-033: the newest stories people shared, each a way into the place it is about. */
@@ -27,9 +28,13 @@ export function LatestStories({
           const credit =
             entry.kind === "written"
               ? format(m.writtenBy, { name: entry.sharedBy })
-              : platform
-                ? format(m.postSharedBy, { platform, name: entry.sharedBy })
-                : format(m.linkSharedBy, { name: entry.sharedBy });
+              : entry.found
+                ? platform
+                  ? format(m.foundPost, { platform })
+                  : m.foundPage
+                : platform
+                  ? format(m.postSharedBy, { platform, name: entry.sharedBy })
+                  : format(m.linkSharedBy, { name: entry.sharedBy });
           return (
             <li key={`${entry.kind}:${entry.id}`} className="w-[260px] shrink-0">
               <a
@@ -44,7 +49,7 @@ export function LatestStories({
                 </span>
                 {entry.text && (
                   <span lang={entry.lang} className="line-clamp-3 text-[15px] leading-relaxed">
-                    {entry.text}
+                    {entry.found ? quoted(entry.text, entry.lang) : entry.text}
                   </span>
                 )}
                 <span className="mt-auto text-[13px] text-muted-foreground">{credit}</span>

@@ -22,6 +22,9 @@ export function createCliRunner(options: {
 }): ConvexRunner {
   if (options.prod && options.deployment !== undefined)
     throw new Error("Name a deployment or use prod, not both");
+  // A value starting with "--" would be read by the CLI as another flag.
+  if (options.deployment !== undefined && !/^[A-Za-z0-9][A-Za-z0-9:/_-]*$/.test(options.deployment))
+    throw new Error("--deployment must be a deployment name such as careful-bee-139");
   const execute: ExecFileLike = options.exec ?? execFile;
   return (fn, args, runOptions) =>
     new Promise((resolve, reject) => {

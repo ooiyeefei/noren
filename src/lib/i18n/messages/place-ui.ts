@@ -28,6 +28,11 @@ export const placeUiMessages = defineMessages({
     notice: "このページには外部サービスの投稿があります。選んだ投稿だけを読み込みます。",
     noticeLink: "外部サービスについて",
     loadFailed: "読み込めませんでした。元の投稿へのリンクをご利用ください。",
+    foundInPublicPost: "公開されている投稿から",
+    foundHint:
+      "Noren が公開の投稿から見つけ、この場所の話だと確かめて載せています。投稿はその人のものです。",
+    postedBy: "投稿者：{author}",
+    webPage: "ウェブページ",
   },
   en: {
     locate: "Show my location",
@@ -55,5 +60,10 @@ export const placeUiMessages = defineMessages({
     notice: "This page can show posts from other services. They load only when you choose.",
     noticeLink: "About other services",
     loadFailed: "This post could not load. You can still view the original.",
+    foundInPublicPost: "Found in a public post",
+    foundHint:
+      "Noren found this in a public post and checked that it is about this place. The post belongs to its author.",
+    postedBy: "Posted by {author}",
+    webPage: "Web page",
   },
 });

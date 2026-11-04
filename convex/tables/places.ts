@@ -210,10 +210,12 @@ export const placeTables = {
     .index("by_sourceUrl_and_lang", ["sourceUrl", "lang"]),
 
   /**
-   * A reference to a public post or page. Stores no captions, images or post content (FR-006).
-   * `demoConsent*` record a steward noting that the post's author agreed to appear in the public
-   * demo (FR-029); `sharedAt` records the member who linked it agreeing to show it (FR-033). A source
-   * with neither is never shown to the public.
+   * A reference to a public post or page. Stores no captions, images or post content (FR-006), apart
+   * from the short verbatim `excerpt` of a post the story finder found on a platform with no
+   * official embed. `demoConsent*` record a steward noting that the post's author agreed to appear
+   * in the public demo (FR-029); `sharedAt` records the member who linked it, or the steward who ran
+   * the story finder, agreeing to show it (FR-033). A source with neither is never shown to the
+   * public.
    */
   source: defineTable({
     placeId: v.id("place"),
@@ -238,11 +240,24 @@ export const placeTables = {
      * (FR-033). The post itself is already public where it was posted; its author needs no say.
      */
     sharedAt: v.optional(v.number()),
+    /**
+     * Set when the story finder found the post and its check accepted it; unset when a member linked
+     * it. The card then says it was found in a public post, not shared by a member.
+     */
+    origin: v.optional(v.literal("story_finder")),
+    /**
+     * For a found post on a platform with no official embed (a Google review, Reddit, a blog): the
+     * passage that carries the story, copied word for word (at most 280 characters), shown in
+     * quotation marks with the author as the platform shows them and a link to the original.
+     */
+    excerpt: v.optional(v.string()),
+    excerptLang: v.optional(v.string()),
     isMock: v.boolean(),
   })
     .index("by_placeId_and_status", ["placeId", "status"])
     .index("by_placeId_and_canonicalUrl", ["placeId", "canonicalUrl"])
     .index("by_status_and_lastCheckedAt", ["status", "lastCheckedAt"])
     .index("by_status_and_sharedAt", ["status", "sharedAt"])
+    .index("by_status_and_origin_and_sharedAt", ["status", "origin", "sharedAt"])
     .index("by_addedBy", ["addedBy"]),
 };
