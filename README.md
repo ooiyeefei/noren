@@ -1,14 +1,14 @@
 # Noren
 
-Noren is a Japanese and English map of Nagasaki's local places, with the stories people have already written about them. Places come from OpenStreetMap, Overture Maps and local creators. Stories come from public posts, each quoted with the writer's name, the date and a link to the original. A place can also carry its owner's own story, made from an interview the owner consented to and approved sentence by sentence. Noren shows no ratings or scores, and search engines don't index its pages. The live site is [noren.yooi.me](https://noren.yooi.me). It is run as “Noren, an open-source project run by Yee Fei”.
+Noren is a Japanese and English map of Nagasaki's local places, with the stories people have already written about them. Places come from OpenStreetMap, Overture Maps and local creators. Stories come from public posts, each quoted with the name it was posted under, the date if known and a link to the original. A place can also carry its owner's own story, made from an interview the owner consented to and approved sentence by sentence. Noren shows no ratings or scores, and search engines don't index its pages. The live site is [noren.yooi.me](https://noren.yooi.me). It is run as “Noren, an open-source project run by Yee Fei”.
 
 ## Status
 
-This is an MVP. On 4 November 2026 the live site shows 3,620 real places and 429 quotes from public posts on 170 of them, chosen from 3,089 collected posts. Owner interviews have only run on test recordings so far. The launch pack (terms, creator licence and privacy notice) isn't finished, so accounts are invite-only and pages stay out of search results. The labelled demo place, Demo Cafe Noren (fictional), belongs to a labelled mock account and isn't shown publicly.
+This is an MVP. On 4 November 2026 the live site shows 3,620 real places and 427 quotes from public posts on 169 of them, chosen from 3,089 collected posts. It has no real visitors yet. Owner interviews have only run on one 42-second clip, a fictional script read by a synthetic voice. The launch pack (terms, creator licence and privacy notice) isn't finished, so accounts are invite-only and pages stay out of search results. The labelled demo place, Demo Cafe Noren (fictional), belongs to a labelled mock account and isn't shown publicly.
 
 ## Built during the hackathon
 
-Noren is an entry in the Meta Global AI Developer Hackathon (building period 27 October to 4 November 2026). Everything in this repository was built in that window: work started on 29 October, the first commit is dated 30 October, and the git history shows the rest. It doesn't build on an earlier project. Open-source dependencies are listed in [package.json](package.json), and the code was written with Claude Code and OpenAI Codex.
+Noren is an entry in the Meta Global AI Developer Hackathon (building period 27 October to 4 November 2026). All the product code was written in that window: work started on 29 October, the first commit is dated 30 October, and the git history shows the rest. It doesn't build on an earlier project. The repository also holds about 110 third-party agent skills and templates in `.agents`, `.claude` and `.specify`. Open-source dependencies are listed in [package.json](package.json), and the code was written with Claude Code and OpenAI Codex.
 
 | Date | What was built |
 | --- | --- |
@@ -91,7 +91,7 @@ Production e2e must use `--workers=2`: a full parallel run trips Vercel's automa
 
 ## Adding a region
 
-Regions are configuration in `regions/<id>.json`. Start from [Nagasaki](regions/nagasaki.json) and follow the [region schema](src/lib/region/schema.ts), rather than hard-coding regional behaviour. A region file holds languages, map bounds and providers, name fallbacks, source adapters, categories, caution labels, consent, retention, takedown, demo and legal settings. The server loader validates region files; register new files in [the shared registry](src/lib/region/registry.ts) too. Set `REGION_ID` when choosing among multiple regions.
+Regions are configuration in `regions/<id>.json`. Start from [Nagasaki](regions/nagasaki.json) and follow the [region schema](src/lib/region/schema.ts), rather than hard-coding regional behaviour. A region file holds languages, map bounds and providers, name fallbacks, source adapters, categories, caution labels, consent, retention, takedown, demo and legal settings. The server loader validates region files; register new files in [the shared registry](src/lib/region/registry.ts) too. Set `REGION_ID` when choosing among multiple regions. The story finder's check prompt ([src/lib/story-finder/check.ts](src/lib/story-finder/check.ts)) still names Nagasaki, so a new region needs that changed too.
 
 ## AI, step by step
 
@@ -123,18 +123,20 @@ Limits that hold whichever model runs:
 
 The story finder looks for what people have already written about each place. [scripts/story-finder.ts](scripts/story-finder.ts) runs the collection on your machine, with the commands `collect`, `check`, `hide`, `attach` and `replay`. [convex/storyFinder.ts](convex/storyFinder.ts) and [src/lib/story-finder](src/lib/story-finder) hold the rest.
 
-1. Collect. Apify actors search Google reviews, blogs, Instagram, TikTok, Facebook and Reddit for a place. Each post waits in a private table that visitors can't see.
+1. Collect. Apify actors search Google reviews, blogs, Instagram, TikTok, Facebook and Reddit for a place. Each post waits, with its full text, in a private table that visitors can't see.
 2. Check. Muse Spark reads a post through one tool call, `report_mention`. It says whether the post is about this place, what kind of post it is and which words to quote. A reply that doesn't parse leaves the post unjudged.
 3. Code decides. The quote must appear in the post word for word, however sure the model sounds. Code also refuses quotes with contact details, bare facts such as an address or opening hours, posts that name private people, sponsored posts, and reviews from a listing that doesn't match the place or has closed. It links at most 3 posts per author per collection and 6 per place.
-4. Read. Before linking, Claude Code read each batch on the operator's behalf and hid the posts that didn't fit, such as a closing notice for a different branch of a shop. A steward can hide any post later on `/steward/story-finder`, which also lists every rejected post with its reason.
+4. Read. Before linking, Claude Code read each batch on the operator's behalf and hid the posts that didn't fit, such as a closing notice for a different branch of a shop. It hid 419 of the 899 posts that passed. A steward can hide any post later on `/steward/story-finder`, which also lists every rejected post with its reason.
 5. Translate and check. Muse Spark translates each quote, and Muse Glimmer checks the translation as described above.
 
-A card shows the quote, the writer's public name, the date and a link to the original post.
+A card shows the quote, the name it was posted under, the date if known and a link to the original post.
+
+These platforms' terms generally forbid scraping, and [the research note](research/04-scraping-bootstrap.md) says so. The owner chose to run it on 4 November 2026 to find out whether the stories exist ([FR-034](specs/001-noren-mvp/spec.md)). A real launch would need permission or official routes.
 
 
 ## Data and licences
 
-The code is [Apache-2.0](LICENSE). OpenStreetMap data is ODbL, kept in its own tables, credited on every page that shows it and never committed to the repository. Overture Maps places keep each provider's own licence and are credited on the notice page. Found posts belong to the people who wrote them: Noren stores a quote of up to 280 characters with the writer's public name, the date and a link to the original, and removing a found post from a page erases its quote, translations and stored text. Stories belong to their owners and creators under the creator licence, which is still to be written.
+The code is [Apache-2.0](LICENSE). OpenStreetMap data is ODbL, kept in its own tables, credited on every page that shows it and never committed to the repository. Overture Maps places keep each provider's own licence and are credited on the notice page. Found posts belong to the people who wrote them: Noren shows a quote of up to 280 characters with the name it was posted under, the date if known and a link to the original, and removing a found post from a page erases its quote, translations and stored text. Stories belong to their owners and creators under the creator licence, which is still to be written.
 
 ## Repository layout
 
