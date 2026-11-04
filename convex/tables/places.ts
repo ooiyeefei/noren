@@ -211,8 +211,7 @@ export const placeTables = {
 
   /**
    * A reference to a public post or page. Stores no captions, images or post content (FR-006), apart
-   * from the short verbatim `excerpt` of a post the story finder found on a platform with no
-   * official embed. `demoConsent*` record a steward noting that the post's author agreed to appear
+   * from the short verbatim `excerpt` of a post the story finder found. `demoConsent*` record a steward noting that the post's author agreed to appear
    * in the public demo (FR-029); `sharedAt` records the member who linked it, or the steward who ran
    * the story finder, agreeing to show it (FR-033). A source with neither is never shown to the
    * public.
@@ -245,10 +244,12 @@ export const placeTables = {
      * it. The card then says it was found in a public post, not shared by a member.
      */
     origin: v.optional(v.literal("story_finder")),
+    /** What the story finder's check called a found post; a page shows stories before tips. */
+    foundKind: v.optional(v.union(v.literal("story"), v.literal("tip"))),
     /**
-     * For a found post on a platform with no official embed (a Google review, Reddit, a blog): the
-     * passage that carries the story, copied word for word (at most 280 characters), shown in
-     * quotation marks with the author as the platform shows them and a link to the original.
+     * For a found post: the passage that carries the story, copied word for word (at most 280
+     * characters), shown in quotation marks with the author as the platform shows them and a link to
+     * the original. An embeddable post shows it above its embed, which loads only when asked for.
      */
     excerpt: v.optional(v.string()),
     excerptLang: v.optional(v.string()),
