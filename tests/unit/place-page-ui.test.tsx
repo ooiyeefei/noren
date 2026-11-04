@@ -163,6 +163,36 @@ it("names no data provider on the place page and points open-data listings to th
   expect(detail([])).not.toContain(checkMessages.en.fromOpenData);
 });
 
+it("says the same about an Overture listing, without naming Overture", () => {
+  const html = render(
+    <PlaceView
+      locale="en"
+      region={region}
+      place={{
+        ...place,
+        isMock: false,
+        dataSources: [
+          {
+            provider: "overture",
+            ref: "00000000-0000-4000-8000-000000000001",
+            licence: "CDLA-Permissive-2.0",
+            attribution:
+              "Overture Maps Foundation (release 2026-10-21.0); data from Meta, CDLA-Permissive-2.0; https://docs.overturemaps.org/attribution/",
+          },
+        ],
+      }}
+      page={null}
+      sources={[]}
+    />,
+  );
+  expect(html).toContain(checkMessages.en.fromOpenData);
+  expect(html).toContain(checkMessages.en.noOneYet);
+  expect(html).toContain('href="/en/notice"');
+  expect(html).not.toMatch(/overture/i);
+  expect(html).not.toContain("00000000-0000-4000-8000-000000000001");
+  expect(html).not.toContain("CDLA");
+});
+
 it("centres the place map on its pin at street zoom", () => {
   const maps: Array<React.ComponentProps<typeof PlaceMap>> = [];
   const visit = (node: ReactNode): void => {

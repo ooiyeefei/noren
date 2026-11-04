@@ -4,6 +4,72 @@ import { PageContainer } from "@/components/layout/page-container";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { publicMessages } from "@/lib/i18n/messages/public";
 
+const LINK = "underline";
+
+/**
+ * What Overture asks us to credit for its Places theme (docs.overturemaps.org/attribution, checked
+ * 2026-11-04): each provider's data under its own licence, and for Foursquare the copyright line,
+ * a note that the data was transformed and a link to its NOTICE.
+ */
+function OvertureCredit({ locale }: { locale: Locale }) {
+  const m = messagesFor(publicMessages, locale);
+  return (
+    <div className="space-y-2">
+      <p>
+        {m.overtureData}{" "}
+        <a className={LINK} href="https://docs.overturemaps.org/attribution/">
+          Overture Maps Foundation, overturemaps.org
+        </a>
+      </p>
+      <ul className="list-disc space-y-1 pl-6">
+        <li>
+          <a className={LINK} href="https://about.meta.com/">
+            Meta
+          </a>
+          ,{" "}
+          <a className={LINK} href="https://www.microsoft.com/en-us/">
+            Microsoft
+          </a>
+          ,{" "}
+          <a className={LINK} href="https://uberall.com/">
+            Uberall
+          </a>
+          ,{" "}
+          <a className={LINK} href="https://opentravel.org/">
+            OpenTravel Alliance
+          </a>
+          :{" "}
+          <a className={LINK} href="https://cdla.dev/permissive-2-0/">
+            CDLA-Permissive-2.0
+          </a>
+        </li>
+        <li>
+          <a className={LINK} href="https://foursquare.com/">
+            Foursquare
+          </a>
+          :{" "}
+          <a className={LINK} href="https://www.apache.org/licenses/LICENSE-2.0">
+            Apache-2.0
+          </a>
+          . Copyright 2024 Foursquare Labs, Inc. All rights reserved. {m.overtureTransformed}{" "}
+          <a className={LINK} href="https://opensource.foursquare.com/places-notice-txt/">
+            NOTICE.txt
+          </a>
+        </li>
+        <li>
+          <a className={LINK} href="https://alltheplaces.xyz/">
+            AllThePlaces
+          </a>
+          :{" "}
+          <a className={LINK} href="https://creativecommons.org/publicdomain/zero/1.0/">
+            CC0 1.0
+          </a>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
 export function NoticeView({
   locale,
   platforms,
@@ -36,6 +102,7 @@ export function NoticeView({
           </a>{" "}
           {m.osmLicence}
         </p>
+        <OvertureCredit locale={locale} />
         <p>{m.storyPolicy}</p>
         <p>
           {platforms.length
