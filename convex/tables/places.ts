@@ -150,7 +150,11 @@ export const placeTables = {
     .index("by_placeId", ["placeId"])
     .index("by_lat", ["lat"]),
 
-  /** Pointers to outside identifiers; never truth (FR-003). OSM data stays in seedOsmCandidate. */
+  /**
+   * Pointers to outside identifiers; never truth (FR-003). OSM data stays in seedOsmCandidate. An Overture
+   * reference is the record's GERS id with the licence and credit line of its own source dataset
+   * (convex/overtureSeed.ts); a place found in both OSM and Overture carries both.
+   */
   placeExternalRef: defineTable({
     placeId: v.id("place"),
     provider: externalProviderValidator,
