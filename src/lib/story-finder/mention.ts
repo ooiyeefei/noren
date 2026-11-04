@@ -555,7 +555,7 @@ function detectionCopy(quote: string): string {
 }
 
 const HEALTH =
-  /体調|お身体|入院|闘病|病気|亡くな|他界|逝去|冥福|余命|\billness\b|\bill\b|\bsick\b|passed away|\bdied\b|\bcancer\b/iu;
+  /体調|お身体|入院|闘病|病気|亡くな|死去|死亡|他界|逝去|冥福|余命|\billness\b|\bill\b|\bsick\b|passed away|\bdied\b|\bcancer\b/iu;
 
 /**
  * Whether a quote speaks of someone's health or death. Whoever wrote it, kindly or not, a page must
