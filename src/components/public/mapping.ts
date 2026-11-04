@@ -64,6 +64,7 @@ export type SourceViewLike = Omit<EmbedSourceView, "id" | "found"> & {
   sharedBy?: string;
   /** The story finder found it in a public post; no member shared it. */
   foundInPublicPost?: boolean;
+  foundKind?: "story" | "tip";
   addedAt?: number;
   addedByMe?: boolean;
   /** Whether a visit to the original goes through /out and is counted (FR-024). */
@@ -232,7 +233,18 @@ export function toStoryFeed(
     source: toEmbedSource(source),
     ...(source.countsVisits ? { outboundHref: outboundPath(source._id) } : {}),
   }));
-  return [...written, ...posts].sort((a, b) => b.addedAt - a.addedAt);
+  // What members shared comes first, newest first (FR-033). Then what the finder found, stories before
+  // tips, each by when it was posted: when the finder linked it says nothing to a reader.
+  const found = new Map(sources.filter((s) => s.foundInPublicPost).map((s) => [String(s._id), s]));
+  const rank = (entry: StoryFeedEntry) => {
+    const source = found.get(entry.id);
+    return source === undefined ? 0 : source.foundKind === "tip" ? 2 : 1;
+  };
+  const when = (entry: StoryFeedEntry) => {
+    const source = found.get(entry.id);
+    return source === undefined ? entry.addedAt : (source.postedAt ?? 0);
+  };
+  return [...written, ...posts].sort((a, b) => rank(a) - rank(b) || when(b) - when(a));
 }
 
 export function toEmbedSource(source: SourceViewLike): EmbedSourceView {

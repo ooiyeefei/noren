@@ -438,8 +438,7 @@ const reportedValidator = v.object({
 
 /** `rejected`: a check made by code failed and the post was rejected for good. */
 type AttachResult =
-  | { ok: true; sourceId: Id<"source">; excerpt: boolean }
-  | { ok: false; error: string; rejected?: true };
+  { ok: true; sourceId: Id<"source"> } | { ok: false; error: string; rejected?: true };
 
 /** Every name the place has, in each language and script. */
 async function placeNameValues(ctx: QueryCtx, placeId: Id<"place">): Promise<string[]> {
@@ -511,6 +510,14 @@ async function shownFromAuthor(ctx: QueryCtx, candidate: Doc<"mentionCandidate">
   return shown;
 }
 
+function foundKindOf(candidate: Doc<"mentionCandidate">): "story" | "tip" {
+  return candidate.verdict?.kind === "story" ? "story" : "tip";
+}
+
+function quoteLang(candidate: Doc<"mentionCandidate">, quote: string): string {
+  return guessLang(quote) ?? candidate.langGuess ?? regionConfig(candidate.regionId).defaultLocale;
+}
+
 /**
  * Links an accepted candidate to its place as a source, in the name of the steward who ran the
  * finder, who agreed to show it (FR-033). Embeddable posts appear through the platform's official
@@ -578,9 +585,6 @@ async function attachCandidate(
     .take(100);
   if (live.filter((row) => row.origin === "story_finder").length >= MAX_FOUND_PER_PLACE)
     return await fail("place_full");
-  // A post with no official embed is shown by its quote; an embed shows the post itself.
-  const withExcerpt = source.embed.kind === "link";
-  const excerptLang = guessLang(quote) ?? candidate.langGuess ?? region.defaultLocale;
   const sourceId = await ctx.db.insert(
     "source",
     withMock(steward, {
@@ -601,7 +605,10 @@ async function attachCandidate(
       status: "live" as const,
       sharedAt: now,
       origin: "story_finder" as const,
-      ...(withExcerpt ? { excerpt: quote, excerptLang } : {}),
+      // Every card says what the post tells, even one whose embed waits to be loaded.
+      foundKind: foundKindOf(candidate),
+      excerpt: quote,
+      excerptLang: quoteLang(candidate, quote),
     }),
   );
   await ctx.db.patch("mentionCandidate", candidate._id, {
@@ -620,7 +627,7 @@ async function attachCandidate(
     targetId: sourceId,
     diff: { candidateId: candidate._id, platform: candidate.platform },
   });
-  return { ok: true, sourceId, excerpt: withExcerpt };
+  return { ok: true, sourceId };
 }
 
 /**
@@ -699,7 +706,7 @@ export const recordCheck = internalMutation({
     return {
       status: "attached",
       sourceId: attached.sourceId,
-      ...(attached.excerpt ? { excerptPlaceId: candidate.placeId } : {}),
+      excerptPlaceId: candidate.placeId,
     };
   },
 });
@@ -744,7 +751,7 @@ async function attachAccepted(ctx: MutationCtx, steward: Doc<"person">, limit: n
     const result = await attachCandidate(ctx, candidate, steward, Date.now(), shownCache);
     if (!result.ok) continue;
     attached++;
-    if (result.excerpt) places.push(candidate.placeId);
+    places.push(candidate.placeId);
   }
   await enqueueExcerptTranslations(ctx, places);
   return { attached, considered };
@@ -1104,6 +1111,50 @@ export const requeue = internalMutation({
         diff: { status, requeued },
       });
     return { requeued, isDone: result.isDone, continueCursor: result.continueCursor };
+  },
+});
+
+/**
+ * Brings rows made before these rules up to date, and is safe to run again. A blog post gets its
+ * blogger's author key, and if the old key held it back it may be linked again. A linked post's
+ * source gets its kind, and its quote if it had none (embeddable posts used to show none), which is
+ * then translated.
+ */
+export const repairFoundPosts = internalMutation({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: v.object({
+    authors: v.number(),
+    sources: v.number(),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+  }),
+  handler: async (ctx, { paginationOpts }) => {
+    const result = await ctx.db.query("mentionCandidate").paginate(paginationOpts);
+    let authors = 0;
+    let sources = 0;
+    const places: Id<"place">[] = [];
+    for (const row of result.page) {
+      const key = authorKey(row);
+      if (row.platform === "web" && key !== row.authorKey) {
+        await ctx.db.patch("mentionCandidate", row._id, {
+          authorKey: key,
+          ...(row.attachError === "author_limit" ? { attachError: undefined } : {}),
+        });
+        authors++;
+      }
+      const quote = row.verdict?.quote;
+      if (row.status !== "attached" || row.sourceId === undefined || !quote) continue;
+      const source = await ctx.db.get("source", row.sourceId);
+      if (source === null || (source.foundKind !== undefined && source.excerpt)) continue;
+      await ctx.db.patch("source", source._id, {
+        foundKind: foundKindOf(row),
+        ...(source.excerpt ? {} : { excerpt: quote, excerptLang: quoteLang(row, quote) }),
+      });
+      sources++;
+      if (!source.excerpt) places.push(row.placeId);
+    }
+    await enqueueExcerptTranslations(ctx, places);
+    return { authors, sources, isDone: result.isDone, continueCursor: result.continueCursor };
   },
 });
 
