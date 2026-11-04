@@ -413,6 +413,35 @@ export const release = mutation({
   },
 });
 
+/** Queues again every found post's quote whose check could not run. Safe to run again. */
+export const recheckUnavailableExcerpts = internalMutation({
+  args: {},
+  returns: v.object({ queued: v.number() }),
+  handler: async (ctx) => {
+    const setting = checkSetting();
+    if (setting === undefined) return { queued: 0 };
+    const checks = await ctx.db
+      .query("translationCheck")
+      .withIndex("by_status_and_nextAttemptAt", (q) => q.eq("status", "unavailable"))
+      .take(200);
+    let queued = 0;
+    for (const check of checks) {
+      if (check.subject !== "excerpt") continue;
+      await ctx.db.patch("translationCheck", check._id, {
+        status: "pending",
+        modelSetting: setting,
+        firstAttemptAt: undefined,
+        nextAttemptAt: Date.now(),
+        leaseUntil: undefined,
+        error: undefined,
+      });
+      queued++;
+    }
+    if (queued > 0) await scheduleCheckRun(ctx, 0);
+    return { queued };
+  },
+});
+
 /** A steward queues a check that could not run; it joins the next run. */
 export const checkAgain = mutation({
   args: { claimId: v.id("claim"), lang: v.string() },

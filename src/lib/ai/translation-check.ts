@@ -14,7 +14,12 @@ import {
  * endpoint can loop on whitespace when asked for a json_schema response.
  */
 export const CHECK_TOOL = "report_check";
-export const CHECK_MAX_TOKENS = 1000;
+/**
+ * The model reasons before it answers, and its reasoning counts against this limit. At 1,000 a hard
+ * pair of texts ran out before the report (finish_reason "length"), so the translations most worth a
+ * look went unchecked. Those took 890 to 1,450 tokens; at about 140 a second, 3,000 fits the timeout.
+ */
+export const CHECK_MAX_TOKENS = 3000;
 export const CHECK_TIMEOUT_MS = 60_000;
 const LIST_ITEMS = 5;
 const ITEM_LENGTH = 200;
