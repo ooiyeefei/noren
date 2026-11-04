@@ -4,6 +4,7 @@ import {
   anchorClaims,
   createClaimExtractor,
   createLanguageModel,
+  EXTRACTION_TIMEOUT_MS,
   type RawExtractedClaim,
 } from "../../src/lib/ai/claim-extractor";
 import { aiConfig } from "../../src/lib/ai/config";
@@ -82,6 +83,17 @@ it("every route builds a model through the same code path and passes the same sc
   }
   expect(direct.doGenerateCalls).toHaveLength(1);
   expect(direct.doGenerateCalls[0]!.responseFormat).toMatchObject({ type: "json" });
+});
+
+it("the default time limit is 8 minutes, inside Convex's 10-minute action limit", async () => {
+  const timeout = vi.spyOn(AbortSignal, "timeout");
+  try {
+    await sdk([raw()]).extractor.extract("mock transcript", { regionConfig: region });
+    expect(timeout).toHaveBeenCalledWith(8 * 60_000);
+    expect(EXTRACTION_TIMEOUT_MS).toBeLessThan(10 * 60_000);
+  } finally {
+    timeout.mockRestore();
+  }
 });
 
 it("provider errors cannot expose keys or transcript text to the job logger", async () => {
