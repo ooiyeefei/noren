@@ -102,6 +102,17 @@ describe("verifyStory", () => {
     expect(problems[0]?.problem).toBe("the English has Japanese in it");
   });
 
+  it.each(["It moved — one post says so.", "It moved – one post says so."])(
+    "fails a sentence with a dash: %s",
+    (en) => {
+      const { sentences, problems } = verifyStory(posts, {
+        sentences: [{ ...sentence([{ post: 1, words: WORDS }]), en }],
+      });
+      expect(sentences).toEqual([]);
+      expect(problems[0]?.problem).toContain("dash");
+    },
+  );
+
   it.each([
     "The same write-up says it moved.",
     "Per that same writer, it moved.",
