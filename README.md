@@ -4,7 +4,7 @@ Noren is a Japanese and English map of Nagasaki's local places, with the stories
 
 ## Status
 
-This is an MVP. On 4 November 2026 the live site shows 3,620 real places and 427 quotes from public posts on 169 of them, chosen from 3,089 collected posts. It has no real visitors yet. Owner interviews have only run on one 42-second clip, a fictional script read by a synthetic voice. The launch pack (terms, creator licence and privacy notice) isn't finished, so accounts are invite-only and pages stay out of search results. The labelled demo place, Demo Cafe Noren (fictional), belongs to a labelled mock account and isn't shown publicly.
+This is an MVP. On 4 November 2026 the live site shows 3,610 real places and 380 quotes from public posts on 168 of them, chosen from 3,089 collected posts. It has no real visitors yet. Owner interviews have only run on one 42-second clip, a fictional script read by a synthetic voice. The launch pack (terms, creator licence and privacy notice) isn't finished, so accounts are invite-only and pages stay out of search results. The labelled demo place, Demo Cafe Noren (fictional), belongs to a labelled mock account and isn't shown publicly.
 
 ## Built during the hackathon
 
@@ -127,7 +127,7 @@ Limits that hold whichever model runs:
 
 The story finder looks for what people have already written about each place. [scripts/story-finder.ts](scripts/story-finder.ts) runs the collection on your machine, with the commands `collect`, `check`, `hide`, `attach` and `replay`. [convex/storyFinder.ts](convex/storyFinder.ts) and [src/lib/story-finder](src/lib/story-finder) hold the rest.
 
-1. Collect. Apify actors search Google reviews, blogs, Instagram, TikTok, Facebook and Reddit for a place. Each post waits, with its full text, in a private table that visitors can't see.
+1. Collect. Apify actors search Google reviews, blogs, Instagram, TikTok, Facebook and Reddit for a place. Each post waits, with its full text, in a private table that visitors can't see. Instagram and Facebook posts are kept off the site, and the story agent doesn't read them.
 2. Check. Muse Spark reads a post through one tool call, `report_mention`. It says whether the post is about this place, what kind of post it is and which words to quote. A reply that doesn't parse leaves the post unjudged.
 3. Code decides. The quote must appear in the post word for word, however sure the model sounds. Code also refuses quotes with contact details, bare facts such as an address or opening hours, posts that name private people, sponsored posts, and reviews from a listing that doesn't match the place or has closed. It links at most 3 posts per author per collection and 6 per place.
 4. Read. Before linking, Claude Code read each batch on the operator's behalf and hid the posts that didn't fit, such as a closing notice for a different branch of a shop. It hid 419 of the 899 posts that passed. A steward can hide any post later on `/steward/story-finder`, which also lists every rejected post with its reason.
