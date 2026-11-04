@@ -375,7 +375,7 @@ const ENTITIES: Record<string, string> = {
   ldquo: "“",
 };
 
-function decodeEntities(text: string): string {
+export function decodeEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, name: string) => {
     if (name[0] === "#") {
       const code =

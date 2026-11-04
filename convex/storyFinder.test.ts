@@ -11,7 +11,7 @@ import {
 import { addPerson, addPlace, addSource, errorCode, newBackend } from "../tests/convex/fixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { MAX_SHOWN_QUOTES } from "./storyFinder";
+import { attachOrder, MAX_SHOWN_QUOTES } from "./storyFinder";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -960,6 +960,301 @@ describe("checks that do not depend on the model", () => {
         (row) => row.text.length,
       ),
     ).toEqual([most]);
+  });
+});
+
+describe("attach order and the per-place cap", () => {
+  // Eight made-up posts with nothing in common, so none is taken for a copy of another.
+  const quotes = [
+    "テスト店の青い扉は、朝だけ内側から開けるそうです。",
+    "テスト店では看板猫の名前を常連が毎年決めています。",
+    "テスト店の二階は、港の花火が真正面に見える席です。",
+    "テスト店の先代は、列車の時刻表を壁一面に貼っていました。",
+    "テスト店は、注文を紙に書いて渡す決まりになっています。",
+    "テスト店の裏口から入ると、先に番号札をもらえます。",
+    "テスト店は、雨の日だけ傘の置き場を軒下に出します。",
+    "テスト店の会計は現金のみで、お釣りは小銭に両替してくれます。",
+  ];
+  const kinds = ["story", "tip", "story", "tip", "tip", "tip", "story", "tip"] as const;
+  // Posted in this order, the first being the oldest.
+  const day = (n: number) => Date.UTC(2026, 9, n + 1);
+
+  it("links stories before tips and the newest first within each kind, up to six", async () => {
+    const w = await world();
+    await w.ingest(
+      quotes.map((quote, i) =>
+        w.candidate(
+          {
+            platform: "reddit",
+            url: `https://www.reddit.com/r/mocktravel/comments/mock${i}/post/`,
+          },
+          {
+            text: `${MARKER} テスト店。${quote}`,
+            authorHandle: `u/mock_user_${i}`,
+            authorUrl: `https://example.com/author${i}`,
+            postedAt: day(i),
+          },
+        ),
+      ),
+    );
+    const byQuote = new Map((await w.rows()).map((row) => [row.text.split("。")[1] + "。", row]));
+    for (const [i, quote] of quotes.entries())
+      await w.record(byQuote.get(quote)!._id, { quote, kind: kinds[i] }, false);
+    expect(
+      await w.b.t.mutation(internal.storyFinder.attachAcceptedBatch, {
+        stewardPersonId: w.steward,
+        limit: 100,
+      }),
+    ).toEqual({ attached: 6, considered: 8 });
+    const status = new Map((await w.rows()).map((row) => [row.verdict?.quote, row.status]));
+    // Three stories (0, 2, 6) first, then the three newest tips (7, 5, 4); tips 3 and 1 wait.
+    expect([0, 2, 6, 7, 5, 4].map((i) => status.get(quotes[i]))).toEqual(Array(6).fill("attached"));
+    expect([1, 3].map((i) => status.get(quotes[i]))).toEqual(["accepted", "accepted"]);
+  });
+
+  it("attachOrder: stories first, then newest first, undated last", () => {
+    const row = (kind: "story" | "tip", postedAt: number | undefined, creation = 0) =>
+      ({
+        verdict: { kind },
+        postedAt,
+        _creationTime: creation,
+      }) as unknown as Parameters<typeof attachOrder>[0];
+    const rows = [
+      row("tip", day(9)),
+      row("story", day(1)),
+      row("story", undefined),
+      row("story", day(5)),
+      row("tip", day(2)),
+    ];
+    expect(
+      [...rows]
+        .sort(attachOrder)
+        .map((r) => [r.verdict!.kind, r.postedAt === day(9) ? 9 : r.postedAt]),
+    ).toEqual([
+      ["story", day(5)],
+      ["story", day(1)],
+      ["story", undefined],
+      ["tip", 9],
+      ["tip", day(2)],
+    ]);
+  });
+});
+
+describe("repairListings", () => {
+  async function googleRows() {
+    const w = await world();
+    const urls = ["one", "two", "three", "four"].map(
+      (tag) => `https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sMOCK${tag}`,
+    );
+    await w.ingest(
+      urls.map((url, i) =>
+        w.candidate(
+          { platform: "google_reviews", url },
+          { text: `${MARKER} テスト店。${quotes[i]}`, authorUrl: `https://example.com/g${i}` },
+        ),
+      ),
+    );
+    const rows = await w.rows();
+    const at = (n: number) => rows.find((row) => row.url === urls[n])!;
+    return { w, at, rows };
+  }
+  const quotes = [
+    "テスト店の青い扉は、朝だけ内側から開けるそうです。",
+    "テスト店では看板猫の名前を常連が毎年決めています。",
+    "テスト店の二階は、港の花火が真正面に見える席です。",
+    "テスト店は、注文を紙に書いて渡す決まりになっています。",
+  ];
+
+  it("gives rows the listing's name and rejects rows of a wrong or closed listing, never a linked one", async () => {
+    const { w, at } = await googleRows();
+    // one: waiting; two: accepted; three: linked; four: waiting.
+    await w.record(at(1)._id, { quote: quotes[1] }, false);
+    await w.record(at(2)._id, { quote: quotes[2] }, true);
+    expect((await w.rows()).find((row) => row.url === at(2).url)!.status).toBe("attached");
+    const fix = (n: number, extra: Record<string, unknown>) => ({
+      placeId: w.placeId,
+      canonicalUrl: at(n).canonicalUrl,
+      ...extra,
+    });
+    const result = await w.b.t.mutation(internal.storyFinder.repairListings, {
+      stewardPersonId: w.steward,
+      fixes: [
+        fix(0, { title: "テスト店 本店" }),
+        fix(1, { reject: "wrong_listing" }),
+        fix(2, { reject: "closed_listing" }),
+        fix(3, { reject: "closed_listing" }),
+        {
+          placeId: w.placeId,
+          canonicalUrl: "https://www.google.com/maps/reviews/none",
+          title: "x",
+        },
+      ],
+    });
+    expect(result).toEqual({
+      retitled: 1,
+      rejected: 2,
+      missing: 1,
+      notChanged: [{ canonicalUrl: at(2).canonicalUrl, status: "attached" }],
+    });
+    const after = await w.rows();
+    const row = (n: number) => after.find((r) => r.url === at(n).url)!;
+    expect(row(0)).toMatchObject({ status: "pending", title: "テスト店 本店" });
+    expect(row(1)).toMatchObject({ status: "rejected", reason: "wrong_listing" });
+    expect(row(2).status).toBe("attached");
+    expect(row(3)).toMatchObject({ status: "rejected", reason: "closed_listing" });
+    // The place is as it was, and doing it again changes nothing.
+    expect((await w.place())!.visibility).toBe("public");
+    expect(
+      await w.b.t.mutation(internal.storyFinder.repairListings, {
+        stewardPersonId: w.steward,
+        fixes: [fix(0, { title: "テスト店 本店" }), fix(3, { reject: "closed_listing" })],
+      }),
+    ).toMatchObject({ retitled: 0, rejected: 0 });
+  });
+
+  it("a row rejected as place_not_named becomes wrong_listing, so a requeue does not pick it up", async () => {
+    const { w, at } = await googleRows();
+    await w.b.t.run((ctx) =>
+      ctx.db.patch("mentionCandidate", at(0)._id, {
+        status: "rejected",
+        reason: "place_not_named",
+      }),
+    );
+    await w.b.t.mutation(internal.storyFinder.repairListings, {
+      stewardPersonId: w.steward,
+      fixes: [{ placeId: w.placeId, canonicalUrl: at(0).canonicalUrl, reject: "wrong_listing" }],
+    });
+    expect((await w.rows()).find((r) => r.url === at(0).url)).toMatchObject({
+      status: "rejected",
+      reason: "wrong_listing",
+    });
+  });
+
+  it("only a real steward may run it", async () => {
+    const { w } = await googleRows();
+    expect(
+      await errorCode(
+        w.b.t.mutation(internal.storyFinder.repairListings, {
+          stewardPersonId: w.mockSteward,
+          fixes: [],
+        }),
+      ),
+    ).toBe("invalid_input");
+  });
+});
+
+describe("requeue", () => {
+  const verdict = (aboutThisPlace: "yes" | "no" | "unsure") => ({
+    aboutThisPlace,
+    evidence: "テスト店",
+    kind: "story" as const,
+    namesPrivatePeople: false,
+    quote: "テスト店の話です。",
+    topics: [],
+  });
+
+  async function seeded() {
+    const w = await world();
+    const add = (slug: string, fields: Record<string, unknown>) =>
+      w.b.t.run((ctx) =>
+        ctx.db.insert("mentionCandidate", {
+          ...stub(w, slug),
+          checkedAt: 1000,
+          checkAttempts: 2,
+          modelSetting: "mock/checker",
+          verdict: verdict("yes"),
+          ...fields,
+        } as never),
+      );
+    const ids = {
+      accepted: await add("accepted", { status: "accepted", reason: undefined }),
+      notNamedYes: await add("notnamed-yes", { reason: "place_not_named" }),
+      notNamedUnsure: await add("notnamed-unsure", {
+        reason: "place_not_named",
+        verdict: verdict("unsure"),
+      }),
+      notNamedNo: await add("notnamed-no", { reason: "place_not_named", verdict: verdict("no") }),
+      rating: await add("rating", { reason: "rating_only" }),
+      wrongListing: await add("wrong", { reason: "wrong_listing" }),
+      attached: await add("attached", { status: "attached", reason: undefined }),
+      hidden: await add("hidden", { status: "hidden", reason: undefined }),
+    };
+    const statusOf = async () =>
+      Object.fromEntries(
+        await Promise.all(
+          Object.entries(ids).map(async ([name, id]) => [
+            name,
+            (await w.b.t.run((ctx) => ctx.db.get("mentionCandidate", id)))!,
+          ]),
+        ),
+      ) as Record<keyof typeof ids, Awaited<ReturnType<typeof w.rows>>[number]>;
+    const requeue = (
+      status: "accepted" | "rejected",
+      cursor: string | null = null,
+      numItems = 100,
+    ) =>
+      w.b.t.mutation(internal.storyFinder.requeue, {
+        stewardPersonId: w.steward,
+        status,
+        paginationOpts: { numItems, cursor },
+      });
+    return { w, ids, statusOf, requeue };
+  }
+
+  it("sets back to pending the accepted posts and those rejected as place_not_named that were not about another place", async () => {
+    const { statusOf, requeue } = await seeded();
+    expect(await requeue("accepted")).toMatchObject({ requeued: 1, isDone: true });
+    expect(await requeue("rejected")).toMatchObject({ requeued: 2, isDone: true });
+    const rows = await statusOf();
+    for (const name of ["accepted", "notNamedYes", "notNamedUnsure"] as const) {
+      expect(rows[name], name).toMatchObject({ status: "pending" });
+      for (const field of [
+        "reason",
+        "verdict",
+        "checkedAt",
+        "checkAttempts",
+        "modelSetting",
+      ] as const)
+        expect(rows[name][field], `${name}.${field}`).toBeUndefined();
+    }
+    // Not about the place, other reasons, a wrong listing, and linked or hidden posts stay.
+    expect(rows.notNamedNo).toMatchObject({ status: "rejected", reason: "place_not_named" });
+    expect(rows.rating).toMatchObject({ status: "rejected", reason: "rating_only" });
+    expect(rows.wrongListing).toMatchObject({ status: "rejected", reason: "wrong_listing" });
+    expect(rows.attached.status).toBe("attached");
+    expect(rows.hidden.status).toBe("hidden");
+  });
+
+  it("pages, and a second run finds nothing more", async () => {
+    const { requeue, statusOf } = await seeded();
+    const first = await requeue("rejected", null, 2);
+    expect(first.isDone).toBe(false);
+    let total = first.requeued;
+    let cursor = first.continueCursor;
+    for (let i = 0; i < 10; i++) {
+      const page = await requeue("rejected", cursor, 2);
+      total += page.requeued;
+      if (page.isDone) break;
+      cursor = page.continueCursor;
+    }
+    expect(total).toBe(2);
+    expect((await statusOf()).notNamedYes.status).toBe("pending");
+    expect(await requeue("rejected")).toMatchObject({ requeued: 0, isDone: true });
+  });
+
+  it("only a real steward may run it, and it audits what it did", async () => {
+    const { w, requeue } = await seeded();
+    expect(
+      await errorCode(
+        w.b.t.mutation(internal.storyFinder.requeue, {
+          stewardPersonId: w.mockSteward,
+          status: "accepted",
+          paginationOpts: { numItems: 10, cursor: null },
+        }),
+      ),
+    ).toBe("invalid_input");
+    await requeue("accepted");
+    expect((await w.audits()).filter((a) => a.action === "story_finder.requeued")).toHaveLength(1);
   });
 });
 

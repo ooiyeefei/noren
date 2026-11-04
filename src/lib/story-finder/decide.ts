@@ -32,7 +32,7 @@ export const reportMentionSchema = z.strictObject({
   kind: z
     .enum(MENTION_KINDS)
     .describe(
-      "story: the place's history, its people, how it came to be or how things are done there. tip: useful firsthand practical detail for a visitor. rating_only: praise, complaints or scores without a story or practical detail. ad_or_sponsored: an advert, sponsored or PR post, affiliate link, campaign or sale. unrelated: not about the place.",
+      "story: the place's history, its people, how it came to be or how things are done there (when it was founded, who started it, why it is run as it is). tip: a concrete practical detail a visitor can act on: how to order, payment, when to go, queues, seating, whether shoes come off, how to get there, what is only sold there. rating_only: praise, complaints or scores; taste, what someone ate, or that they were satisfied or full, with no such detail or story. ad_or_sponsored: an advert, sponsored or PR post, affiliate link, campaign or sale. unrelated: not about the place.",
     ),
   namesPrivatePeople: z
     .boolean()
@@ -43,7 +43,7 @@ export const reportMentionSchema = z.strictObject({
     .string()
     .max(2000)
     .describe(
-      "The one passage, at most 280 characters, copied character for character from the post, that carries the story or tip. No translation, corrections, ellipses or joined parts. Empty unless kind is story or tip.",
+      "The one sentence (or passage), at most 280 characters, copied character for character from the post, that itself carries the story or the tip: the sentence that states the founding or the practical detail, not a nearby sentence of praise. No translation, corrections, ellipses or joined parts. Empty unless kind is story or tip.",
     ),
   topics: z
     .array(z.string().max(80))

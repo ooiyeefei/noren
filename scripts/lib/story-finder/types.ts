@@ -50,7 +50,44 @@ export type NormaliseContext = {
   runId: string;
   /** The collect run the candidates belong to; the per-author limit counts within it. */
   collectionId: string;
+  /** Where the Google collector records the listings and reviews it leaves out. */
+  listings?: ListingTally;
 };
+
+/** Why a Google listing's reviews are left out. */
+export type ListingProblem = "wrong_listing" | "closed_listing";
+
+/**
+ * The Google listings (and their reviews) left out of a run: the listing is not the place we
+ * searched for, or is permanently closed. Counted in reviews, since each would have been a candidate.
+ */
+export type ListingTally = {
+  wrongListing: number;
+  closedListing: number;
+  /** Each listing once, with the place it was searched for, for a steward to look at. */
+  listings: { problem: ListingProblem; place: string; slug: string; listing: string }[];
+  /** The reviews left out, so a replay can reject the rows already ingested from them. */
+  excluded: { placeId: string; canonicalUrl: string; problem: ListingProblem }[];
+};
+
+export function newListingTally(): ListingTally {
+  return { wrongListing: 0, closedListing: 0, listings: [], excluded: [] };
+}
+
+/** A run's tally as it is logged: counts, and the places and listings behind them. */
+export function summariseListings(tally: ListingTally) {
+  return {
+    wrongListing: tally.wrongListing,
+    closedListing: tally.closedListing,
+    wrongListings: tally.listings
+      .filter((entry) => entry.problem === "wrong_listing")
+      .map(({ place, slug, listing }) => ({ place, slug, listing })),
+    // For a steward to review: the place itself is not changed.
+    closedPlaces: tally.listings
+      .filter((entry) => entry.problem === "closed_listing")
+      .map(({ place, slug, listing }) => ({ place, slug, listing })),
+  };
+}
 
 /**
  * One source of public posts behind one Apify actor. `plan` and `normalise` are pure, so they are

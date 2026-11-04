@@ -5,12 +5,21 @@ import {
   googleReviews,
   instagram,
   instagramKeyword,
+  judgeListing,
+  NAMED_PLACE_M,
+  plainText,
   reddit,
   tiktok,
   web,
   webCandidate,
 } from "../../scripts/lib/story-finder/collectors";
-import { chargeCap, type FinderPlace } from "../../scripts/lib/story-finder/types";
+import {
+  chargeCap,
+  newListingTally,
+  summariseListings,
+  type FinderPlace,
+  type PlannedQuery,
+} from "../../scripts/lib/story-finder/types";
 import { MENTION_PLATFORMS } from "@/lib/story-finder/mention";
 
 // Fictional places and posts only: none of these exist.
@@ -151,7 +160,8 @@ describe("normalise", () => {
       actorId: "compass/crawler-google-places",
       runId: "mockrun1",
       collectionId: "mock-collection-1",
-      // Google's own name for the place it matched, within 400 m of our pin.
+      // Google's own name for the place it matched, within 300 m of our pin.
+      title: "架空珈琲 試験堂",
       locationName: "架空珈琲 試験堂",
     });
     expect(JSON.stringify(candidates)).not.toMatch(/stars|likes|totalScore|4\.8/);
@@ -172,6 +182,162 @@ describe("normalise", () => {
       ],
     });
     expect(googleReviews.normalise([item("試験湯"), item("別の湯")], run, ctx)).toHaveLength(1);
+  });
+
+  it("Google reviews: the listing's name becomes the title, and review markup is cleaned", () => {
+    const run = googleReviews.plan([place], options)[0]!;
+    const item = {
+      searchString: "架空珈琲 試験堂 長崎",
+      title: "試験堂 &amp; 珈琲",
+      location: { lat: 32.7501, lng: 129.8702 },
+      reviews: [
+        {
+          name: "Mock",
+          text: "初めて行きました。<br><br>店主は&quot;焙煎&quot;の話をしてくれました。<br/>&lt;br&gt;は消えません",
+          reviewUrl: "https://www.google.com/maps/reviews/data=MOCK2",
+        },
+      ],
+    };
+    // 試験堂 is a part of the place's name, so the listing is the place.
+    const [candidate] = googleReviews.normalise([item], run, ctx);
+    expect(candidate!.text).toBe(
+      '初めて行きました。\n\n店主は"焙煎"の話をしてくれました。\n<br>は消えません',
+    );
+    expect(candidate).toMatchObject({ title: "試験堂 & 珈琲", locationName: "試験堂 & 珈琲" });
+  });
+
+  describe("which Google listing is the place", () => {
+    const planned = (names: string[], pin: PlannedQuery["pin"]): PlannedQuery => ({
+      placeId: "mockplace9",
+      slug: "fictional-place-9",
+      query: "q",
+      searchedFor: names[0]!,
+      names,
+      pin,
+    });
+    const pin = { lat: 32.75, lng: 129.87 };
+    /** A point this many metres due north of the pin (1 degree of latitude is 111,195 m). */
+    const north = (metres: number) => ({ lat: pin.lat + metres / 111_195, lng: pin.lng });
+    const listing = (title: string, metres: number, extra: Record<string, unknown> = {}) => ({
+      title,
+      location: north(metres),
+      ...extra,
+    });
+
+    it("takes a near listing whose name fits: the whole name, a part of it, or old-form kanji", () => {
+      const names = ["架空餃子専門店 カクウの門 Kakunomon"];
+      expect(judgeListing(listing("カクウの門", 14), planned(names, pin))).toBeNull();
+      expect(judgeListing(listing("中華料理架空樓", 5), planned(["架空楼"], pin))).toBeNull();
+      expect(judgeListing(listing("架空 桃華園", 7), planned(["架空桃華園"], pin))).toBeNull();
+    });
+
+    it("leaves out a near listing with another name, and one over 300 m with only part of the name", () => {
+      const names = ["架空餃子専門店 カクウの門 Kakunomon"];
+      expect(judgeListing(listing("別の店", 10), planned(names, pin))).toBe("wrong_listing");
+      expect(judgeListing(listing("カクウの門", 900), planned(names, pin))).toBe("wrong_listing");
+    });
+
+    it("takes a listing further off only when it holds the whole name as a word", () => {
+      const names = ["架空屋"];
+      expect(
+        judgeListing(listing("カステラ本家 架空屋 長崎本店", 1_276), planned(names, pin)),
+      ).toBeNull();
+      // Too far for any name.
+      expect(
+        judgeListing(listing("架空屋 長崎本店", NAMED_PLACE_M + 500), planned(names, pin)),
+      ).toBe("wrong_listing");
+      // The name inside a longer katakana word is another name.
+      expect(
+        judgeListing(listing("ネオ·プレイステスビオス壱番館", 1_949), planned(["テスビ"], pin)),
+      ).toBe("wrong_listing");
+      // A different name that looks alike.
+      expect(judgeListing(listing("ベルビュー出島", 1_087), planned(["ラ ベルヴュー"], pin))).toBe(
+        "wrong_listing",
+      );
+      // Two characters or fewer never count that far off.
+      expect(judgeListing(listing("架空 本店", 1_000), planned(["架空"], pin))).toBe(
+        "wrong_listing",
+      );
+    });
+
+    it("lets position decide when the place has a one-character name", () => {
+      expect(
+        judgeListing(listing("ダイニングバー架", 10), planned(["Kakuu", "架"], pin)),
+      ).toBeNull();
+      expect(judgeListing(listing("架の店", 900), planned(["Kakuu", "架"], pin))).toBe(
+        "wrong_listing",
+      );
+    });
+
+    it("with no pin the name must fit, and a listing with no point is not the place", () => {
+      expect(judgeListing({ title: "架空屋 本店" }, planned(["架空屋"], null))).toBeNull();
+      expect(judgeListing({ title: "別の店" }, planned(["架空屋"], null))).toBe("wrong_listing");
+      expect(judgeListing({ title: "架空屋" }, planned(["架空屋"], pin))).toBe("wrong_listing");
+    });
+
+    it("a permanently closed listing of the place is closed_listing; a closed one that is not the place is wrong", () => {
+      expect(
+        judgeListing(listing("架空屋", 31, { permanentlyClosed: true }), planned(["架空屋"], pin)),
+      ).toBe("closed_listing");
+      expect(
+        judgeListing(listing("別の店", 31, { permanentlyClosed: true }), planned(["架空屋"], pin)),
+      ).toBe("wrong_listing");
+      expect(
+        judgeListing(listing("架空屋", 31, { temporarilyClosed: true }), planned(["架空屋"], pin)),
+      ).toBeNull();
+    });
+
+    it("normalise counts the reviews it leaves out and names the listings and places", () => {
+      const run = googleReviews.plan([place], options)[0]!;
+      const reviews = (n: number, tag: string) =>
+        Array.from({ length: n }, (_, i) => ({
+          name: "Mock",
+          text: `架空珈琲 試験堂のテスト用の口コミ ${tag}${i}`,
+          reviewUrl: `https://www.google.com/maps/reviews/data=${tag}${i}`,
+        }));
+      const base = { searchString: "架空珈琲 試験堂 長崎" };
+      const items = [
+        { ...base, title: "架空珈琲 試験堂", location: north(20), reviews: reviews(2, "ok") },
+        { ...base, title: "別の喫茶", location: north(20), reviews: reviews(3, "wrong") },
+        {
+          ...base,
+          title: "架空珈琲 試験堂",
+          location: north(40),
+          permanentlyClosed: true,
+          reviews: reviews(2, "closed"),
+        },
+      ].map((item) => ({ ...item, location: item.location }));
+      // The place's pin is (32.75, 129.87), the one these points are measured from.
+      const tally = newListingTally();
+      const kept = googleReviews.normalise(items, run, { ...ctx, listings: tally });
+      expect(kept).toHaveLength(2);
+      expect(tally).toMatchObject({ wrongListing: 3, closedListing: 2 });
+      expect(tally.excluded.map((e) => e.problem)).toEqual([
+        "wrong_listing",
+        "wrong_listing",
+        "wrong_listing",
+        "closed_listing",
+        "closed_listing",
+      ]);
+      expect(tally.excluded.every((e) => e.placeId === "mockplace1")).toBe(true);
+      expect(summariseListings(tally)).toEqual({
+        wrongListing: 3,
+        closedListing: 2,
+        wrongListings: [
+          { place: "架空珈琲 試験堂", slug: "fictional-test-coffee", listing: "別の喫茶" },
+        ],
+        closedPlaces: [
+          { place: "架空珈琲 試験堂", slug: "fictional-test-coffee", listing: "架空珈琲 試験堂" },
+        ],
+      });
+      // Without a tally the reviews are still left out.
+      expect(googleReviews.normalise(items, run, ctx)).toHaveLength(2);
+    });
+  });
+
+  it("plainText turns <br> into line breaks, then decodes entities", () => {
+    expect(plainText("a<br>b<BR />c<br/>d")).toBe("a\nb\nc\nd");
+    expect(plainText("A &amp; B &lt;br&gt; &#39;x&#39;")).toBe("A & B <br> 'x'");
   });
 
   it("Instagram: matches the keyword back to the place and credits the account", () => {
