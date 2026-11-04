@@ -16,6 +16,8 @@ export function StoryFinderContainer({ locale, region }: { locale: Locale; regio
   const requestCheck = useMutation(api.storyFinder.requestCheck);
   const attachNow = useMutation(api.storyFinder.attachAcceptedNow);
   const hide = useMutation(api.storyFinder.hide);
+  const held = useQuery(api.translationChecks.heldExcerpts, {});
+  const release = useMutation(api.translationChecks.releaseExcerpt);
   const { state, run } = useStewardAction(locale);
   const m = messagesFor(storyFinderMessages, locale);
   if (!overview) return <p role="status">{messagesFor(stewardMessages, locale).loading}</p>;
@@ -45,6 +47,16 @@ export function StoryFinderContainer({ locale, region }: { locale: Locale; regio
       attached={overview.attached.map(toRow)}
       accepted={overview.accepted.map(toRow)}
       rejected={overview.rejected.map(toRow)}
+      held={(held ?? []).map((row) => ({
+        id: row.checkId,
+        placeSlug: row.placeSlug,
+        placeName: pickPlaceName(row.placeNames, locale, region).primary?.value ?? row.placeSlug,
+        url: row.url,
+        quote: row.quote,
+        translation: row.translation,
+        added: row.added,
+        missing: row.missing,
+      }))}
       {...state}
       onCheck={(attach) =>
         void run("check", async () => {
@@ -62,6 +74,12 @@ export function StoryFinderContainer({ locale, region }: { locale: Locale; regio
         void run(`hide:${id}`, async () => {
           await hide({ candidateId: id as Id<"mentionCandidate"> });
           return m.hidden;
+        })
+      }
+      onRelease={(id) =>
+        void run(`release:${id}`, async () => {
+          await release({ checkId: id as Id<"translationCheck"> });
+          return m.released;
         })
       }
     />

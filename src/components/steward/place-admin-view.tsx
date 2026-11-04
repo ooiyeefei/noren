@@ -71,6 +71,35 @@ export function ComposeResultView({ locale, result }: { locale: Locale; result: 
   );
 }
 type TranslationCheck = NonNullable<ClaimView["translations"][number]["check"]>;
+/** What the translation check says a translation adds to the original or leaves out of it. */
+export function CheckFindings({
+  locale,
+  added,
+  missing,
+}: {
+  locale: Locale;
+  added: readonly string[];
+  missing: readonly string[];
+}) {
+  const m = messagesFor(stewardMessages, locale);
+  const lists = (
+    [
+      ["checkAdded", added],
+      ["checkMissing", missing],
+    ] as const
+  ).filter(([, items]) => items.length > 0);
+  return lists.map(([key, items]) => (
+    <div key={key}>
+      <p className="font-bold">{m[key]}</p>
+      <ul className="list-disc pl-5">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  ));
+}
+
 /** What the translation check found, and the steward's choices when it held a translation back. */
 export function TranslationCheckView({
   locale,
@@ -87,12 +116,6 @@ export function TranslationCheckView({
 }) {
   const m = messagesFor(stewardMessages, locale);
   const button = "min-h-11 h-auto w-full rounded-[10px] px-5 py-2 whitespace-normal sm:w-auto";
-  const lists = (
-    [
-      ["checkAdded", check.added],
-      ["checkMissing", check.missing],
-    ] as const
-  ).filter(([, items]) => items.length > 0);
   return (
     <div data-translation-check={check.status} className="mt-2 min-w-0 space-y-2">
       <p>
@@ -107,17 +130,9 @@ export function TranslationCheckView({
         }
       </p>
       {check.retranslated && check.status !== "pending" && <p>{m.checkRetranslated}</p>}
-      {(check.status === "held" || check.status === "released") &&
-        lists.map(([key, items]) => (
-          <div key={key}>
-            <p className="font-bold">{m[key]}</p>
-            <ul className="list-disc pl-5">
-              {items.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        ))}
+      {(check.status === "held" || check.status === "released") && (
+        <CheckFindings locale={locale} added={check.added} missing={check.missing} />
+      )}
       {check.status === "held" && (
         <Button className={button} variant="outline" disabled={disabled} onClick={onRelease}>
           {m.checkRelease}

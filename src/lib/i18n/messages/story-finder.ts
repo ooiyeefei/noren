@@ -14,6 +14,11 @@ export const storyFinderMessages = defineMessages({
     checkStarted: "{count}件の確認を始めました。結果はこのページに順に表示されます。",
     attach: "通った投稿を載せる",
     attached: "{count}件を載せました。",
+    heldTitle: "表示を止めている翻訳",
+    heldIntro:
+      "翻訳チェックで原文との違いが見つかったため、これらの引用は翻訳なしで表示しています。指摘を読み、問題のない訳なら表示してください。",
+    heldTranslation: "止めている翻訳",
+    released: "翻訳を表示しました。",
     linkedTitle: "載せた投稿",
     linkedIntro:
       "新しく載せたものから順に並んでいます。目を通して、違うと思ったものは非表示にしてください。",
@@ -84,6 +89,11 @@ export const storyFinderMessages = defineMessages({
     checkStarted: "Checking {count} posts. Results appear on this page as they come.",
     attach: "Show accepted posts",
     attached: "Showed {count} posts.",
+    heldTitle: "Translations held back",
+    heldIntro:
+      "The translation check found differences from the original, so these quotes show without a translation. Read what it found, and show the translation if it is fair.",
+    heldTranslation: "Translation held back",
+    released: "The translation is now shown.",
     linkedTitle: "Shown on places",
     linkedIntro: "Newest first. Look through them and hide any that should not be shown.",
     acceptedTitle: "Accepted, not shown yet",
