@@ -68,6 +68,21 @@ export const regionSchema = z
       )
       .min(1)
       .optional(),
+    /**
+     * The areas a neighbourhood mission covers. A place belongs to the nearest centre whose circle
+     * holds its pin, and to none when no circle does. Progress is the area's, never a person's.
+     */
+    neighbourhoods: z
+      .array(
+        z.strictObject({
+          id: z.string().regex(/^[a-z][a-z0-9-]*$/, "lowercase letters, digits and hyphens"),
+          names: localised,
+          center: z.strictObject({ lat, lng }),
+          radiusMetres: z.number().positive(),
+        }),
+      )
+      .min(1)
+      .optional(),
     consent: z.strictObject({
       textVersion: z.string().min(1),
       text: localised,
@@ -153,6 +168,22 @@ export const regionSchema = z
       fail(["categories"], "category keys must be unique");
     }
 
+    region.neighbourhoods?.forEach((n, i) => {
+      requireLocales(["neighbourhoods", i, "names"], Object.keys(n.names));
+      if (
+        n.center.lng < west ||
+        n.center.lng > east ||
+        n.center.lat < south ||
+        n.center.lat > north
+      ) {
+        fail(["neighbourhoods", i, "center"], "a neighbourhood's centre must lie inside bbox");
+      }
+    });
+    const neighbourhoodIds = (region.neighbourhoods ?? []).map((n) => n.id);
+    if (new Set(neighbourhoodIds).size !== neighbourhoodIds.length) {
+      fail(["neighbourhoods"], "neighbourhood ids must be unique");
+    }
+
     const keys = region.cautionVocabulary.map((c) => c.key);
     if (new Set(keys).size !== keys.length) {
       fail(["cautionVocabulary"], "caution keys must be unique");
@@ -191,6 +222,7 @@ export const regionSchema = z
   });
 
 export type RegionConfig = z.infer<typeof regionSchema>;
+export type Neighbourhood = NonNullable<RegionConfig["neighbourhoods"]>[number];
 export type AerialPhoto = NonNullable<RegionConfig["geo"]["aerialPhoto"]>;
 
 export type RegionPolicy = {

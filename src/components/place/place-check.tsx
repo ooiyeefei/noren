@@ -44,6 +44,10 @@ export function PlaceCheck({
   const radioName = useId();
   const [shownAt] = useState(() => Date.now());
   const state = checkState(confirmedAt, now ?? shownAt);
+  // One tap for a member at a place no one has checked. Once opened it stays under their control:
+  // React leaves the attribute alone until this changes, and this never changes back.
+  const [opened, setOpened] = useState(false);
+  if (!opened && actions?.signedIn && state === "unconfirmed") setOpened(true);
   const [reporting, setReporting] = useState(false);
   const [problem, setProblem] = useState<CheckProblem | "">("");
   const [note, setNote] = useState("");
@@ -77,6 +81,7 @@ export function PlaceCheck({
   return (
     <details
       data-check={state}
+      open={opened || undefined}
       className={cn(
         "group rounded-[10px] border border-line",
         state === "unconfirmed" && "border-dashed",
@@ -125,6 +130,7 @@ export function PlaceCheck({
               <button
                 type="button"
                 disabled={pending}
+                data-still-here=""
                 className={cn(BUTTON, "bg-kon text-white")}
                 onClick={() => void send(actions.confirm, "confirmed")}
               >

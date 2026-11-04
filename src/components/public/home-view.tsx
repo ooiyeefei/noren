@@ -9,6 +9,10 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { ExploreGuide } from "@/components/explore/guide";
 import { NorenTab } from "@/components/explore/noren-tab";
 import {
+  NeighbourhoodList,
+  type NeighbourhoodProgress,
+} from "@/components/explore/neighbourhood-list";
+import {
   STORIES_FILTER,
   draggedSheet,
   normaliseSearch,
@@ -47,6 +51,8 @@ export function HomeView({
   hasDemo,
   hasStories,
   latest,
+  neighbourhoods,
+  onChooseNeighbourhood,
   position,
   locationOff = false,
   selectedId,
@@ -75,6 +81,9 @@ export function HomeView({
   hasStories?: boolean;
   /** The newest stories people shared in the region; undefined while loading. */
   latest?: readonly LatestStoryLike[];
+  /** Each neighbourhood's shared progress; undefined while loading. */
+  neighbourhoods?: readonly NeighbourhoodProgress[];
+  onChooseNeighbourhood?(neighbourhood: NeighbourhoodProgress): void;
   position?: Position | null;
   locationOff?: boolean;
   selectedId?: string | null;
@@ -248,6 +257,13 @@ export function HomeView({
             )}
             {!searching && latest && latest.length > 0 && (
               <LatestStories locale={locale} region={region} entries={latest} />
+            )}
+            {!searching && neighbourhoods && (
+              <NeighbourhoodList
+                locale={locale}
+                neighbourhoods={neighbourhoods}
+                onChoose={onChooseNeighbourhood}
+              />
             )}
             <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 px-4">
               <p role="status" className="text-[15px] font-bold">

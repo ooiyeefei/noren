@@ -7,6 +7,8 @@ import { AddStory, type AddStoryActions } from "@/components/place/add-story";
 import { StoryFeed, type StoryFeedActions } from "@/components/place/story-feed";
 import { PlaceCheck, type PlaceCheckActions } from "@/components/place/place-check";
 import { PlaceStory, type PlaceStoryLike } from "@/components/place/place-story";
+import { PlaceStamp } from "@/components/place/place-stamp";
+import { NeighbourhoodMission, type MissionLike } from "@/components/place/neighbourhood-mission";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { labelForCategory } from "./category";
 import { EmbedNotice } from "@/components/embeds/embed-notice";
@@ -38,6 +40,8 @@ export function PlaceView({
   placeStory,
   checks,
   story,
+  mission,
+  stamp,
 }: {
   locale: Locale;
   region: PublicRegionProps;
@@ -50,6 +54,10 @@ export function PlaceView({
   placeStory?: PlaceStoryLike;
   checks?: PlaceCheckActions;
   story?: AddStoryActions & StoryFeedActions;
+  /** What the place's neighbourhood still needs, when it is in one. */
+  mission?: MissionLike | null;
+  /** The viewer's stamp for this place, and what they just did to earn it, if anything. */
+  stamp?: { stampedAt: number; pressedFrom: "check" | "story" | null } | null;
 }) {
   const m = messagesFor(publicMessages, locale);
   const shell = messagesFor(shellMessages, locale);
@@ -77,6 +85,17 @@ export function PlaceView({
       </>
     );
   const heading = placeHeading(place.names, locale, region);
+  const stampHere = (from: "check" | "story") =>
+    stamp && (
+      <PlaceStamp
+        locale={locale}
+        region={region}
+        slug={place.slug}
+        names={place.names}
+        stampedAt={stamp.stampedAt}
+        pressed={stamp.pressedFrom === from}
+      />
+    );
   const markers = toHomeModel([place], locale, region).markers;
   const feed =
     sources === undefined || stories === undefined
@@ -115,6 +134,9 @@ export function PlaceView({
               actions={checks}
             />
           )}
+          {/* It shows where the person acted: a story's stamp appears beside the story form. */}
+          <div aria-live="polite">{stamp?.pressedFrom !== "story" && stampHere("check")}</div>
+          {mission && <NeighbourhoodMission locale={locale} region={region} mission={mission} />}
           {place.visibility === "draft" && <p role="note">{m.draft}</p>}
           {(place.canEdit || place.isOwner) && (
             <nav aria-label={ui.manage} className="flex flex-wrap items-center gap-x-4 text-[15px]">
@@ -165,6 +187,7 @@ export function PlaceView({
               <>
                 {feed.length === 0 && <p className="text-[17px]">{ui.noStories}</p>}
                 {!place.isMock && <AddStory locale={locale} region={region} actions={story} />}
+                <div aria-live="polite">{stamp?.pressedFrom === "story" && stampHere("story")}</div>
                 {feed.some(
                   (entry) => entry.kind === "post" && entry.source.embed.kind !== "link",
                 ) && <EmbedNotice locale={locale} />}

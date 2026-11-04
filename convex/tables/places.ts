@@ -74,6 +74,8 @@ export const placeTables = {
     hasPublishedPage: v.optional(v.boolean()),
     /** Whether anyone may read a story a member wrote or a post a member shared here (FR-033). */
     hasPeopleStories: v.optional(v.boolean()),
+    /** The region neighbourhood the pin falls in, copied like the pin; unset when it falls in none. */
+    neighbourhood: v.optional(v.string()),
     /**
      * When a person last confirmed the place in person: they placed its pin, or said "Still here"
      * (FR-030). Unset means "Not yet confirmed", as for a listing from open data no one has checked.
@@ -95,7 +97,12 @@ export const placeTables = {
   })
     .index("by_regionId_and_slug", ["regionId", "slug"])
     .index("by_regionId_and_visibility", ["regionId", "visibility"])
-    .index("by_createdBy", ["createdBy"]),
+    .index("by_createdBy", ["createdBy"])
+    .index("by_regionId_and_neighbourhood_and_visibility", [
+      "regionId",
+      "neighbourhood",
+      "visibility",
+    ]),
 
   /**
    * One person saying a place is still there, or reporting what is wrong with it (FR-030). A report
@@ -115,7 +122,8 @@ export const placeTables = {
     isMock: v.boolean(),
   })
     .index("by_placeId_and_personId", ["placeId", "personId"])
-    .index("by_regionId_and_verdict_and_reviewedAt", ["regionId", "verdict", "reviewedAt"]),
+    .index("by_regionId_and_verdict_and_reviewedAt", ["regionId", "verdict", "reviewedAt"])
+    .index("by_personId_and_verdict", ["personId", "verdict"]),
 
   /** Links a business owner to a place they may confirm claims for. */
   placeOwner: defineTable({
@@ -266,5 +274,6 @@ export const placeTables = {
       "foundKind",
       "sharedAt",
     ])
-    .index("by_addedBy", ["addedBy"]),
+    .index("by_addedBy", ["addedBy"])
+    .index("by_addedBy_and_origin", ["addedBy", "origin"]),
 };
