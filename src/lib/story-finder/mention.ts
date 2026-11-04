@@ -187,7 +187,7 @@ const CONTAINS_POLITE = String.raw`含(?:みます|んでいます|んでおり�
  * the bare word: "広告", "提供", "タイアップ" and "PR" are all ordinary words too ("看板広告",
  * "コーヒーを提供しています", "ドラマとのタイアップ", "自己PR"), and a false match costs a story.
  */
-const AD_MARKERS = [
+const AD_LABELS = [
   // A hashtag: #PR, #広告, #提供 ... (a tag that only starts with one, such as #prague, is not one).
   /[#＃](?:ad|ads|pr|sponsored|promotion|promo|gifted|affiliate|提供|商品提供|無償提供|案件|タイアップ|プロモーション|広告|宣伝|アフィリエイト|スポンサード|協賛|モニター)(?![\p{L}\p{N}_])/iu,
   // A label in brackets: 【PR】, [広告], (宣伝), 【提供】, 【案件】 ... The whole bracket is the label.
@@ -197,19 +197,25 @@ const AD_MARKERS = [
   // could cross lines, and a page of "-\n" lines took quadratic time (every line start scanned on to
   // the end). Each attempt now ends with its line.
   /^[ \t\u3000※*■□◆◇●○▼▽★☆▶►・\-–—]*(?:PR|広告|宣伝|プロモーション|タイアップ|スポンサード|アフィリエイト|Sponsored|Advertisement)(?:記事|広告|投稿)?[ \t\u3000]*(?:[:|]|$)/imu,
-  // English disclosures.
-  /paid partnership|sponsored by|sponsored (?:post|content)|affiliate links?/iu,
-  // A sponsored visit or product: 商品提供, 商品をご提供いただき, 無償でご提供いただき, ご招待いただき.
-  /有料パートナーシップ|商品提供|ご招待(?:いただ|頂)/u,
-  /(?:商品|製品|サンプル|試供品|無償|無料)(?:を|で|の)?(?:ご)?提供(?:いただ|頂|を受け|して(?:いただ|頂|もら))/u,
+  /sponsored by|sponsored (?:post|content)/iu,
   // "提供" as a credit line: "提供：株式会社テスト", "提供 by". Not "写真提供：長崎市" (a photo credit:
   // a letter before it) and not "コーヒーを提供しています" (no colon).
   /(?<![\p{L}\p{N}])提供\s*(?::|by\b)/iu,
   // A named kind of post: PR記事, 広告記事, プロモーション記事, タイアップ記事, PR案件, 企業案件.
+  // Not スポンサードリンク, the usual label on an ad slot in an ordinary blog.
   new RegExp(
-    String.raw`${NOT_COMPOUND}(?:PR|広告|プロモーション|アフィリエイト)(?:記事|案件|投稿|表記)|タイアップ(?:記事|広告|案件|投稿)|(?:PR|企業|スポンサー|広告)案件|案件(?:記事|投稿)|スポンサード`,
+    String.raw`${NOT_COMPOUND}(?:PR|広告|プロモーション|アフィリエイト)(?:記事|案件|投稿|表記)|タイアップ(?:記事|広告|案件|投稿)|(?:PR|企業|スポンサー|広告)案件|案件(?:記事|投稿)|スポンサード(?!リンク)`,
     "iu",
   ),
+];
+
+/** Sentences that say what the post itself is. Unlike a label, they don't name an ad slot beside it. */
+const AD_DISCLOSURES = [
+  // English disclosures.
+  /paid partnership|affiliate links?/iu,
+  // A sponsored visit or product: 商品提供, 商品をご提供いただき, 無償でご提供いただき, ご招待いただき.
+  /有料パートナーシップ|商品提供|ご招待(?:いただ|頂)/u,
+  /(?:商品|製品|サンプル|試供品|無償|無料)(?:を|で|の)?(?:ご)?提供(?:いただ|頂|を受け|して(?:いただ|頂|もら))/u,
   // The usual disclosure sentence: 「※この記事はプロモーションを含みます」, 「本記事には広告を含む」,
   // 「このページは広告です」. A subject noun comes first, so "広告を含みません" (no ads) never matches.
   new RegExp(
@@ -226,13 +232,24 @@ const AD_MARKERS = [
 ];
 
 /**
- * Whether a text carries an advertising label or disclosure (AD_MARKERS). Run it on the whole post:
- * Japanese sponsored posts put theirs at the top or the bottom of the page, which a long page's
- * stored window (storedPostText) cuts off.
+ * Whether a post's own text carries an advertising label or disclosure. Run it on the whole post:
+ * sponsored posts put theirs at the top or the bottom, which a long post's stored window
+ * (storedPostText) cuts off.
  */
 export function hasAdMarker(text: string): boolean {
   const folded = text.normalize("NFKC");
-  return AD_MARKERS.some((pattern) => pattern.test(folded));
+  return [...AD_LABELS, ...AD_DISCLOSURES].some((pattern) => pattern.test(folded));
+}
+
+/**
+ * Whether a whole web page, menus and side bars included, discloses that it is sponsored. Only
+ * disclosure sentences count here: "広告", "PR", "【PR】" and "スポンサードリンク" label ad slots on
+ * ordinary blogs, and would reject most of them. Labels still count in the article's own text, which
+ * postHasAdMarker reads from the stored window.
+ */
+export function hasPageDisclosure(text: string): boolean {
+  const folded = text.normalize("NFKC");
+  return AD_DISCLOSURES.some((pattern) => pattern.test(folded));
 }
 
 /**

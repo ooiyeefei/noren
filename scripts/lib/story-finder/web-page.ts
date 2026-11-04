@@ -5,7 +5,7 @@ import { isIP, type LookupFunction } from "node:net";
 import type { Readable } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { parseHttpUrl } from "../../../src/lib/adapters/url";
-import { hasAdMarker, storedPostText } from "../../../src/lib/story-finder/mention";
+import { hasPageDisclosure, storedPostText } from "../../../src/lib/story-finder/mention";
 import { namesPlace } from "./types";
 
 /** The robots.txt product token, and the User-Agent sent with it. */
@@ -441,7 +441,7 @@ const BLOCK_TAGS =
   /<\/?(?:p|div|li|ul|ol|dl|dt|dd|h[1-6]|blockquote|section|article|header|footer|nav|aside|main|form|table|tr|td|th|figure|figcaption|address|details|summary|pre|hr|title)\b[^<>]*>/gi;
 
 /**
- * A page's text for the ad screen (hasAdMarker), which must see all of it: only scripts, styles and
+ * A page's text for the ad screen (hasPageDisclosure), which must see all of it: only scripts, styles and
  * comments are left out, so a disclosure in a footer, a side bar or a menu is read (htmlText drops
  * those, and the stored window comes from htmlText). Inline tags go without leaving a space, so
  * <b>プロモーション</b>を含みます still reads as one phrase; block tags and <br> end the line. Every
@@ -483,7 +483,7 @@ export type PageReader = (
       url: string;
       /** The part of the page around the place's name (textAroundPlace), not the whole page. */
       text: string;
-      /** True when the whole page, not only `text`, carried an ad label (hasAdMarker). */
+      /** True when the whole page, not only `text`, disclosed sponsorship (hasPageDisclosure). */
       adMarker?: boolean;
       author?: string;
       publishedAt?: number;
@@ -590,7 +590,7 @@ export function createPageReader(
       text,
       // From the whole page, footer and side bars included: the label may be at its top or bottom,
       // outside `text`, in a part htmlText leaves out.
-      ...(hasAdMarker(htmlScreenText(response.body)) ? { adMarker: true } : {}),
+      ...(hasPageDisclosure(htmlScreenText(response.body)) ? { adMarker: true } : {}),
       author: metaContent(response.body, "author") ?? metaContent(response.body, "og:site_name"),
       ...(Number.isFinite(published) ? { publishedAt: published } : {}),
     };
