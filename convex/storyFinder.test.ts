@@ -578,6 +578,37 @@ describe("the steward's page", () => {
     );
   });
 
+  it("hides a list of posts for a real steward only, linked or not", async () => {
+    const w = await world();
+    await w.ingest([w.candidate(posts.google), w.candidate(posts.instagram)]);
+    const [google, instagram] = await w.rows();
+    await w.record(google!._id, {});
+    await w.record(instagram!._id, {}, false);
+    const candidateIds = [google!._id, instagram!._id];
+    await expect(
+      w.b.t.mutation(internal.storyFinder.hideMany, {
+        stewardPersonId: w.mockSteward,
+        candidateIds,
+      }),
+    ).rejects.toThrow();
+    expect(
+      await w.b.t.mutation(internal.storyFinder.hideMany, {
+        stewardPersonId: w.steward,
+        candidateIds,
+      }),
+    ).toEqual({ hidden: 2 });
+    expect((await w.rows()).map((row) => row.status)).toEqual(["hidden", "hidden"]);
+    const sourceId = (await w.rows())[0]!.sourceId!;
+    expect((await w.b.t.run((ctx) => ctx.db.get("source", sourceId)))!.status).toBe("hidden");
+    // The attach no longer sees them.
+    expect(
+      await w.b.t.mutation(internal.storyFinder.attachAcceptedBatch, {
+        stewardPersonId: w.steward,
+        limit: 10,
+      }),
+    ).toEqual({ attached: 0, considered: 0 });
+  });
+
   it("starting a check needs the model setting and a real steward", async () => {
     const w = await world();
     await w.ingest([w.candidate(posts.instagram)]);
@@ -647,6 +678,51 @@ describe("checks that do not depend on the model", () => {
     expect(await w.record(row!._id, { evidence: "テスト店", quote: ATTACK_QUOTE })).toMatchObject({
       status: "attached",
     });
+  });
+
+  it("a quote that is only an address or opening hours is never shown", async () => {
+    const w = await world();
+    const quotes = ["📍試験県架空市試験町3-1", "⏰ 14:00-23:30(日曜日 14:00-22:00)"];
+    await w.ingest(
+      quotes.map((quote, i) =>
+        w.candidate(
+          { platform: "reddit", url: `https://www.reddit.com/r/mocktravel/comments/bare${i}/p/` },
+          { text: `${MARKER} テスト店。${quote}` },
+        ),
+      ),
+    );
+    for (const row of await w.rows()) {
+      await w.record(row._id, { quote: row.text.split("。")[1]! });
+      expect((await w.rows()).find((r) => r._id === row._id)).toMatchObject({
+        status: "rejected",
+        reason: "bare_fact",
+      });
+    }
+  });
+
+  it("a bare address accepted before the rule is refused at the attach", async () => {
+    const w = await world();
+    await w.ingest([w.candidate(posts.google, { text: `${MARKER} テスト店。架空市試験町3-1` })]);
+    const [row] = await w.rows();
+    await w.b.t.run((ctx) =>
+      ctx.db.patch("mentionCandidate", row!._id, {
+        status: "accepted",
+        checkedAt: 1000,
+        verdict: {
+          aboutThisPlace: "yes",
+          evidence: "テスト店",
+          kind: "tip",
+          namesPrivatePeople: false,
+          quote: "架空市試験町3-1",
+          topics: [],
+        },
+      }),
+    );
+    await w.b.t.mutation(internal.storyFinder.attachAcceptedBatch, {
+      stewardPersonId: w.steward,
+      limit: 10,
+    });
+    expect((await w.rows())[0]).toMatchObject({ status: "rejected", reason: "bare_fact" });
   });
 
   it("a quote with a web address, email, phone number or handle is never shown", async () => {

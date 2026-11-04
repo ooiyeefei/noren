@@ -23,6 +23,7 @@ Commands
   replay    Send saved results (.scratch/story-finder/<stamp>) to a deployment again, no new scraping.
   check     Check staged posts with the AI model (AI_MODEL_CHECK_MENTION on the deployment).
   attach    Link posts that passed the check but were not linked yet.
+  hide      Never link these posts, and take down any already linked.
 
 Common flags
   --steward <personId>     The steward running it (required). Demo accounts are refused.
@@ -57,9 +58,12 @@ check
                            posts are never touched. Run check again afterwards.
 
 attach
-  --limit 100              Most checked posts to link in one call.`;
+  --limit 100              Most checked posts to link in one call.
 
-export type Command = "collect" | "replay" | "check" | "attach";
+hide
+  --ids <file>             A text file of candidate ids, one per line; a # starts a comment.`;
+
+export type Command = "collect" | "replay" | "check" | "attach" | "hide";
 
 export type Flags = {
   command: Command;
@@ -78,6 +82,7 @@ export type Flags = {
   attach: boolean;
   requeue: boolean;
   from?: string;
+  ids?: string;
   prod: boolean;
   deployment?: string;
   envFile?: string;
@@ -99,7 +104,13 @@ function list(value: string): string[] {
 
 export function parseFlags(argv: readonly string[]): Flags {
   const [command, ...rest] = argv;
-  if (command !== "collect" && command !== "replay" && command !== "check" && command !== "attach")
+  if (
+    command !== "collect" &&
+    command !== "replay" &&
+    command !== "check" &&
+    command !== "attach" &&
+    command !== "hide"
+  )
     throw new Error(`Unknown command ${JSON.stringify(command ?? "")}; run with --help`);
   const flags: Flags = {
     command,
@@ -177,6 +188,9 @@ export function parseFlags(argv: readonly string[]): Flags {
         case "--timeout-secs":
           flags.timeoutSecs = positive(flag, value);
           break;
+        case "--ids":
+          flags.ids = value;
+          break;
         case "--from":
           flags.from = value;
           break;
@@ -197,6 +211,7 @@ export function parseFlags(argv: readonly string[]): Flags {
   if (flags.prod && flags.deployment)
     throw new Error("Use either --prod or --deployment, not both");
   if (flags.command === "replay" && !flags.from) throw new Error("replay needs --from <folder>");
+  if (flags.command === "hide" && !flags.ids) throw new Error("hide needs --ids <file>");
   if (flags.requeue && flags.command !== "check")
     throw new Error("--requeue belongs to the check command");
   if (flags.perPlace > 50) throw new Error("--per-place is at most 50");
@@ -309,6 +324,23 @@ export async function runStoryFinder(
         attach: flags.attach,
       }),
     );
+    return;
+  }
+  if (flags.command === "hide") {
+    options.log({ target });
+    const ids = (await readFile(resolve(options.cwd, flags.ids!), "utf8"))
+      .split("\n")
+      .map((line) => line.replace(/#.*$/, "").trim())
+      .filter(Boolean);
+    let hidden = 0;
+    for (let i = 0; i < ids.length; i += 50) {
+      const done = (await convex("storyFinder:hideMany", {
+        stewardPersonId: flags.steward,
+        candidateIds: ids.slice(i, i + 50),
+      })) as { hidden: number };
+      hidden += done.hidden;
+    }
+    options.log({ hidden });
     return;
   }
   if (flags.command === "attach") {

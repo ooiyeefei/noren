@@ -12,6 +12,7 @@ import {
   MENTION_KINDS,
   mentionCanonicalUrl,
   namesPlace,
+  isBareFact,
   postHasAdMarker,
   quoteFingerprint,
   storedPostText,
@@ -555,6 +556,7 @@ async function attachCandidate(
   // The collector's flag from the whole page, or a label in the stored text.
   if (postHasAdMarker(candidate)) return await reject("sponsored");
   if (contactIn(quote) !== null) return await reject("quote_has_contact");
+  if (isBareFact(quote)) return await reject("bare_fact");
   const shown = await shownQuotesIn(ctx, place.regionId, shownCache);
   if (!shown.complete) return await fail("copy_check_full");
   if (copiesShownQuote(shown, candidate, quote)) return await reject("duplicate_quote");
@@ -1106,44 +1108,64 @@ export const requeue = internalMutation({
 });
 
 /**
- * One click takes a found post down: its source is hidden through the same change `sources.remove`
- * makes, and the candidate is never linked again.
+ * Takes a found post down: its source is hidden through the same change `sources.remove` makes, and
+ * the candidate is never linked again.
  */
+async function hideCandidate(
+  ctx: MutationCtx,
+  steward: Doc<"person">,
+  candidateId: Id<"mentionCandidate">,
+) {
+  const candidate = await ctx.db.get("mentionCandidate", candidateId);
+  if (candidate === null) throw appError("not_found", "candidate not found");
+  if (candidate.status === "hidden") return;
+  if (candidate.sourceId !== undefined) {
+    const source = await ctx.db.get("source", candidate.sourceId);
+    if (source !== null && source.status === "live") {
+      await ctx.db.patch("source", source._id, { status: "hidden" });
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: steward._id,
+        action: "source.remove",
+        targetType: "source",
+        targetId: source._id,
+      });
+    }
+  }
+  await ctx.db.patch("mentionCandidate", candidateId, {
+    status: "hidden",
+    hiddenAt: Date.now(),
+    hiddenBy: steward._id,
+    checkStartedAt: undefined,
+  });
+  await writeAudit(ctx, {
+    actorKind: "person",
+    actorPersonId: steward._id,
+    action: "mention.hide",
+    targetType: "mentionCandidate",
+    targetId: candidateId,
+  });
+}
+
+/** One click on the steward's page. */
 export const hide = mutation({
   args: { candidateId: v.id("mentionCandidate") },
   returns: v.null(),
   handler: async (ctx, { candidateId }) => {
     const steward = await requireRole(ctx, ["steward"]);
     if (steward.isMock) throw appError("forbidden", "a demo account may not change found posts");
-    const candidate = await ctx.db.get("mentionCandidate", candidateId);
-    if (candidate === null) throw appError("not_found", "candidate not found");
-    if (candidate.status === "hidden") return null;
-    if (candidate.sourceId !== undefined) {
-      const source = await ctx.db.get("source", candidate.sourceId);
-      if (source !== null && source.status === "live") {
-        await ctx.db.patch("source", source._id, { status: "hidden" });
-        await writeAudit(ctx, {
-          actorKind: "person",
-          actorPersonId: steward._id,
-          action: "source.remove",
-          targetType: "source",
-          targetId: source._id,
-        });
-      }
-    }
-    await ctx.db.patch("mentionCandidate", candidateId, {
-      status: "hidden",
-      hiddenAt: Date.now(),
-      hiddenBy: steward._id,
-      checkStartedAt: undefined,
-    });
-    await writeAudit(ctx, {
-      actorKind: "person",
-      actorPersonId: steward._id,
-      action: "mention.hide",
-      targetType: "mentionCandidate",
-      targetId: candidateId,
-    });
+    await hideCandidate(ctx, steward, candidateId);
     return null;
+  },
+});
+
+/** The same for a list, from a steward's read of the accepted posts on the command line. */
+export const hideMany = internalMutation({
+  args: { stewardPersonId: v.id("person"), candidateIds: v.array(v.id("mentionCandidate")) },
+  returns: v.object({ hidden: v.number() }),
+  handler: async (ctx, { stewardPersonId, candidateIds }) => {
+    const steward = await finderSteward(ctx, stewardPersonId);
+    for (const candidateId of candidateIds) await hideCandidate(ctx, steward, candidateId);
+    return { hidden: candidateIds.length };
   },
 });
