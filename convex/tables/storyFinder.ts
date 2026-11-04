@@ -156,6 +156,8 @@ export const storyFinderTables = {
     writer: v.string(),
     checker: v.string(),
     publishedAt: v.number(),
+    /** A person read it, or the place, and decided it stays off the page. A later run replaces this. */
+    withdrawnAt: v.optional(v.number()),
   }).index("by_placeId", ["placeId"]),
 
   /** One run of the story agent and what it did, step by step. Steward-only. */
