@@ -7,6 +7,7 @@ import {
   interviewStatusValidator,
   pageVersionStatusValidator,
   transcriptOriginValidator,
+  translationCheckStatusValidator,
   translationOriginValidator,
 } from "../lib/validators";
 
@@ -103,6 +104,45 @@ export const interviewTables = {
     reviewedBy: v.optional(v.string()),
     reviewedAt: v.optional(v.number()),
   }).index("by_claimId_and_lang", ["claimId", "lang"]),
+
+  /**
+   * A second model's check of one machine translation against the person's own words, run when
+   * AI_MODEL_CHECK_TRANSLATION is set. Only a `held` translation leaves the public page, and only
+   * while `text` still equals its row's text; a person then decides. One row per translation.
+   */
+  translationCheck: defineTable({
+    translationId: v.id("claimTranslation"),
+    claimId: v.id("claim"),
+    lang: v.string(),
+    /** The machine text this check is about. */
+    text: v.string(),
+    status: translationCheckStatusValidator,
+    /** The AI_MODEL_CHECK_TRANSLATION value the last attempt ran with. */
+    modelSetting: v.string(),
+    /** Check requests sent, counting ones that found the endpoint asleep. */
+    attempts: v.number(),
+    /** The translator has already translated again once, with the first check's lists. */
+    retranslated: v.boolean(),
+    /** Claims the translation adds that the original does not make. */
+    added: v.array(v.string()),
+    /** Claims the original makes that the translation leaves out. */
+    missing: v.array(v.string()),
+    firstAttemptAt: v.optional(v.number()),
+    nextAttemptAt: v.number(),
+    /** A run is working on it until then. */
+    leaseUntil: v.optional(v.number()),
+    checkedAt: v.optional(v.number()),
+    /** Why the last attempt failed, for operators; never shown in the app. */
+    error: v.optional(v.string()),
+    decidedBy: v.optional(v.id("person")),
+  })
+    .index("by_translationId", ["translationId"])
+    .index("by_status_and_nextAttemptAt", ["status", "nextAttemptAt"]),
+
+  /** The one scheduled run of the translation check, so checks queue behind it instead of racing. */
+  translationCheckRun: defineTable({
+    scheduledId: v.optional(v.id("_scheduled_functions")),
+  }),
 
   pageVersion: defineTable({
     placeId: v.id("place"),

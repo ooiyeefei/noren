@@ -89,6 +89,29 @@ it("a human translation shows the original without the machine badge", () => {
   expect(html).toContain('lang="ja"');
   expect(html).not.toContain('data-badge="machine-translation"');
 });
+it("a sentence whose translation is held shows the original with the under-review note", () => {
+  for (const locale of ["en", "ja"] as const) {
+    const html = render(
+      model({
+        locale,
+        sentences: [
+          sentence("a", {
+            lang: locale,
+            text: locale === "en" ? "架空の原文" : "Fictional original.",
+            textLang: locale === "en" ? "ja" : "en",
+            translation: "original",
+            underReview: true,
+          }),
+        ],
+      }),
+    );
+    expect(html).toContain('data-badge="translation-under-review"');
+    expect(html).toContain(locale === "en" ? "Translation under review" : "翻訳を確認中");
+    expect(html).not.toContain('data-badge="translation-pending"');
+    expect(html).not.toContain('data-badge="machine-translation"');
+    expect(html).not.toMatch(/Muse|Glimmer|Modal|Meta/);
+  }
+});
 it("a sentence without a translation shows translation pending", () => {
   const html = render(
     model({

@@ -66,6 +66,7 @@ const inheritsMockFlag = [
   "consent",
   "transcript",
   "claimTranslation",
+  "translationCheck",
   "pageVersion",
   "pageSentence",
   "noteTranslation",
@@ -77,6 +78,7 @@ const notPersonCreated = [
   "takedownRequest",
   "rateLimit",
   "auditLog",
+  "translationCheckRun",
 ];
 
 it("no table or field is named like a rating, score or sentiment", () => {

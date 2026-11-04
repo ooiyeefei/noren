@@ -105,6 +105,8 @@ function admin(locale: Locale): PlaceAdminProps {
     translations: {},
     onTranslation: noop,
     onSaveTranslation: noop,
+    onReleaseTranslation: noop,
+    onCheckAgain: noop,
     onDispute: noop,
     onTranslate: noop,
     onCompose: noop,
@@ -233,6 +235,75 @@ describe("steward views", () => {
       encoded(stewardMessages.en.revokeConsent),
     );
   });
+  it.each(["ja", "en"] as const)(
+    "%s a held translation shows what the check found, a show button and a human translation box",
+    (locale) => {
+      const m = stewardMessages[locale];
+      const props = admin(locale);
+      const released: string[] = [];
+      props.onReleaseTranslation = (id, lang) => released.push(`${id}:${lang}`);
+      const check = {
+        status: "held" as const,
+        added: ["the best coffee shop in Nagasaki"],
+        missing: ["payment is cash only"],
+        attempts: 2,
+        retranslated: true,
+      };
+      props.claims = props.claims.map((claim) => ({
+        ...claim,
+        translations: [
+          { lang: "en", text: "Fictional held translation.", origin: "machine" as const, check },
+        ],
+      }));
+      const html = renderToStaticMarkup(<PlaceAdminView {...props} />);
+      const card = html.match(
+        /<div[^>]*data-translation-check="held"[^>]*>[\s\S]*?<\/button><\/div>/,
+      )![0];
+      for (const text of [
+        m.checkHeld,
+        m.checkRetranslated,
+        m.checkAdded,
+        m.checkMissing,
+        m.checkRelease,
+      ])
+        expect(card).toContain(encoded(text));
+      expect(card).toContain("the best coffee shop in Nagasaki");
+      expect(card).toContain("payment is cash only");
+      expect(card).not.toContain(encoded(m.checkAgain));
+      expect(html).toContain(`${encoded(m.human)} (en)`);
+      expect(html).not.toMatch(/Muse|Glimmer|Modal|Meta/);
+      for (const control of html.match(/<(?:button|textarea)\b[^>]*>/g) ?? [])
+        expect(control).toMatch(/min-h-11/);
+    },
+  );
+  it.each([
+    ["pending", "checkPending", false],
+    ["passed", "checkPassed", false],
+    ["unavailable", "checkUnavailable", true],
+    ["released", "checkReleased", false],
+  ] as const)(
+    "a %s check shows its note and offers check again only when it could not run",
+    (status, key, again) => {
+      const props = admin("en");
+      props.claims = props.claims.map((claim) => ({
+        ...claim,
+        translations: [
+          {
+            lang: "en",
+            text: "Fictional translation.",
+            origin: "machine" as const,
+            check: { status, added: [], missing: [], attempts: 1, retranslated: false },
+          },
+        ],
+      }));
+      const html = renderToStaticMarkup(<PlaceAdminView {...props} />);
+      expect(html).toContain(`data-translation-check="${status}"`);
+      expect(html).toContain(encoded(stewardMessages.en[key]));
+      expect(html.includes(encoded(stewardMessages.en.checkAgain))).toBe(again);
+      expect(html).not.toContain(encoded(stewardMessages.en.checkRelease));
+      expect(html).not.toContain(`${encoded(stewardMessages.en.human)} (en)`);
+    },
+  );
   it("the compose result shows held sentences", () => {
     const html = renderToStaticMarkup(<ComposeResultView locale="en" result={result} />);
     expect(html).toContain("Held sentences</dt><dd>2</dd>");

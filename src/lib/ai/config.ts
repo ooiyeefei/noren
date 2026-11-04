@@ -5,15 +5,18 @@ export const AI_CAPABILITIES = [
   "compose",
   "entail",
   "followup",
+  "check_translation",
 ] as const;
 export type AiCapability = (typeof AI_CAPABILITIES)[number];
 // Each capability names its model in AI_MODEL_<CAPABILITY>, so switching provider is a settings
-// change: "claude-sonnet-5-5" (Anthropic), "meta:muse-spark-1.3" (Meta Model API) or
-// "vendor/model" (Vercel AI Gateway).
+// change: "claude-sonnet-5-5" (Anthropic), "meta:muse-spark-1.3" (Meta Model API),
+// "modal:noren-glimmer" (an OpenAI-compatible Modal endpoint) or "vendor/model" (Vercel AI Gateway).
 export type AiModelConfig = {
-  provider: "anthropic" | "gateway" | "meta";
+  provider: "anthropic" | "gateway" | "meta" | "modal";
   apiKey: string;
   modelId: string;
+  /** The endpoint's root URL, without /v1; set for modal only. */
+  baseURL?: string;
 };
 
 export type CompatibleTranscriptionConfig = {
@@ -43,6 +46,46 @@ function metaKey(
   if (/[\r\n\x00-\x1f\x7f]/.test(apiKey))
     return { ok: false, reason: "META_API_KEY must not contain control characters" };
   return { ok: true, config: { apiKey } };
+}
+
+function httpsBase(value: string | undefined): string | undefined {
+  try {
+    const url = new URL(value?.trim() ?? "");
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
+      return undefined;
+    return url.href.replace(/\/+$/, "");
+  } catch {
+    return undefined;
+  }
+}
+
+/** A modal: model runs on our own Modal endpoint, which serves the OpenAI Chat Completions API. */
+function modalConfig(
+  variable: string,
+  model: string,
+  env: Readonly<Record<string, string | undefined>>,
+): ConfigResult<AiModelConfig> {
+  if (!META_MODEL.test(model))
+    return {
+      ok: false,
+      reason: `${variable} must be modal: followed by a model id without spaces`,
+    };
+  const apiKey = env.MODAL_PROXY_TOKEN?.trim();
+  if (!apiKey) return { ok: false, reason: "AI is not configured: MODAL_PROXY_TOKEN is not set" };
+  if (/[\r\n\x00-\x1f\x7f]/.test(apiKey))
+    return { ok: false, reason: "MODAL_PROXY_TOKEN must not contain control characters" };
+  if (!env.MODAL_BASE_URL?.trim())
+    return { ok: false, reason: "AI is not configured: MODAL_BASE_URL is not set" };
+  const base = httpsBase(env.MODAL_BASE_URL);
+  if (!base)
+    return {
+      ok: false,
+      reason: "MODAL_BASE_URL must be an https URL without credentials, query or fragment",
+    };
+  return {
+    ok: true,
+    config: { provider: "modal", apiKey, modelId: model, baseURL: base.replace(/\/v1$/, "") },
+  };
 }
 
 function metaTranscriptionConfig(
@@ -149,11 +192,16 @@ export function aiConfig(
   }
   if (!modelId) {
     const keys =
-      !env.AI_GATEWAY_API_KEY?.trim() && !env.ANTHROPIC_API_KEY?.trim() && !env.META_API_KEY?.trim()
-        ? "AI_GATEWAY_API_KEY (vendor/model), ANTHROPIC_API_KEY (slashless model) or META_API_KEY (meta:model) is required; "
+      !env.AI_GATEWAY_API_KEY?.trim() &&
+      !env.ANTHROPIC_API_KEY?.trim() &&
+      !env.META_API_KEY?.trim() &&
+      !env.MODAL_PROXY_TOKEN?.trim()
+        ? "AI_GATEWAY_API_KEY (vendor/model), ANTHROPIC_API_KEY (slashless model), META_API_KEY (meta:model) or MODAL_PROXY_TOKEN (modal:model) is required; "
         : "";
     return { ok: false, reason: `AI is not configured: ${keys}${variable} is not set` };
   }
+  if (capability !== "transcribe" && modelId.startsWith("modal:"))
+    return modalConfig(variable, modelId.slice("modal:".length), env);
   if (capability !== "transcribe" && modelId.startsWith("meta:")) {
     const metaModel = modelId.slice("meta:".length);
     if (!META_MODEL.test(metaModel))
@@ -176,7 +224,7 @@ export function aiConfig(
       reason:
         capability === "transcribe"
           ? `${variable} must be a gateway model id (vendor/model).${fallback}`
-          : `${variable} must be a slashless Anthropic model id, meta:model or a gateway model id (vendor/model)`,
+          : `${variable} must be a slashless Anthropic model id, meta:model, modal:model or a gateway model id (vendor/model)`,
     };
   const keyVariable = gateway ? "AI_GATEWAY_API_KEY" : "ANTHROPIC_API_KEY";
   const apiKey = env[keyVariable]?.trim();

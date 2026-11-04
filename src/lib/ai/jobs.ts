@@ -3,6 +3,12 @@ import { getRegionConfig } from "../region/registry";
 import { anchorClaims } from "./claim-extractor";
 import { aiConfig, type AiModelConfig, type TranscriptionConfig } from "./config";
 import { toTranscriptSegments } from "./transcriber";
+import {
+  classifyCheckError,
+  describeCheckError,
+  type CheckReport,
+  type TranslationChecker,
+} from "./translation-check";
 import { placeGlossary } from "./translator";
 
 export type JobDeps = {
@@ -14,6 +20,7 @@ const KEY_VARIABLES = [
   "AI_GATEWAY_API_KEY",
   "ANTHROPIC_API_KEY",
   "META_API_KEY",
+  "MODAL_PROXY_TOKEN",
   "TRANSCRIBE_API_KEY",
 ] as const;
 
@@ -214,4 +221,166 @@ export async function translateJob(
     log(error);
     return { translated, failed: Math.max(failed, pending.length - translated) };
   }
+}
+
+export type TranslationCheckItem = {
+  checkId: string;
+  text: string;
+  lang: string;
+  original: string;
+  originalLang: string;
+  placeId: string;
+  retranslated: boolean;
+};
+export type TranslationCheckOutcome =
+  | ({ kind: "report" } & CheckReport)
+  | { kind: "retry"; sent: boolean; error?: string }
+  | { kind: "defer" }
+  | { kind: "fail"; error: string }
+  | { kind: "retranslation_failed"; error: string };
+export type TranslationCheckStep =
+  "passed" | "retranslate" | "held" | "waiting" | "unavailable" | "stale";
+
+/** A run stops starting checks after this, leaving the rest for the next run. */
+export const CHECK_RUN_BUDGET_MS = 4 * 60_000;
+
+/**
+ * One run of the translation check over every check that is due. The first request that finds
+ * the endpoint asleep (or unreachable) stops the run from sending more: the rest wait with it, so
+ * the wake it started serves them all when the next run comes 30 seconds later.
+ */
+export async function checkTranslationsJob(
+  deps: JobDeps & {
+    now(): number;
+    startBatch(): Promise<TranslationCheckItem[]>;
+    makeChecker(config: AiModelConfig): TranslationChecker;
+    makeTranslator(config: AiModelConfig): Translator;
+    placeNames(placeId: string): Promise<{ lang: string; value: string; isPrimary: boolean }[]>;
+    record(
+      item: TranslationCheckItem,
+      modelSetting: string,
+      outcome: TranslationCheckOutcome,
+    ): Promise<TranslationCheckStep>;
+    saveRetranslation(
+      item: TranslationCheckItem,
+      text: string,
+      modelVersion: string,
+    ): Promise<boolean>;
+  },
+): Promise<Record<TranslationCheckStep, number>> {
+  const counts: Record<TranslationCheckStep, number> = {
+    passed: 0,
+    retranslate: 0,
+    held: 0,
+    waiting: 0,
+    unavailable: 0,
+    stale: 0,
+  };
+  const log = (line: string) => deps.log(safeMessage(line, deps));
+  const setting = deps.env.AI_MODEL_CHECK_TRANSLATION?.trim() ?? "";
+  // Leased by this run and not yet recorded; released in `finally` if the run fails.
+  const open = new Map<string, TranslationCheckItem>();
+  const record = async (item: TranslationCheckItem, outcome: TranslationCheckOutcome) => {
+    const step = await deps.record(item, setting, outcome);
+    if (step === "retranslate") open.set(item.checkId, item);
+    else open.delete(item.checkId);
+    counts[step] += 1;
+    return step;
+  };
+  try {
+    const items = await deps.startBatch();
+    for (const item of items) open.set(item.checkId, item);
+    if (!items.length) return counts;
+    const config = aiConfig("check_translation", deps.env);
+    if (!config.ok) {
+      log(`translation check failed (Error: ${config.reason})`);
+      for (const item of items) await record(item, { kind: "fail", error: config.reason });
+      return counts;
+    }
+    const checker = deps.makeChecker(config.config);
+    const started = deps.now();
+    let waking = false;
+    const blocked = (): TranslationCheckOutcome | undefined =>
+      waking
+        ? { kind: "retry", sent: false }
+        : deps.now() - started > CHECK_RUN_BUDGET_MS
+          ? { kind: "defer" }
+          : undefined;
+    const attempt = async (item: TranslationCheckItem): Promise<TranslationCheckOutcome> => {
+      try {
+        const report = await checker.check({
+          original: item.original,
+          originalLang: item.originalLang,
+          translation: item.text,
+          translationLang: item.lang,
+        });
+        return { kind: "report", ...report };
+      } catch (error) {
+        const description = safeMessage(describeCheckError(error), deps);
+        if (classifyCheckError(error) === "retry") {
+          waking = true;
+          return { kind: "retry", sent: true, error: description };
+        }
+        log(`translation check failed (${description})`);
+        return { kind: "fail", error: description };
+      }
+    };
+    const retranslate = async (item: TranslationCheckItem, report: CheckReport) => {
+      const translate = aiConfig("translate", deps.env);
+      if (!translate.ok) throw new Error(translate.reason);
+      const names = await deps.placeNames(item.placeId);
+      const result = await deps
+        .makeTranslator(translate.config)
+        .translate([{ itemId: item.checkId, text: item.original }], {
+          from: item.originalLang,
+          to: item.lang,
+          glossary: placeGlossary(names, item.originalLang, item.lang),
+          inputKind: "claim",
+          feedback: { added: report.added, missing: report.missing },
+        });
+      if (!result.ok) throw new Error(result.reason);
+      const text = result.items.find(({ itemId }) => itemId === item.checkId)?.text.trim();
+      if (!text) throw new Error("no translation returned");
+      return { text, modelVersion: translate.config.modelId };
+    };
+
+    for (const item of items) {
+      const wait = blocked();
+      if (wait) {
+        await record(item, wait);
+        continue;
+      }
+      const first = await attempt(item);
+      if ((await record(item, first)) !== "retranslate" || first.kind !== "report") continue;
+      // The loop's one correction: translate again with what the check found, then check again.
+      let again: { text: string; modelVersion: string };
+      try {
+        again = await retranslate(item, first);
+      } catch (error) {
+        const description = safeMessage(describe(error), deps);
+        log(`re-translation failed (${description})`);
+        await record(item, { kind: "retranslation_failed", error: description });
+        continue;
+      }
+      if (!(await deps.saveRetranslation(item, again.text, again.modelVersion))) {
+        open.delete(item.checkId);
+        counts.stale += 1;
+        continue;
+      }
+      const next = { ...item, text: again.text, retranslated: true };
+      open.set(item.checkId, next);
+      await record(next, blocked() ?? (await attempt(next)));
+    }
+  } catch (error) {
+    log(`translation check run failed (${describe(error)})`);
+  } finally {
+    for (const item of open.values()) {
+      try {
+        await deps.record(item, setting, { kind: "defer" });
+      } catch (error) {
+        log(`releasing a translation check failed (${describe(error)})`);
+      }
+    }
+  }
+  return counts;
 }

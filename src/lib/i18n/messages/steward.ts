@@ -80,6 +80,17 @@ export const stewardMessages = defineMessages({
     machine: "機械翻訳",
     translation: "翻訳",
     saveTranslation: "人による翻訳を保存",
+    checkPending: "翻訳チェック待ちです。原文と比べて、付け加えや抜けがないか確かめます。",
+    checkPassed: "翻訳チェック済み：付け加えや抜けは見つかりませんでした。",
+    checkHeld:
+      "公開ページには出していません。翻訳チェックで原文との違いが見つかりました。この翻訳を表示するか、人による翻訳を保存してください。",
+    checkRetranslated: "最初のチェックの後、一度訳し直しました。",
+    checkAdded: "原文にない内容",
+    checkMissing: "訳されていない内容",
+    checkRelease: "この翻訳を表示",
+    checkReleased: "運営者の判断で表示しています。",
+    checkUnavailable: "翻訳チェックを実行できませんでした。翻訳は未確認として表示されています。",
+    checkAgain: "もう一度チェック",
     translationRule:
       "確認済みのインタビューの記述だけ翻訳できます。公開資料からの記述は翻訳しません。",
     selectClaim: "異なる証言として選択",
@@ -214,6 +225,18 @@ export const stewardMessages = defineMessages({
     machine: "Machine translation",
     translation: "Translation",
     saveTranslation: "Save human translation",
+    checkPending:
+      "Waiting for the translation check, which compares it with the original for anything added or left out.",
+    checkPassed: "Translation checked: nothing added or left out.",
+    checkHeld:
+      "Held back from the public page: the translation check found differences from the original. Show this translation, or save a human translation.",
+    checkRetranslated: "Translated again once after the first check.",
+    checkAdded: "Says what the original does not",
+    checkMissing: "Leaves out",
+    checkRelease: "Show this translation",
+    checkReleased: "Shown because a steward decided so.",
+    checkUnavailable: "The translation check could not run. The translation is shown as unchecked.",
+    checkAgain: "Check again",
     translationRule:
       "You can translate reviewed interview statements. Text from open sources is not translated.",
     selectClaim: "Select as a conflicting account",

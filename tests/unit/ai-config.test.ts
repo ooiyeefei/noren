@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AI_CAPABILITIES, aiConfig } from "../../src/lib/ai/config";
+import nagasaki from "../../regions/nagasaki.json";
 
 const configured = { AI_GATEWAY_API_KEY: "test-key", TRANSCRIBE_PROVIDER: "gateway" };
 afterEach(() => vi.unstubAllEnvs());
@@ -8,6 +9,8 @@ function stubConfig(values: Record<string, string | undefined>) {
     "ANTHROPIC_API_KEY",
     "AI_GATEWAY_API_KEY",
     "META_API_KEY",
+    "MODAL_PROXY_TOKEN",
+    "MODAL_BASE_URL",
     "TRANSCRIBE_PROVIDER",
     "TRANSCRIBE_MODEL",
     "TRANSCRIBE_BASE_URL",
@@ -401,5 +404,22 @@ describe("Meta Model API", () => {
         reason: expect.stringContaining("-contributor"),
       });
     }
+  });
+});
+
+describe("consent", () => {
+  // A setting may route people's words only to a service the owner's consent names (77c8969).
+  it("names every service a model setting can send people's words to, in each language", () => {
+    const services = {
+      anthropic: "Anthropic",
+      meta: "Meta Platforms",
+      modal: "Modal",
+      "openai-compatible": "OpenAI",
+    };
+    for (const text of Object.values(nagasaki.consent.text))
+      for (const name of Object.values(services)) expect(text).toContain(name);
+    expect(nagasaki.consent.text.en).toContain(
+      "Modal (United States), which runs an open-weight model that checks the translations",
+    );
   });
 });

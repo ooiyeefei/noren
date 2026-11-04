@@ -10,20 +10,31 @@ import { disputeClaims, transitionClaim } from "./lib/claimEffects";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { isCautionKey, isRegionLocale, regionConfig } from "./lib/region";
+import { checkFor, dropCheck, queueCheck } from "./lib/translationChecks";
 import {
   claimKindValidator,
   claimOriginValidator,
   claimStatusValidator,
+  translationCheckStatusValidator,
   translationOriginValidator,
 } from "./lib/validators";
 import schema from "./schema";
 
+const translationCheckView = v.object({
+  status: translationCheckStatusValidator,
+  added: v.array(v.string()),
+  missing: v.array(v.string()),
+  attempts: v.number(),
+  retranslated: v.boolean(),
+});
 const translationView = v.object({
   lang: v.string(),
   text: v.string(),
   origin: translationOriginValidator,
   modelVersion: v.optional(v.string()),
   reviewedBy: v.optional(v.string()),
+  /** The check of this machine translation's current text, if one ran or is waiting. */
+  check: v.optional(translationCheckView),
 });
 const claimView = v.object({
   _id: v.id("claim"),
@@ -202,13 +213,29 @@ export const listForPlace = query({
           modelVersion: claim.modelVersion,
           aiAssisted: claim.modelVersion !== undefined,
           isMock: claim.isMock,
-          translations: translations.map(({ lang, text, origin, modelVersion, reviewedBy }) => ({
-            lang,
-            text,
-            origin,
-            modelVersion,
-            reviewedBy,
-          })),
+          translations: await Promise.all(
+            translations.map(async (row) => {
+              const check = row.origin === "machine" ? await checkFor(ctx, row._id) : null;
+              return {
+                lang: row.lang,
+                text: row.text,
+                origin: row.origin,
+                modelVersion: row.modelVersion,
+                reviewedBy: row.reviewedBy,
+                ...(check === null || check.text !== row.text
+                  ? {}
+                  : {
+                      check: {
+                        status: check.status,
+                        added: check.added,
+                        missing: check.missing,
+                        attempts: check.attempts,
+                        retranslated: check.retranslated,
+                      },
+                    }),
+              };
+            }),
+          ),
         };
       }),
     );
@@ -362,7 +389,11 @@ export const setHumanTranslation = mutation({
       modelVersion: undefined,
     };
     if (existing === null) await ctx.db.insert("claimTranslation", row);
-    else await ctx.db.patch("claimTranslation", existing._id, row);
+    else {
+      await ctx.db.patch("claimTranslation", existing._id, row);
+      // A person's translation needs no machine check, and replaces any held one.
+      await dropCheck(ctx, existing._id);
+    }
     await writeAudit(ctx, {
       actorKind: "person",
       actorPersonId: steward._id,
@@ -464,8 +495,9 @@ export const saveMachineTranslation = internalMutation({
       origin: "machine" as const,
       modelVersion,
     };
-    if (existing === null) await ctx.db.insert("claimTranslation", row);
-    else await ctx.db.patch("claimTranslation", existing._id, row);
+    let translationId = existing?._id;
+    if (translationId === undefined) translationId = await ctx.db.insert("claimTranslation", row);
+    else await ctx.db.patch("claimTranslation", translationId, row);
     await writeAudit(ctx, {
       actorKind: "ai",
       modelVersion,
@@ -474,6 +506,8 @@ export const saveMachineTranslation = internalMutation({
       targetId: claimId,
       diff: { lang },
     });
+    const saved = await ctx.db.get("claimTranslation", translationId);
+    if (saved !== null) await queueCheck(ctx, saved);
     return null;
   },
 });
