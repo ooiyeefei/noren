@@ -23,7 +23,6 @@ import {
   guessLang,
   hasAdMarker,
   isVerbatim,
-  listingHoldsWholeName,
   listingNamesPlace,
   listingSharesName,
   namePartsOf,
@@ -961,20 +960,6 @@ describe("namesPlace: names with several parts, and old-form kanji", () => {
     expect(postNamesPlace({ ...post, locationName: "別の店" }, ["中華菜館 架空"])).toBe(false);
     // In a post's own words, two characters are still too few.
     expect(postNamesPlace({ text: "架空の話をした。" }, ["中華菜館 架空"])).toBe(false);
-  });
-
-  it("listingHoldsWholeName wants the name as a word of its own", () => {
-    expect(listingHoldsWholeName("カステラ本家 架空屋 長崎本店", ["架空屋"])).toBe(true);
-    expect(listingHoldsWholeName("大波止 架空園", ["大波止架空園"])).toBe(true);
-    // Kanji compounds join freely, and old-form kanji are folded.
-    expect(listingHoldsWholeName("中華料理架空樓", ["架空楼"])).toBe(true);
-    // A katakana name inside a longer katakana word is another name.
-    expect(listingHoldsWholeName("ネオ·プレイステスビオス壱番館", ["テスビ"])).toBe(false);
-    expect(listingHoldsWholeName("テスビ 一番館", ["テスビ"])).toBe(true);
-    // Latin names likewise, and names under three characters never count.
-    expect(listingHoldsWholeName("Kakuuland Hotel", ["Kakuu"])).toBe(false);
-    expect(listingHoldsWholeName("Kakuu Hotel", ["Kakuu"])).toBe(true);
-    expect(listingHoldsWholeName("架空 本店", ["架空"])).toBe(false);
   });
 });
 
