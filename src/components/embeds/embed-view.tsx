@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { DemoBadge } from "@/components/badges/demo-badge";
+import { MachineTranslationBadge } from "@/components/badges/machine-translation-badge";
 import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import type { EmbedDescriptor } from "@/lib/ports";
 import { embedPlan, isAllowedOrigin, loadEmbedScript } from "./embed-scripts";
+import { platformName } from "./platform-name";
+import { quoted } from "./quoted";
 
 export type EmbedSourceView = {
   id: string;
@@ -19,6 +22,13 @@ export type EmbedSourceView = {
   creatorNote?: string;
   noteLang?: string;
   isMock: boolean;
+  /** The story finder found it in a public post; the author is as the platform shows them. */
+  found?: boolean;
+  /** A found post's verbatim quote, shown for a platform with no official embed. */
+  excerpt?: string;
+  excerptLang?: string;
+  /** Machine translations of the quote, labelled as such. */
+  excerptTranslations?: readonly { lang: string; text: string }[];
 };
 
 export function EmbedView(props: {
@@ -63,18 +73,37 @@ function Post({
   // creator gets for sharing (FR-024). /out passes on only Noren's origin, never the page.
   const toOriginal = outboundHref ? { target: "_blank", rel: "noopener" } : external;
   const frameAllowed = plan.kind !== "iframe" || isAllowedOrigin(plan.src, frameOrigins);
+  // A found post names the platform properly and credits its author as the platform shows them.
+  const platform = source.found
+    ? (platformName(source.platform) ?? messages.webPage)
+    : source.platform;
+  const author = source.authorHandle
+    ? format(source.found ? messages.postedBy : messages.byAuthor, {
+        author: source.authorHandle,
+      })
+    : undefined;
+  const excerpt = source.found && plan.kind === "link" ? source.excerpt?.trim() : undefined;
+  const translation =
+    excerpt && source.excerptLang !== locale
+      ? source.excerptTranslations?.find((item) => item.lang === locale)?.text
+      : undefined;
   return (
     <article lang={locale} className="space-y-3 rounded-lg border p-4">
+      {source.found && (
+        <p className="text-[13px] font-bold text-muted-foreground" title={messages.foundHint}>
+          {messages.foundInPublicPost}
+        </p>
+      )}
       <header className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold">{source.platform}</span>
-        {source.authorHandle && (
+        <span className="font-semibold">{platform}</span>
+        {author && (
           <span>
             {source.authorUrl ? (
               <a href={source.authorUrl} {...external} className="underline">
-                {format(messages.byAuthor, { author: source.authorHandle })}
+                {author}
               </a>
             ) : (
-              format(messages.byAuthor, { author: source.authorHandle })
+              author
             )}
           </span>
         )}
@@ -90,6 +119,23 @@ function Post({
           </time>
         )}
       </header>
+      {excerpt && (
+        <figure className="space-y-2">
+          <blockquote
+            lang={source.excerptLang}
+            cite={source.canonicalUrl}
+            className="border-l-4 border-line pl-3 text-[18px] leading-[1.8] whitespace-pre-wrap"
+          >
+            {quoted(excerpt, source.excerptLang)}
+          </blockquote>
+          {translation && (
+            <p lang={locale} className="space-x-2 pl-4 text-[15px] text-muted-foreground">
+              <span>{translation}</span>
+              <MachineTranslationBadge locale={locale} />
+            </p>
+          )}
+        </figure>
+      )}
       {plan.kind === "link" && (
         <a href={href} {...toOriginal} className="block rounded border p-4 underline">
           {source.title || new URL(plan.url).hostname}
@@ -102,10 +148,10 @@ function Post({
             className="rounded border bg-background px-4 py-2 focus-visible:outline-2"
             onClick={() => setLoaded(true)}
           >
-            {format(messages.loadPost, { platform: source.platform })}
+            {format(messages.loadPost, { platform })}
           </button>
           <p className="text-sm">
-            {format(messages.cookieLine, { platform: source.platform })}{" "}
+            {format(messages.cookieLine, { platform })}{" "}
             <a className="underline" href={localePath(locale, "/notice")}>
               {messages.noticeLink}
             </a>
