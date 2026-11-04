@@ -20,9 +20,13 @@ describe("shared port contracts", () => {
     assertType<SourceAdapter["policy"]["aiAllowed"]>(true);
   });
 
-  it("limits translation to the three consent-eligible input kinds", () => {
-    expect(TRANSLATOR_INPUT_KINDS).toEqual(["claim", "note", "live_chunk"]);
-    expectTypeOf<TranslatorInputKind>().toEqualTypeOf<"claim" | "note" | "live_chunk">();
+  it("limits translation to the three consent-eligible input kinds and found posts' quotes", () => {
+    // public_post_quote: the short quote of a public post the owner chose to show (2026-11-04),
+    // translated as untrusted data.
+    expect(TRANSLATOR_INPUT_KINDS).toEqual(["claim", "note", "live_chunk", "public_post_quote"]);
+    expectTypeOf<TranslatorInputKind>().toEqualTypeOf<
+      "claim" | "note" | "live_chunk" | "public_post_quote"
+    >();
     expectTypeOf<
       Parameters<Translator["translate"]>[1]["inputKind"]
     >().toEqualTypeOf<TranslatorInputKind>();

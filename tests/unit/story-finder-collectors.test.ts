@@ -104,7 +104,7 @@ describe("plans", () => {
 });
 
 describe("normalise", () => {
-  const ctx = { runId: "mockrun1" };
+  const ctx = { runId: "mockrun1", collectionId: "mock-collection-1" };
 
   it("Google reviews: keeps reviews of the place near our pin, never stars or likes", () => {
     const run = googleReviews.plan([place], options)[0]!;
@@ -150,6 +150,9 @@ describe("normalise", () => {
       query: "架空珈琲 試験堂 長崎",
       actorId: "compass/crawler-google-places",
       runId: "mockrun1",
+      collectionId: "mock-collection-1",
+      // Google's own name for the place it matched, within 400 m of our pin.
+      locationName: "架空珈琲 試験堂",
     });
     expect(JSON.stringify(candidates)).not.toMatch(/stars|likes|totalScore|4\.8/);
   });
@@ -180,6 +183,7 @@ describe("normalise", () => {
       ownerUsername: "mock_author",
       timestamp: "2026-10-02T03:04:05.000Z",
       likesCount: 99,
+      locationName: "架空珈琲 試験堂",
     };
     const [candidate, ...rest] = instagram.normalise(
       [
@@ -203,7 +207,10 @@ describe("normalise", () => {
       authorUrl: "https://www.instagram.com/mock_author/",
       postedAt: Date.parse("2026-10-02T03:04:05.000Z"),
       placeId: "mockplace1",
+      collectionId: "mock-collection-1",
     });
+    expect(candidate!.locationName).toBe("架空珈琲 試験堂");
+    expect(JSON.stringify(candidate)).not.toMatch(/likes|99/);
     expect(rest.map((c) => c.url)).toEqual(["https://www.instagram.com/p/MOCKPOST2/"]);
   });
 
@@ -293,6 +300,8 @@ describe("normalise", () => {
       "Fictional Test Coffee House\n\nA made-up post for tests: the owner roasts every morning.",
     );
     expect(candidates[1]!.authorUrl).toBe("https://www.reddit.com/user/mock_user2/");
+    expect(candidates[0]!.title).toBe("Fictional Test Coffee House");
+    expect(candidates[1]!.title).toBeUndefined();
   });
 
   it("Web: keeps blog results, skips platforms and listing sites, then builds candidates from the page", () => {
@@ -314,11 +323,17 @@ describe("normalise", () => {
     );
     expect(hits.map((hit) => hit.url)).toEqual(["https://blog.example.com/mock-entry"]);
     expect(web.normalise([], run, ctx)).toEqual([]);
-    expect(webCandidate(hits[0]!, { text: TEXT }, run, "mockrun1")).toMatchObject({
+    expect(webCandidate(hits[0]!, { text: TEXT }, run, ctx)).toMatchObject({
       platform: "web",
       url: "https://blog.example.com/mock-entry",
       authorName: "blog.example.com",
+      title: "Mock blog",
       placeId: "mockplace1",
+      collectionId: "mock-collection-1",
     });
+    // After a redirect the post is credited at the address the page was read from.
+    expect(
+      webCandidate(hits[0]!, { url: "https://www.example.org/moved-entry", text: TEXT }, run, ctx),
+    ).toMatchObject({ url: "https://www.example.org/moved-entry", authorName: "www.example.org" });
   });
 });

@@ -2,13 +2,21 @@ import { paginationOptsValidator } from "convex/server";
 import { v, type Infer } from "convex/values";
 import { describeSource } from "../src/lib/adapters";
 import { aiConfig } from "../src/lib/ai/config";
-import { decideMention, reportMentionSchema } from "../src/lib/story-finder/decide";
+import { decideMention, postContext, reportMentionSchema } from "../src/lib/story-finder/decide";
 import {
   ABOUT_ANSWERS,
+  authorKey,
+  contactIn,
+  DUPLICATE_QUOTE_SIMILARITY,
   guessLang,
   MENTION_KINDS,
   mentionCanonicalUrl,
+  namesPlace,
+  quoteKeys,
+  quoteSimilarity,
   TEXT_MAX,
+  translationFits,
+  type RejectReason,
 } from "../src/lib/story-finder/mention";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -37,7 +45,11 @@ const MAX_ATTEMPTS = 3;
 const MAX_CLAIM = 24;
 /** At most this many found posts are linked to one place, so they never crowd out members' own. */
 const MAX_FOUND_PER_PLACE = 12;
+/** At most this many posts by one author are attached from one collection, so no one can flood it. */
+const AUTHOR_LIMIT = 3;
 const INGEST_MAX = 100;
+/** Attach failures that stay true until something else changes; a batch passes over them. */
+const STUCK = new Set(["place_full", "already_linked", "author_limit"]);
 
 /** The steward a script names must be a real (not demo) steward: found posts go public in their name. */
 async function finderSteward(ctx: QueryCtx, personId: Id<"person">): Promise<Doc<"person">> {
@@ -159,11 +171,14 @@ const candidateInput = v.object({
   authorUrl: v.optional(v.string()),
   postedAt: v.optional(v.number()),
   text: v.string(),
+  title: v.optional(v.string()),
+  locationName: v.optional(v.string()),
   langGuess: v.optional(v.string()),
   searchedFor: v.string(),
   query: v.string(),
   actorId: v.string(),
   runId: v.string(),
+  collectionId: v.string(),
 });
 
 /**
@@ -226,15 +241,21 @@ export const ingest = internalMutation({
         totals.alreadyLinked++;
         continue;
       }
+      const author = {
+        authorName: cap(candidate.authorName, 100),
+        authorHandle: cap(candidate.authorHandle, 100),
+        authorUrl: httpsUrl(candidate.authorUrl),
+      };
       await ctx.db.insert("mentionCandidate", {
         placeId: place._id,
         regionId: place.regionId,
         platform: candidate.platform,
         url: candidate.url.trim(),
         canonicalUrl,
-        authorName: cap(candidate.authorName, 100),
-        authorHandle: cap(candidate.authorHandle, 100),
-        authorUrl: httpsUrl(candidate.authorUrl),
+        ...author,
+        authorKey: authorKey(candidate.platform, author),
+        title: cap(candidate.title, 300),
+        locationName: cap(candidate.locationName, 200),
         postedAt:
           candidate.postedAt !== undefined && Number.isFinite(candidate.postedAt)
             ? candidate.postedAt
@@ -245,6 +266,7 @@ export const ingest = internalMutation({
         query: cap(candidate.query, 300) ?? "",
         actorId: cap(candidate.actorId, 100) ?? "",
         runId: cap(candidate.runId, 100) ?? "",
+        collectionId: cap(candidate.collectionId, 100) ?? "",
         collectedBy: steward._id,
         status: "pending",
       });
@@ -309,12 +331,15 @@ export const startCheck = internalMutation({
 
 /** The same from the steward's page: check what is pending and link what passes. */
 export const requestCheck = mutation({
-  args: {},
+  args: {
+    /** false: only check, and show nothing until the steward links what passed. Default true. */
+    attach: v.optional(v.boolean()),
+  },
   returns: v.object({ pending: v.number(), scheduled: v.number() }),
-  handler: async (ctx) => {
+  handler: async (ctx, { attach }) => {
     const steward = await requireRole(ctx, ["steward"]);
     if (steward.isMock) throw appError("forbidden", "a demo account may not run the story finder");
-    return await scheduleCheck(ctx, steward, 500, true);
+    return await scheduleCheck(ctx, steward, 500, attach ?? true);
   },
 });
 
@@ -323,6 +348,8 @@ const claimed = v.object({
   placeId: v.id("place"),
   platform: mentionPlatformValidator,
   text: v.string(),
+  title: v.optional(v.string()),
+  locationName: v.optional(v.string()),
   author: v.optional(v.string()),
   placeNames: v.array(v.object({ lang: v.string(), value: v.string() })),
   category: v.optional(v.string()),
@@ -366,6 +393,8 @@ export const claimForCheck = internalMutation({
         placeId: row.placeId,
         platform: row.platform,
         text: row.text,
+        title: row.title,
+        locationName: row.locationName,
         author: row.authorHandle ?? row.authorName,
         placeNames: names.map(({ lang, value }) => ({ lang, value })),
         category: place?.category,
@@ -384,8 +413,63 @@ const reportedValidator = v.object({
   topics: v.array(v.string()),
 });
 
+/** `rejected`: a check made by code failed and the post was rejected for good. */
 type AttachResult =
-  { ok: true; sourceId: Id<"source">; excerpt: boolean } | { ok: false; error: string };
+  | { ok: true; sourceId: Id<"source">; excerpt: boolean }
+  | { ok: false; error: string; rejected?: true };
+
+/** Every name the place has, in each language and script. */
+async function placeNameValues(ctx: QueryCtx, placeId: Id<"place">): Promise<string[]> {
+  const place = await ctx.db.get("place", placeId);
+  if (place === null) return [];
+  return (place.mapNames ?? (await readMapNames(ctx, place._id))).map(({ value }) => value);
+}
+
+/**
+ * Whether the quote is a copy of one already shown (or shown and hidden) for another post: the
+ * same text posted again, perhaps with a few words changed, is spam, not another person's story.
+ */
+async function copiesShownQuote(ctx: QueryCtx, candidate: Doc<"mentionCandidate">, quote: string) {
+  const { quoteHead, quoteTail } = quoteKeys(quote);
+  const near = [
+    ...(await ctx.db
+      .query("mentionCandidate")
+      .withIndex("by_quoteHead", (q) => q.eq("quoteHead", quoteHead))
+      .take(20)),
+    ...(await ctx.db
+      .query("mentionCandidate")
+      .withIndex("by_quoteTail", (q) => q.eq("quoteTail", quoteTail))
+      .take(20)),
+  ];
+  return near.some(
+    (other) =>
+      other._id !== candidate._id &&
+      (other.status === "attached" || other.status === "hidden") &&
+      other.verdict !== undefined &&
+      quoteSimilarity(other.verdict.quote, quote) >= DUPLICATE_QUOTE_SIMILARITY,
+  );
+}
+
+/**
+ * How many posts by this author from the same collection are shown or were hidden. A hidden post
+ * counts too, so hiding one cannot make room for more from the same account.
+ */
+async function shownFromAuthor(ctx: QueryCtx, candidate: Doc<"mentionCandidate">) {
+  let shown = 0;
+  for (const status of ["attached", "hidden"] as const)
+    shown += (
+      await ctx.db
+        .query("mentionCandidate")
+        .withIndex("by_collectionId_and_authorKey_and_status", (q) =>
+          q
+            .eq("collectionId", candidate.collectionId)
+            .eq("authorKey", candidate.authorKey)
+            .eq("status", status),
+        )
+        .take(AUTHOR_LIMIT)
+    ).length;
+  return shown;
+}
 
 /**
  * Links an accepted candidate to its place as a source, in the name of the steward who ran the
@@ -402,11 +486,35 @@ async function attachCandidate(
     await ctx.db.patch("mentionCandidate", candidate._id, { attachError: error });
     return { ok: false, error };
   };
+  /** A check code makes on the post itself: failing it rejects the post for good. */
+  const reject = async (reason: RejectReason): Promise<AttachResult> => {
+    await ctx.db.patch("mentionCandidate", candidate._id, {
+      status: "rejected",
+      reason,
+      attachError: undefined,
+    });
+    await writeAudit(ctx, {
+      actorKind: "system",
+      action: "mention.attach_refused",
+      targetType: "mentionCandidate",
+      targetId: candidate._id,
+      diff: { reason },
+    });
+    return { ok: false, error: reason, rejected: true };
+  };
   if (candidate.status !== "accepted" || !candidate.verdict?.quote)
     return await fail("not_accepted");
   if (steward.role !== "steward" || steward.isMock) return await fail("not_a_real_steward");
   const place = await ctx.db.get("place", candidate.placeId);
   if (!isFinderPlace(place)) return await fail("place_not_public");
+  // Checks that need no model, all of which must pass before anything is shown, so a post that
+  // talked the model round still cannot publish an address, a copy or a flood.
+  const quote = candidate.verdict.quote;
+  if (!namesPlace(postContext(candidate), await placeNameValues(ctx, place._id)))
+    return await reject("place_not_named");
+  if (contactIn(quote) !== null) return await reject("quote_has_contact");
+  if (await copiesShownQuote(ctx, candidate, quote)) return await reject("duplicate_quote");
+  if ((await shownFromAuthor(ctx, candidate)) >= AUTHOR_LIMIT) return await fail("author_limit");
   const region = regionConfig(place.regionId);
   const described = describeSource(candidate.url, region.enabledSourceAdapters);
   if (!described.ok) return await fail(`invalid_url:${described.reason}`);
@@ -425,7 +533,6 @@ async function attachCandidate(
   if (live.filter((row) => row.origin === "story_finder").length >= MAX_FOUND_PER_PLACE)
     return await fail("place_full");
   // A post with no official embed is shown by its quote; an embed shows the post itself.
-  const quote = candidate.verdict.quote;
   const withExcerpt = source.embed.kind === "link";
   const excerptLang = guessLang(quote) ?? candidate.langGuess ?? region.defaultLocale;
   const sourceId = await ctx.db.insert(
@@ -454,6 +561,7 @@ async function attachCandidate(
   await ctx.db.patch("mentionCandidate", candidate._id, {
     status: "attached",
     sourceId,
+    attachedAt: now,
     attachError: undefined,
   });
   await writeAudit(ctx, {
@@ -507,11 +615,16 @@ export const recordCheck = internalMutation({
       return { status: failed ? "rejected" : "pending" };
     }
     const reported = reportMentionSchema.parse(args.result.reported);
-    const decision = decideMention(candidate.text, reported);
+    const decision = decideMention(
+      candidate,
+      await placeNameValues(ctx, candidate.placeId),
+      reported,
+    );
     await ctx.db.patch("mentionCandidate", candidate._id, {
       status: decision.status,
       reason: decision.status === "rejected" ? decision.reason : undefined,
       verdict: decision.verdict,
+      ...(decision.status === "accepted" ? quoteKeys(decision.quote) : {}),
       modelSetting: args.modelSetting,
       latencyMs: Math.max(0, Math.round(args.latencyMs)),
       checkedAt: now,
@@ -535,7 +648,7 @@ export const recordCheck = internalMutation({
     const fresh = await ctx.db.get("mentionCandidate", candidate._id);
     if (steward === null || fresh === null) return { status: decision.status };
     const attached = await attachCandidate(ctx, fresh, steward, now);
-    if (!attached.ok) return { status: "accepted" };
+    if (!attached.ok) return { status: attached.rejected ? "rejected" : "accepted" };
     return {
       status: "attached",
       sourceId: attached.sourceId,
@@ -552,22 +665,27 @@ async function enqueueExcerptTranslations(ctx: MutationCtx, placeIds: Iterable<I
 }
 
 async function attachAccepted(ctx: MutationCtx, steward: Doc<"person">, limit: number) {
+  // Posts stuck on a full place or an author's limit are passed over, so they cannot hold the
+  // batch up; at most `limit` are tried.
   const accepted = await ctx.db
     .query("mentionCandidate")
     .withIndex("by_status_and_checkedAt", (q) => q.eq("status", "accepted"))
-    .take(Math.max(0, Math.min(100, Math.floor(limit))));
+    .take(500);
   const places: Id<"place">[] = [];
   let attached = 0;
+  let considered = 0;
+  const max = Math.max(0, Math.min(100, Math.floor(limit)));
   for (const candidate of accepted) {
-    if (candidate.attachError === "place_full" || candidate.attachError === "already_linked")
-      continue;
+    if (considered >= max) break;
+    if (candidate.attachError !== undefined && STUCK.has(candidate.attachError)) continue;
+    considered++;
     const result = await attachCandidate(ctx, candidate, steward, Date.now());
     if (!result.ok) continue;
     attached++;
     if (result.excerpt) places.push(candidate.placeId);
   }
   await enqueueExcerptTranslations(ctx, places);
-  return { attached, considered: accepted.length };
+  return { attached, considered };
 }
 
 /** Links candidates the check accepted while it ran without linking (`--no-attach`). */
@@ -660,9 +778,12 @@ export const saveExcerptTranslation = internalMutation({
       return null;
     const place = await ctx.db.get("place", source.placeId);
     if (place === null || !regionConfig(place.regionId).locales.includes(lang)) return null;
+    // A quote's translation says about as much as the quote: one far longer, or one that adds a
+    // link or a number, is not only a translation (a model talked into writing something else), so
+    // it is refused rather than shown.
     const translated = text.trim();
-    if (!translated || translated.length > 1000)
-      throw appError("invalid_input", "a translation is 1 to 1000 characters");
+    if (!translationFits(sourceText, translated))
+      throw appError("invalid_input", "a quote's translation must be about as long as the quote");
     const existing = await ctx.db
       .query("sourceExcerptTranslation")
       .withIndex("by_sourceId_and_lang", (q) => q.eq("sourceId", sourceId).eq("lang", lang))
@@ -715,6 +836,7 @@ const candidateRow = v.object({
   verdict: v.optional(mentionVerdictValidator),
   modelSetting: v.optional(v.string()),
   checkedAt: v.optional(v.number()),
+  attachedAt: v.optional(v.number()),
   sourceStatus: v.optional(sourceStatusValidator),
 });
 type CandidateRow = Infer<typeof candidateRow>;
@@ -746,9 +868,16 @@ export const stewardOverview = query({
       .map(({ status, platform, count }) => ({ status, platform, count }));
     const places = new Map<Id<"place">, Doc<"place"> | null>();
     async function rows(status: "attached" | "accepted" | "rejected"): Promise<CandidateRow[]> {
-      const candidates = await ctx.db
-        .query("mentionCandidate")
-        .withIndex("by_status_and_checkedAt", (q) => q.eq("status", status))
+      // Shown posts newest first by when they were shown, for spot checks; the rest by check time.
+      const candidates = await (
+        status === "attached"
+          ? ctx.db
+              .query("mentionCandidate")
+              .withIndex("by_status_and_attachedAt", (q) => q.eq("status", status))
+          : ctx.db
+              .query("mentionCandidate")
+              .withIndex("by_status_and_checkedAt", (q) => q.eq("status", status))
+      )
         .order("desc")
         .take(LIST_LIMIT);
       const result: CandidateRow[] = [];
@@ -773,6 +902,7 @@ export const stewardOverview = query({
           verdict: candidate.verdict,
           modelSetting: candidate.modelSetting,
           checkedAt: candidate.checkedAt,
+          attachedAt: candidate.attachedAt,
           sourceStatus: source?.status,
         });
       }

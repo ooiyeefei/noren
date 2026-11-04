@@ -79,6 +79,7 @@ const flags = (overrides: Partial<CollectFlags> = {}): CollectFlags => ({
   batchSize: 20,
   timeoutSecs: 600,
   dryRun: false,
+  collectionId: "mock-collection-1",
   ...overrides,
 });
 
@@ -200,9 +201,15 @@ describe("collect", () => {
         ],
       },
     ]);
+    // The first result redirected to the blog's new address; the page reader followed it.
     const readPage = vi.fn(async (url: string) =>
       url.endsWith("/a")
-        ? { ok: true as const, text: "架空の店1についてのテスト用の記事。", author: "Mock Blog" }
+        ? {
+            ok: true as const,
+            url: "https://blog.example.com/2026/a",
+            text: "架空の店1についてのテスト用の記事。",
+            author: "Mock Blog",
+          }
         : { ok: false as const, reason: "robots" as const },
     );
     const saved = new Map<string, unknown>();
@@ -218,11 +225,22 @@ describe("collect", () => {
     });
     expect(readPage).toHaveBeenCalledTimes(2);
     const raw = saved.get("raw/web-mockrun1.json") as SavedRun;
+    expect(raw.collectionId).toBe("mock-collection-1");
     expect(raw.pages).toEqual([
-      expect.objectContaining({ url: "https://blog.example.com/a", author: "Mock Blog" }),
+      expect.objectContaining({
+        url: "https://blog.example.com/2026/a",
+        hitUrl: "https://blog.example.com/a",
+        author: "Mock Blog",
+      }),
     ]);
     expect(saved.get("candidates/web-mockrun1.json")).toEqual([
-      expect.objectContaining({ platform: "web", authorName: "Mock Blog", placeId: "mockplace1" }),
+      expect.objectContaining({
+        platform: "web",
+        url: "https://blog.example.com/2026/a",
+        authorName: "Mock Blog",
+        placeId: "mockplace1",
+        collectionId: "mock-collection-1",
+      }),
     ]);
   });
 
@@ -248,6 +266,7 @@ describe("collect", () => {
     const saved: SavedRun = {
       version: 1,
       savedAt: "2026-11-04T00:00:00.000Z",
+      collectionId: "mock-collection-9",
       run,
       apifyRun: { id: "mockrun9", status: "SUCCEEDED", costUsd: 0.03 },
       items: [{ url: "https://www.facebook.com/mockpage/posts/9", text: "架空の店2のテスト投稿" }],
@@ -261,8 +280,10 @@ describe("collect", () => {
     expect(result).toMatchObject({ candidates: 1, inserted: 1, unmatchedSearches: 0 });
     const sent = calls.find((call) => call.fn === "storyFinder:ingest")!.args.candidates as {
       placeId: string;
+      collectionId: string;
     }[];
     expect(sent[0]!.placeId).toBe("mockplace2");
+    expect(sent[0]).toMatchObject({ collectionId: "mock-collection-9", runId: "mockrun9" });
   });
 });
 

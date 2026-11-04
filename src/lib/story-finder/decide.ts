@@ -2,17 +2,22 @@ import { z } from "zod";
 import {
   ABOUT_ANSWERS,
   capQuote,
+  contactIn,
   EVIDENCE_MAX,
   hasAdMarker,
   isVerbatim,
   MENTION_KINDS,
+  namesPlace,
   normaliseWhitespace,
   type MentionKind,
   type RejectReason,
 } from "./mention";
 
-/** What the model reports about one post, through the report_mention tool. */
-export const reportMentionSchema = z.object({
+/**
+ * What the model reports about one post, through the report_mention tool. Parsed strictly: an extra
+ * field, a wrong type or an overlong value fails the parse, and the post is not judged at all.
+ */
+export const reportMentionSchema = z.strictObject({
   aboutThisPlace: z
     .enum(ABOUT_ANSWERS)
     .describe(
@@ -20,8 +25,9 @@ export const reportMentionSchema = z.object({
     ),
   evidence: z
     .string()
+    .max(1000)
     .describe(
-      "The shortest words, copied character for character from the post, that show it is about this place. Empty when there are none.",
+      "The shortest words, copied character for character from the post's text, title or location tag, that show it is about this place. Empty when there are none.",
     ),
   kind: z
     .enum(MENTION_KINDS)
@@ -35,11 +41,13 @@ export const reportMentionSchema = z.object({
     ),
   quote: z
     .string()
+    .max(2000)
     .describe(
       "The one passage, at most 280 characters, copied character for character from the post, that carries the story or tip. No translation, corrections, ellipses or joined parts. Empty unless kind is story or tip.",
     ),
   topics: z
-    .array(z.string())
+    .array(z.string().max(80))
+    .max(10)
     .describe("Up to 5 short English topic words, such as history, founder, craft, menu."),
 });
 export type ReportedMention = z.infer<typeof reportMentionSchema>;
@@ -59,15 +67,37 @@ export type MentionDecision =
   | { status: "accepted"; verdict: StoredVerdict; quote: string }
   | { status: "rejected"; reason: RejectReason; verdict: StoredVerdict };
 
+/** The post as the check sees it. Everything here is the post's own, untrusted. */
+export type CheckedPost = {
+  text: string;
+  /** A web page's or Reddit post's title. */
+  title?: string;
+  /** The place the post is tagged with (Google's name for the place, an Instagram location). */
+  locationName?: string;
+};
+
+/** The post's text with its title and location tag: where its words about the place may be. */
+export function postContext(post: CheckedPost): string {
+  return [post.text, post.title, post.locationName].filter(Boolean).join("\n");
+}
+
 /**
- * Code checks what the model claims (Meta's "verifiable agents"): the evidence and the quote must be
- * in the post, word for word apart from whitespace, or nothing the model said is trusted. Then the
- * rules: about this place, a story or a tip, no advert, no private person named, a quote that fits.
+ * Code checks what the model claims (Meta's "verifiable agents"): the evidence must be in the post
+ * (its text, title or location tag) and the quote in its text, word for word apart from whitespace,
+ * or nothing the model said is trusted. Then checks that need no model: the post names the place
+ * (one of `placeNames`, in any language or script) and carries no advert label. Then the model's
+ * rules: about this place, a story or a tip, no private person named. Last, the quote that would be
+ * shown must fit and carry no address, email, phone number or handle.
  */
-export function decideMention(text: string, reported: ReportedMention): MentionDecision {
+export function decideMention(
+  post: CheckedPost,
+  placeNames: readonly string[],
+  reported: ReportedMention,
+): MentionDecision {
+  const text = post.text;
   const evidence = normaliseWhitespace(reported.evidence);
   const quote = normaliseWhitespace(reported.quote);
-  const adMarker = hasAdMarker(text);
+  const adMarker = hasAdMarker(postContext(post));
   const verdict: StoredVerdict = {
     aboutThisPlace: reported.aboutThisPlace,
     evidence: evidence.slice(0, EVIDENCE_MAX),
@@ -85,8 +115,9 @@ export function decideMention(text: string, reported: ReportedMention): MentionD
     reason,
     verdict,
   });
-  if ((evidence && !isVerbatim(text, evidence)) || (quote && !isVerbatim(text, quote)))
+  if ((evidence && !isVerbatim(postContext(post), evidence)) || (quote && !isVerbatim(text, quote)))
     return reject("unverifiable");
+  if (!namesPlace(postContext(post), placeNames)) return reject("place_not_named");
   if (adMarker || reported.kind === "ad_or_sponsored") return reject("sponsored");
   if (reported.aboutThisPlace === "no") return reject("not_about_place");
   if (reported.aboutThisPlace === "unsure") return reject("unsure_about_place");
@@ -97,5 +128,6 @@ export function decideMention(text: string, reported: ReportedMention): MentionD
   if (!quote) return reject("no_quote");
   const capped = capQuote(quote);
   if (capped === null) return reject("quote_too_long");
+  if (contactIn(capped) !== null) return reject("quote_has_contact");
   return { status: "accepted", verdict: { ...verdict, quote: capped }, quote: capped };
 }

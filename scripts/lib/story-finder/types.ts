@@ -46,7 +46,11 @@ export type CollectOptions = {
   batchSize: number;
 };
 
-export type NormaliseContext = { runId: string };
+export type NormaliseContext = {
+  runId: string;
+  /** The collect run the candidates belong to; the per-author limit counts within it. */
+  collectionId: string;
+};
 
 /**
  * One source of public posts behind one Apify actor. `plan` and `normalise` are pure, so they are
@@ -140,12 +144,5 @@ export function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng
   return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
 }
 
-/** Whether a text names the place by one of its names (ignoring width, case and spaces). */
-export function namesPlace(text: string, names: readonly string[]): boolean {
-  const norm = (value: string) => value.normalize("NFKC").replace(/\s+/g, "").toLowerCase();
-  const haystack = norm(text);
-  return names.some((name) => {
-    const needle = norm(name);
-    return needle.length >= 2 && haystack.includes(needle);
-  });
-}
+/** Shared with the Convex check, which applies the same test before anything is shown. */
+export { namesPlace } from "../../../src/lib/story-finder/mention";

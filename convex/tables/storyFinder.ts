@@ -42,11 +42,19 @@ export const storyFinderTables = {
     authorUrl: v.optional(v.string()),
     postedAt: v.optional(v.number()),
     text: v.string(),
+    /** A web page's or Reddit post's title; untrusted, like the text. */
+    title: v.optional(v.string()),
+    /** The place the post is tagged with: Google's own name for it, an Instagram location. */
+    locationName: v.optional(v.string()),
     langGuess: v.optional(v.string()),
     searchedFor: v.string(),
     query: v.string(),
     actorId: v.string(),
     runId: v.string(),
+    /** One run of the collect script; at most a few posts per author are attached from one. */
+    collectionId: v.string(),
+    /** The platform and the author's address, handle or name, normalised (lib/story-finder). */
+    authorKey: v.string(),
     /** The steward who ran the finder; an attached post is linked in their name. */
     collectedBy: v.id("person"),
     status: mentionStatusValidator,
@@ -62,13 +70,21 @@ export const storyFinderTables = {
     modelSetting: v.optional(v.string()),
     latencyMs: v.optional(v.number()),
     verdict: v.optional(mentionVerdictValidator),
+    /** The start and end of the accepted quote's fingerprint, to find copies of it. */
+    quoteHead: v.optional(v.string()),
+    quoteTail: v.optional(v.string()),
     sourceId: v.optional(v.id("source")),
+    attachedAt: v.optional(v.number()),
     hiddenAt: v.optional(v.number()),
     hiddenBy: v.optional(v.id("person")),
   })
     .index("by_placeId_and_canonicalUrl", ["placeId", "canonicalUrl"])
     .index("by_status_and_checkStartedAt", ["status", "checkStartedAt"])
     .index("by_status_and_checkedAt", ["status", "checkedAt"])
+    .index("by_status_and_attachedAt", ["status", "attachedAt"])
+    .index("by_collectionId_and_authorKey_and_status", ["collectionId", "authorKey", "status"])
+    .index("by_quoteHead", ["quoteHead"])
+    .index("by_quoteTail", ["quoteTail"])
     .index("by_sourceId", ["sourceId"]),
 
   /** How many candidates there are per status and platform, kept by a trigger (lib/rules/storyFinder). */
