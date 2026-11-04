@@ -116,6 +116,8 @@ function Admin({
   const saveTranslation = useMutation(api.claims.setHumanTranslation);
   const markDisputed = useMutation(api.claims.markDisputed);
   const translate = useMutation(api.aiRequests.translatePlace);
+  const releaseTranslation = useMutation(api.translationChecks.release);
+  const checkAgain = useMutation(api.translationChecks.checkAgain);
   const compose = useMutation(api.pages.compose);
   const [ownerId, setOwnerId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -177,6 +179,17 @@ function Admin({
             delete next[`${id}:${lang}`];
             return next;
           });
+        })
+      }
+      onReleaseTranslation={(id, lang) =>
+        void run(`release:${id}:${lang}`, async () => {
+          await releaseTranslation({ claimId: id as Id<"claim">, lang });
+          setComposeResult(undefined);
+        })
+      }
+      onCheckAgain={(id, lang) =>
+        void run(`check:${id}:${lang}`, async () => {
+          await checkAgain({ claimId: id as Id<"claim">, lang });
         })
       }
       onDispute={() =>

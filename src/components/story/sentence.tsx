@@ -1,4 +1,8 @@
-import { MachineTranslationBadge, TranslationPendingBadge } from "@/components/badges";
+import {
+  MachineTranslationBadge,
+  TranslationPendingBadge,
+  TranslationReviewBadge,
+} from "@/components/badges";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { storyMessages } from "@/lib/i18n/messages/story";
 import type { StoryClaimView, StorySentenceView } from "./types";
@@ -36,7 +40,11 @@ export function Sentence({
         ))}
       </p>
       {sentence.translation === "machine" && <MachineTranslationBadge locale={locale} />}
-      {sentence.textLang !== locale && <TranslationPendingBadge locale={locale} />}
+      {sentence.underReview ? (
+        <TranslationReviewBadge locale={locale} />
+      ) : (
+        sentence.textLang !== locale && <TranslationPendingBadge locale={locale} />
+      )}
       {cited.some((claim) => claim.status === "disputed") && (
         <a
           href="#disputed"

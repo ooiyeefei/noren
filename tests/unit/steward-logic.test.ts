@@ -122,6 +122,27 @@ describe("steward logic", () => {
       missingTranslations({ ...claim, origin: "interview", status: "proposed" }, ["en"]),
     ).toEqual([]);
   });
+  it("a translation the check held back can be replaced by a human translation", () => {
+    const interview = {
+      origin: "interview",
+      status: "published",
+      langOriginal: "ja",
+    } as const;
+    for (const [status, expected] of [
+      ["held", ["en"]],
+      ["pending", []],
+      ["passed", []],
+      ["unavailable", []],
+      ["released", []],
+    ] as const) {
+      expect(
+        missingTranslations({ ...interview, translations: [{ lang: "en", check: { status } }] }, [
+          "ja",
+          "en",
+        ]),
+      ).toEqual(expected);
+    }
+  });
   it("addExcerpt refuses blank, out-of-range and overlapping selections, including across a surrogate pair", () => {
     const text = "A😀 B";
     expect(addExcerpt(text, [], { start: 3, end: 4 }, "story")).toEqual({

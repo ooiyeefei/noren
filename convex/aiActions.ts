@@ -5,9 +5,10 @@ import { v } from "convex/values";
 import { createClaimExtractor, createLanguageModel } from "../src/lib/ai/claim-extractor";
 import { aiConfig, type TranscriptionConfig } from "../src/lib/ai/config";
 import { createFollowUpAgent, type FollowUp, type FollowUpInput } from "../src/lib/ai/follow-ups";
-import { extractJob, transcribeJob, translateJob } from "../src/lib/ai/jobs";
+import { checkTranslationsJob, extractJob, transcribeJob, translateJob } from "../src/lib/ai/jobs";
 import { createMetaTranscriber } from "../src/lib/ai/meta";
 import { createCompatibleTranscriber, createTranscriber } from "../src/lib/ai/transcriber";
+import { createTranslationChecker } from "../src/lib/ai/translation-check";
 import { createTranslator } from "../src/lib/ai/translator";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -147,6 +148,51 @@ export const translateClaims = internalAction({
           ...args,
         }),
     });
+    return null;
+  },
+});
+
+/**
+ * One run of the translation check (see checkTranslationsJob). Only translationChecks.finishRun
+ * schedules the next run, so a sleeping endpoint is retried by scheduling, never by waiting here.
+ */
+export const checkTranslations = internalAction({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    try {
+      await checkTranslationsJob({
+        env: process.env,
+        log: (line) => console.error("translation check:", line),
+        now: () => Date.now(),
+        startBatch: () => ctx.runMutation(internal.translationChecks.startBatch, {}),
+        makeChecker: (config) => createTranslationChecker({ model: createLanguageModel(config) }),
+        makeTranslator: (config) =>
+          createTranslator({
+            model: createLanguageModel(config),
+            modelVersion: config.modelId,
+            timeoutMs: 60_000,
+          }),
+        placeNames: (placeId) =>
+          ctx.runQuery(internal.aiRequests.placeNames, { placeId: placeId as Id<"place"> }),
+        record: (item, modelSetting, outcome) =>
+          ctx.runMutation(internal.translationChecks.recordOutcome, {
+            checkId: item.checkId as Id<"translationCheck">,
+            text: item.text,
+            modelSetting,
+            outcome,
+          }),
+        saveRetranslation: (item, newText, modelVersion) =>
+          ctx.runMutation(internal.translationChecks.saveRetranslation, {
+            checkId: item.checkId as Id<"translationCheck">,
+            text: item.text,
+            newText,
+            modelVersion,
+          }),
+      });
+    } finally {
+      await ctx.runMutation(internal.translationChecks.finishRun, {});
+    }
     return null;
   },
 });

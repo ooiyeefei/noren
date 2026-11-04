@@ -113,6 +113,8 @@ export type TranslationOptions = {
   /** Original place name to its translation in the target language. */
   glossary: Readonly<Record<string, string>>;
   inputKind: TranslatorInputKind;
+  /** What a translation check found in an earlier translation of these items. */
+  feedback?: { added: readonly string[]; missing: readonly string[] };
 };
 export type TranslationResult = { ok: true; items: TranslatedItem[] } | Refusal;
 

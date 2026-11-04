@@ -2,7 +2,7 @@ import type { Triggers } from "convex-helpers/server/triggers";
 import type { DataModel } from "../../_generated/dataModel";
 import { mustBeUnique, violation } from "./shared";
 
-/** Rules for the interview, consent, transcript and claim translation tables. */
+/** Rules for the interview, consent, transcript, claim translation and translation check tables. */
 export function registerInterviewRules(triggers: Triggers<DataModel>) {
   mustBeUnique(triggers, "consent", "consent_one_per_interview", "interview", (ctx, consent) =>
     ctx.db
@@ -77,6 +77,18 @@ export function registerInterviewRules(triggers: Triggers<DataModel>) {
         .withIndex("by_claimId_and_lang", (q) =>
           q.eq("claimId", translation.claimId).eq("lang", translation.lang),
         )
+        .take(2),
+  );
+
+  mustBeUnique(
+    triggers,
+    "translationCheck",
+    "translation_check_unique",
+    "translation",
+    (ctx, check) =>
+      ctx.db
+        .query("translationCheck")
+        .withIndex("by_translationId", (q) => q.eq("translationId", check.translationId))
         .take(2),
   );
 }
