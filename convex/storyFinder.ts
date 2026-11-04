@@ -6,6 +6,7 @@ import { decideMention, postNamesPlace, reportMentionSchema } from "../src/lib/s
 import {
   ABOUT_ANSWERS,
   authorKey,
+  aboutHealth,
   contactIn,
   CopyIndex,
   guessLang,
@@ -46,12 +47,12 @@ const MAX_ATTEMPTS = 3;
 /** The most candidates one claim takes (storyFinderActions.checkBatch asks for a dozen). */
 const MAX_CLAIM = 24;
 /** At most this many found posts are linked to one place, so they never crowd out members' own. */
-const MAX_FOUND_PER_PLACE = 6;
+const MAX_FOUND_PER_PLACE = 10;
 /** At most this many posts by one author are attached from one collection, so no one can flood it. */
 const AUTHOR_LIMIT = 3;
 const INGEST_MAX = 100;
 /**
- * The most shown quotes one region's copy check reads. At most MAX_FOUND_PER_PLACE (12) found posts
+ * The most shown quotes one region's copy check reads. At most MAX_FOUND_PER_PLACE found posts
  * are live per place, so a region reaches this only with hundreds of places each holding a full set.
  * A row is a fingerprint of at most QUOTE_MAX characters, about 1 KB, so reading all of them stays
  * near 4 MB, well inside one mutation's read limit. They are indexed once per mutation (CopyIndex):
@@ -568,6 +569,7 @@ async function attachCandidate(
   // The collector's flag from the whole page, or a label in the stored text.
   if (postHasAdMarker(candidate)) return await reject("sponsored");
   if (contactIn(quote) !== null) return await reject("quote_has_contact");
+  if (aboutHealth(quote)) return await reject("quote_about_health");
   if (isBareFact(quote)) return await reject("bare_fact");
   const shown = await shownQuotesIn(ctx, place.regionId, shownCache);
   if (!shown.complete) return await fail("copy_check_full");
@@ -1081,9 +1083,11 @@ export const requeue = internalMutation({
     stewardPersonId: v.id("person"),
     status: v.union(v.literal("accepted"), v.literal("rejected")),
     paginationOpts: paginationOptsValidator,
+    /** Also send back what the check called only a rating, after the check's idea of a story changes. */
+    ratings: v.optional(v.boolean()),
   },
   returns: v.object({ requeued: v.number(), isDone: v.boolean(), continueCursor: v.string() }),
-  handler: async (ctx, { stewardPersonId, status, paginationOpts }) => {
+  handler: async (ctx, { stewardPersonId, status, paginationOpts, ratings }) => {
     const steward = await finderSteward(ctx, stewardPersonId);
     const result = await ctx.db
       .query("mentionCandidate")
@@ -1093,7 +1097,8 @@ export const requeue = internalMutation({
     for (const row of result.page) {
       const wanted =
         status === "accepted" ||
-        (row.reason === "place_not_named" && row.verdict?.aboutThisPlace !== "no");
+        (row.reason === "place_not_named" && row.verdict?.aboutThisPlace !== "no") ||
+        (ratings === true && row.reason === "rating_only");
       if (!wanted) continue;
       await ctx.db.patch("mentionCandidate", row._id, {
         status: "pending",
@@ -1265,6 +1270,50 @@ export const hide = mutation({
     if (steward.isMock) throw appError("forbidden", "a demo account may not change found posts");
     await hideCandidate(ctx, steward, candidateId);
     return null;
+  },
+});
+
+/**
+ * Forgets every post collected about one place, so a saved collection can be replayed and checked from
+ * the start. Everything else keeps a record of a post once it has been read; this is for a place added
+ * today whose first read went wrong, so it refuses a place with a story, which cites its posts.
+ */
+export const forgetFoundPosts = internalMutation({
+  args: { stewardPersonId: v.id("person"), placeId: v.id("place") },
+  returns: v.object({ forgotten: v.number() }),
+  handler: async (ctx, { stewardPersonId, placeId }) => {
+    const steward = await finderSteward(ctx, stewardPersonId);
+    const story = await ctx.db
+      .query("placeStory")
+      .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
+      .first();
+    if (story !== null) throw appError("conflict", "the place has a story citing these posts");
+    const candidates = await ctx.db
+      .query("mentionCandidate")
+      .withIndex("by_placeId_and_canonicalUrl", (q) => q.eq("placeId", placeId))
+      .take(500);
+    for (const { _id: candidateId, sourceId } of candidates) {
+      const source = sourceId === undefined ? null : await ctx.db.get("source", sourceId);
+      if (source !== null) {
+        await eraseFoundPost(ctx, source, steward._id);
+        await ctx.db.delete("source", source._id);
+      }
+      const quote = await ctx.db
+        .query("shownQuote")
+        .withIndex("by_candidateId", (q) => q.eq("candidateId", candidateId))
+        .unique();
+      if (quote !== null) await ctx.db.delete("shownQuote", quote._id);
+      await ctx.db.delete("mentionCandidate", candidateId);
+    }
+    await writeAudit(ctx, {
+      actorKind: "person",
+      actorPersonId: steward._id,
+      action: "story_finder.forgotten",
+      targetType: "place",
+      targetId: placeId,
+      diff: { forgotten: candidates.length },
+    });
+    return { forgotten: candidates.length };
   },
 });
 

@@ -58,6 +58,8 @@ check
                            post rejected as place_not_named whose check did not say it is about
                            another place, so the next check reads them again. Linked and hidden
                            posts are never touched. Run check again afterwards.
+  --requeue-ratings        The same, and also every post rejected as only a rating, for when the
+                           check's idea of a story has changed.
 
 attach
   --limit 100              Most checked posts to link in one call.
@@ -83,6 +85,7 @@ export type Flags = {
   skipSearched: boolean;
   attach: boolean;
   requeue: boolean;
+  requeueRatings?: boolean;
   from?: string;
   ids?: string;
   places?: string;
@@ -145,7 +148,10 @@ export function parseFlags(argv: readonly string[]): Flags {
     else if (flag === "--prod") flags.prod = true;
     else if (flag === "--no-attach") flags.attach = false;
     else if (flag === "--requeue") flags.requeue = true;
-    else {
+    else if (flag === "--requeue-ratings") {
+      flags.requeue = true;
+      flags.requeueRatings = true;
+    } else {
       const value = rest[++i];
       if (value === undefined || value.startsWith("--"))
         throw new Error(`Missing value for ${flag}`);
@@ -317,6 +323,7 @@ export async function runStoryFinder(
           stewardPersonId: flags.steward,
           status,
           paginationOpts: { numItems: 100, cursor },
+          ...(flags.requeueRatings ? { ratings: true } : {}),
         })) as { requeued: number; isDone: boolean; continueCursor: string };
         requeued[status] += page.requeued;
         if (page.isDone) break;
