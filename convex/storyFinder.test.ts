@@ -600,7 +600,15 @@ describe("the steward's page", () => {
     expect((await w.rows()).map((row) => row.status)).toEqual(["hidden", "hidden"]);
     const sourceId = (await w.rows())[0]!.sourceId!;
     expect((await w.b.t.run((ctx) => ctx.db.get("source", sourceId)))!.status).toBe("hidden");
-    expect((await w.rows()).map((row) => row.text)).toEqual(["", ""]);
+    for (const row of await w.rows()) {
+      expect(row).toMatchObject({ text: "", verdict: { quote: "", evidence: "", topics: [] } });
+      expect(row.title).toBeUndefined();
+      expect(row.locationName).toBeUndefined();
+    }
+    // The fingerprints were written before the words went, so copies stay out.
+    const fingerprints = await w.b.t.run((ctx) => ctx.db.query("shownQuote").collect());
+    expect(fingerprints.map((row) => row.status)).toEqual(["hidden", "hidden"]);
+    expect(fingerprints.every((row) => row.fingerprint.length > 0)).toBe(true);
     // The attach no longer sees them.
     expect(
       await w.b.t.mutation(internal.storyFinder.attachAcceptedBatch, {
@@ -635,37 +643,68 @@ describe("the steward's page", () => {
       expect((await held()).translations).toHaveLength(1);
       return { w, row: row!, sourceId: sourceId!, held };
     }
-    const erased = (state: { source: unknown; translations: unknown[] }) => {
+    const erased = async (
+      w: Awaited<ReturnType<typeof world>>,
+      state: { source: unknown; translations: unknown[] },
+    ) => {
       expect(state.source).toMatchObject({ foundKind: "story" });
       expect((state.source as { excerpt?: string }).excerpt).toBeUndefined();
       expect((state.source as { excerptLang?: string }).excerptLang).toBeUndefined();
       expect(state.translations).toEqual([]);
+      expect((await w.rows())[0]).toMatchObject({
+        status: "hidden",
+        text: "",
+        verdict: { quote: "", evidence: "" },
+      });
+      expect(await w.b.t.run((ctx) => ctx.db.query("shownQuote").collect())).toEqual([
+        expect.objectContaining({ status: "hidden", fingerprint: expect.any(String) }),
+      ]);
     };
 
     it("by the steward's hide", async () => {
       const { w, row, held } = await linked();
       await w.b.as("steward").mutation(api.storyFinder.hide, { candidateId: row._id });
-      erased(await held());
-      expect((await w.rows())[0]!.text).toBe("");
+      await erased(w, await held());
     });
 
     it("by removing the source", async () => {
       const { w, sourceId, held } = await linked();
       await w.b.as("steward").mutation(api.sources.remove, { sourceId });
-      erased(await held());
+      await erased(w, await held());
+    });
+
+    it("when a steward marks the original gone", async () => {
+      const { w, sourceId, held } = await linked();
+      await w.b.as("steward").mutation(api.sources.markGone, { sourceId });
+      await erased(w, await held());
     });
 
     it("when the original is found to be gone", async () => {
       const { w, sourceId, held } = await linked();
       await w.b.t.mutation(internal.sources.recordCheck, { sourceId, result: "gone" });
-      erased(await held());
+      await erased(w, await held());
     });
 
-    it("a hidden post's quote still keeps a copy of it out", async () => {
-      const { w, row } = await linked();
-      await w.b.as("steward").mutation(api.storyFinder.hide, { candidateId: row._id });
-      const shown = await w.b.t.run((ctx) => ctx.db.query("shownQuote").collect());
-      expect(shown).toEqual([expect.objectContaining({ status: "hidden" })]);
+    it("a member's post keeps its note", async () => {
+      const w = await world();
+      const sourceId = await w.b.t.run((ctx) =>
+        ctx.db.insert("source", {
+          placeId: w.placeId,
+          platform: "web",
+          adapter: "link_card",
+          url: "https://mock.example/member",
+          canonicalUrl: "https://mock.example/member",
+          creatorNote: "A member's own made-up line.",
+          addedBy: w.steward,
+          status: "live",
+          isMock: false,
+        }),
+      );
+      await w.b.as("steward").mutation(api.sources.remove, { sourceId });
+      expect(await w.b.t.run((ctx) => ctx.db.get("source", sourceId))).toMatchObject({
+        status: "hidden",
+        creatorNote: "A member's own made-up line.",
+      });
     });
   });
 
@@ -1201,6 +1240,32 @@ describe("repairFoundPosts", () => {
       excerptLang: "ja",
     });
     expect(await repair(w)).toMatchObject({ sources: 0 });
+  });
+
+  it("erases the words of a post hidden before erasing existed, and keeps its fingerprint", async () => {
+    const w = await world();
+    await w.ingest([w.candidate(posts.instagram)]);
+    const [row] = await w.rows();
+    await w.record(row!._id, {}, false);
+    // As an older hide left it: hidden, its fingerprint written, its words still there.
+    await w.b.t.run(async (ctx) => {
+      await ctx.db.patch("mentionCandidate", row!._id, { status: "hidden" });
+      await ctx.db.insert("shownQuote", {
+        regionId: "nagasaki",
+        candidateId: row!._id,
+        status: "hidden",
+        fingerprint: "mockfingerprint",
+      });
+    });
+    expect((await w.rows())[0]!.text).not.toBe("");
+    expect(await repair(w)).toMatchObject({ erased: 1 });
+    expect((await w.rows())[0]).toMatchObject({
+      status: "hidden",
+      text: "",
+      verdict: { quote: "", evidence: "" },
+    });
+    expect(await w.b.t.run((ctx) => ctx.db.query("shownQuote").collect())).toHaveLength(1);
+    expect(await repair(w)).toMatchObject({ erased: 0 });
   });
 
   it("gives a blog post its blogger's key, and frees a post the old key held back", async () => {
