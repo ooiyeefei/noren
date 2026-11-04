@@ -8,3 +8,4 @@ export { UnreviewedBadge } from "./unreviewed-badge";
 export { UnconfirmedBadge } from "./unconfirmed-badge";
 export { AiAssistedBadge } from "./ai-assisted-badge";
 export { TranslationPendingBadge } from "./translation-pending-badge";
+export { TranslationReviewBadge } from "./translation-review-badge";

@@ -51,6 +51,17 @@ export const CLAIM_STATUSES = [
   "hidden",
 ] as const;
 export const TRANSLATION_ORIGINS = ["machine", "human"] as const;
+/**
+ * A machine translation's check against the person's words: waiting, nothing added or left out,
+ * held back from the public for a person to decide, the check could not run, or shown by a steward.
+ */
+export const TRANSLATION_CHECK_STATUSES = [
+  "pending",
+  "passed",
+  "held",
+  "unavailable",
+  "released",
+] as const;
 
 export const INTERVIEW_STATUSES = [
   "consent_pending",
@@ -111,6 +122,7 @@ export type SourceAdapterId = (typeof SOURCE_ADAPTER_IDS)[number];
 export type ClaimKind = (typeof CLAIM_KINDS)[number];
 export type ClaimOrigin = (typeof CLAIM_ORIGINS)[number];
 export type TranslationOrigin = (typeof TRANSLATION_ORIGINS)[number];
+export type TranslationCheckStatus = (typeof TRANSLATION_CHECK_STATUSES)[number];
 export type InterviewStatus = (typeof INTERVIEW_STATUSES)[number];
 export type TranscriptOrigin = (typeof TRANSCRIPT_ORIGINS)[number];
 export type Licence = (typeof LICENCES)[number];

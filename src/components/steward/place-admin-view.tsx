@@ -45,6 +45,8 @@ export type PlaceAdminProps = ActionState & {
   translations: Readonly<Record<string, string>>;
   onTranslation: (id: string, lang: string, text: string) => void;
   onSaveTranslation: (id: string, lang: string) => void;
+  onReleaseTranslation: (id: string, lang: string) => void;
+  onCheckAgain: (id: string, lang: string) => void;
   onDispute: () => void;
   onTranslate: () => void;
   onCompose: () => void;
@@ -65,6 +67,67 @@ export function ComposeResultView({ locale, result }: { locale: Locale; result: 
         <dd>{result.publishedClaims}</dd>
       </dl>
       <p>{m.heldReason}</p>
+    </div>
+  );
+}
+type TranslationCheck = NonNullable<ClaimView["translations"][number]["check"]>;
+/** What the translation check found, and the steward's choices when it held a translation back. */
+export function TranslationCheckView({
+  locale,
+  check,
+  disabled,
+  onRelease,
+  onCheckAgain,
+}: {
+  locale: Locale;
+  check: TranslationCheck;
+  disabled: boolean;
+  onRelease: () => void;
+  onCheckAgain: () => void;
+}) {
+  const m = messagesFor(stewardMessages, locale);
+  const button = "min-h-11 h-auto w-full rounded-[10px] px-5 py-2 whitespace-normal sm:w-auto";
+  const lists = (
+    [
+      ["checkAdded", check.added],
+      ["checkMissing", check.missing],
+    ] as const
+  ).filter(([, items]) => items.length > 0);
+  return (
+    <div data-translation-check={check.status} className="mt-2 min-w-0 space-y-2">
+      <p>
+        {
+          {
+            pending: m.checkPending,
+            passed: m.checkPassed,
+            held: m.checkHeld,
+            unavailable: m.checkUnavailable,
+            released: m.checkReleased,
+          }[check.status]
+        }
+      </p>
+      {check.retranslated && check.status !== "pending" && <p>{m.checkRetranslated}</p>}
+      {(check.status === "held" || check.status === "released") &&
+        lists.map(([key, items]) => (
+          <div key={key}>
+            <p className="font-bold">{m[key]}</p>
+            <ul className="list-disc pl-5">
+              {items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      {check.status === "held" && (
+        <Button className={button} variant="outline" disabled={disabled} onClick={onRelease}>
+          {m.checkRelease}
+        </Button>
+      )}
+      {check.status === "unavailable" && (
+        <Button className={button} variant="outline" disabled={disabled} onClick={onCheckAgain}>
+          {m.checkAgain}
+        </Button>
+      )}
     </div>
   );
 }
@@ -229,6 +292,15 @@ export function PlaceAdminView(props: PlaceAdminProps) {
                     ) : translation.origin === "machine" ? (
                       <UnreviewedBadge locale={locale} />
                     ) : null}
+                    {translation.check && (
+                      <TranslationCheckView
+                        locale={locale}
+                        check={translation.check}
+                        disabled={!!pending}
+                        onRelease={() => props.onReleaseTranslation(claim._id, translation.lang)}
+                        onCheckAgain={() => props.onCheckAgain(claim._id, translation.lang)}
+                      />
+                    )}
                   </li>
                 ))}
               </ul>

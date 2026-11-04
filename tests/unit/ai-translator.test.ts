@@ -29,23 +29,29 @@ describe("translator", () => {
     const direct = modelFor([{ itemId: "1", text: "Mock translation" }]);
     const gateway = modelFor([{ itemId: "1", text: "Mock translation" }]);
     const meta = modelFor([{ itemId: "1", text: "Mock translation" }]);
+    const modal = modelFor([{ itemId: "1", text: "Mock translation" }]);
     const directModel = vi.fn(() => direct);
     const gatewayModel = vi.fn(() => gateway);
     const metaModel = vi.fn(() => meta);
+    const modalModel = vi.fn(() => modal);
     const factories = {
       anthropic: vi.fn(() => directModel),
       gateway: vi.fn(() => gatewayModel),
       meta: vi.fn(() => metaModel),
+      modal: vi.fn(() => modalModel),
     };
     for (const modelId of [
       "claude-sonnet-5-5",
       "anthropic/claude-sonnet-5-5",
       "meta:muse-spark-1.3",
+      "modal:noren-glimmer",
     ]) {
       const result = aiConfig("translate", {
         ANTHROPIC_API_KEY: "mock-direct-key",
         AI_GATEWAY_API_KEY: "mock-gateway-key",
         META_API_KEY: "mock-meta-key",
+        MODAL_PROXY_TOKEN: "mock-modal-token",
+        MODAL_BASE_URL: "https://mock.invalid/v1/",
         AI_MODEL_TRANSLATE: modelId,
       });
       if (!result.ok) throw new Error(result.reason);
@@ -57,17 +63,26 @@ describe("translator", () => {
       ).toEqual({
         ok: true,
         items: [
-          { itemId: "1", text: "Mock translation", modelVersion: modelId.replace(/^meta:/, "") },
+          {
+            itemId: "1",
+            text: "Mock translation",
+            modelVersion: modelId.replace(/^(meta|modal):/, ""),
+          },
         ],
       });
     }
     expect(factories.anthropic).toHaveBeenCalledExactlyOnceWith({ apiKey: "mock-direct-key" });
     expect(factories.gateway).toHaveBeenCalledExactlyOnceWith({ apiKey: "mock-gateway-key" });
     expect(factories.meta).toHaveBeenCalledExactlyOnceWith({ apiKey: "mock-meta-key" });
+    expect(factories.modal).toHaveBeenCalledExactlyOnceWith({
+      apiKey: "mock-modal-token",
+      baseURL: "https://mock.invalid",
+    });
     expect(directModel).toHaveBeenCalledExactlyOnceWith("claude-sonnet-5-5");
     expect(gatewayModel).toHaveBeenCalledExactlyOnceWith("anthropic/claude-sonnet-5-5");
     expect(metaModel).toHaveBeenCalledExactlyOnceWith("muse-spark-1.3");
-    for (const model of [gateway, meta]) {
+    expect(modalModel).toHaveBeenCalledExactlyOnceWith("noren-glimmer");
+    for (const model of [gateway, meta, modal]) {
       expect(model.doGenerateCalls).toHaveLength(1);
       expect(direct.doGenerateCalls[0]!.prompt).toEqual(model.doGenerateCalls[0]!.prompt);
       expect(direct.doGenerateCalls[0]!.responseFormat).toEqual(

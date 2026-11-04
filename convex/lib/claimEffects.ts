@@ -9,6 +9,7 @@ import type { MutationCtx } from "../_generated/server";
 import { isVerifiedOwner } from "./access";
 import { writeAudit } from "./audit";
 import { appError } from "./errors";
+import { dropCheck } from "./translationChecks";
 
 export type TransitionOptions = {
   actor: ClaimActor;
@@ -121,6 +122,7 @@ async function applyTransition(
       .withIndex("by_claimId_and_lang", (q) => q.eq("claimId", claim._id))
       .take(20);
     for (const translation of translations) {
+      await dropCheck(ctx, translation._id);
       await ctx.db.delete("claimTranslation", translation._id);
     }
   }
