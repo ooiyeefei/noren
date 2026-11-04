@@ -98,6 +98,7 @@ export async function loadPlaces(
     limit: number;
     categories?: string[];
     bbox?: number[];
+    slugs?: ReadonlySet<string>;
     keep?: (place: FinderPlace) => boolean;
   },
 ): Promise<FinderPlace[]> {
@@ -121,7 +122,13 @@ export async function loadPlaces(
       ...(options.bbox ? { bbox: options.bbox } : {}),
     })) as PlacePage;
     places.push(
-      ...page.page.filter((place) => firstOfItsName(place) && (options.keep?.(place) ?? true)),
+      // A named place is searched even if a branch elsewhere on the map comes first in the list.
+      ...page.page.filter(
+        (place) =>
+          (!options.slugs || options.slugs.has(place.slug)) &&
+          firstOfItsName(place) &&
+          (options.keep?.(place) ?? true),
+      ),
     );
     cursor = page.isDone ? null : page.continueCursor;
   } while (cursor !== null && places.length < options.limit);
@@ -351,9 +358,7 @@ export async function collect(flags: CollectFlags, deps: RunnerDeps) {
   const searched = flags.searched;
   const places = await loadPlaces(deps.convex, {
     ...flags,
-    keep: (place) =>
-      (!flags.slugs || flags.slugs.has(place.slug)) &&
-      (!searched || stillToSearch(place, flags.platforms, searched)),
+    ...(searched ? { keep: (place) => stillToSearch(place, flags.platforms, searched) } : {}),
   });
   const runs = planRuns(places, flags);
   const plan = summarisePlan(runs);
