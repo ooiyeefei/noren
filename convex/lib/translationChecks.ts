@@ -82,24 +82,6 @@ export async function dropCheck(
 }
 
 /**
- * Erases what a found post's source holds of the post: its quote and every translation of it. A post
- * that comes off the page is never shown again, so nothing of it should stay to be shown. Does nothing
- * to a member's post, whose note is the member's own words.
- */
-export async function eraseFoundQuote(ctx: MutationCtx, source: Doc<"source">) {
-  if (source.origin !== "story_finder") return;
-  const translations = await ctx.db
-    .query("sourceExcerptTranslation")
-    .withIndex("by_sourceId_and_lang", (q) => q.eq("sourceId", source._id))
-    .take(8);
-  for (const translation of translations) {
-    await dropCheck(ctx, translation._id);
-    await ctx.db.delete("sourceExcerptTranslation", translation._id);
-  }
-  await ctx.db.patch("source", source._id, { excerpt: undefined, excerptLang: undefined });
-}
-
-/**
  * Schedules the one check run, unless one is running (it looks for more work when it ends) or is
  * already due sooner. Every queued check waits for the same run, so one endpoint wake serves all.
  */
