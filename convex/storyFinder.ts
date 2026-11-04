@@ -12,6 +12,7 @@ import {
   MENTION_KINDS,
   mentionCanonicalUrl,
   namesPlace,
+  postHasAdMarker,
   quoteFingerprint,
   storedPostText,
   translationFits,
@@ -184,6 +185,8 @@ const candidateInput = v.object({
   title: v.optional(v.string()),
   locationName: v.optional(v.string()),
   langGuess: v.optional(v.string()),
+  /** The collector's finding on the whole post, before its text was cut (see postHasAdMarker). */
+  adMarker: v.optional(v.boolean()),
   searchedFor: v.string(),
   query: v.string(),
   actorId: v.string(),
@@ -225,6 +228,10 @@ export const ingest = internalMutation({
       );
       if (!placeNames.has(place._id))
         placeNames.set(place._id, await placeNameValues(ctx, place._id));
+      // Screened before the window is cut: a label at the top or bottom of a long page would go.
+      // The collector does the same and sends the result; a sender that sent the whole text is
+      // screened here too.
+      const adMarker = postHasAdMarker(candidate);
       // The same window the collector cut (a no-op on its text), so the mention is kept.
       const text = storedPostText(candidate.text, placeNames.get(place._id) ?? []);
       if (canonicalUrl === null || candidate.url.length > 2048) {
@@ -276,6 +283,7 @@ export const ingest = internalMutation({
             : undefined,
         text,
         langGuess: cap(candidate.langGuess, 12) ?? guessLang(text),
+        ...(adMarker ? { adMarker } : {}),
         searchedFor: cap(candidate.searchedFor, 300) ?? "",
         query: cap(candidate.query, 300) ?? "",
         actorId: cap(candidate.actorId, 100) ?? "",
@@ -544,6 +552,8 @@ async function attachCandidate(
   const quote = candidate.verdict.quote;
   if (!namesPlace(postContext(candidate), await placeNameValues(ctx, place._id)))
     return await reject("place_not_named");
+  // The collector's flag from the whole page, or a label in the stored text.
+  if (postHasAdMarker(candidate)) return await reject("sponsored");
   if (contactIn(quote) !== null) return await reject("quote_has_contact");
   const shown = await shownQuotesIn(ctx, place.regionId, shownCache);
   if (!shown.complete) return await fail("copy_check_full");

@@ -4,11 +4,11 @@ import {
   capQuote,
   contactIn,
   EVIDENCE_MAX,
-  hasAdMarker,
   isVerbatim,
   MENTION_KINDS,
   namesPlace,
   normaliseWhitespace,
+  postHasAdMarker,
   type MentionKind,
   type RejectReason,
 } from "./mention";
@@ -74,6 +74,11 @@ export type CheckedPost = {
   title?: string;
   /** The place the post is tagged with (Google's name for the place, an Instagram location). */
   locationName?: string;
+  /**
+   * Set by the collector when the whole post, before its text was cut to the stored window, carried
+   * an ad label. The text here may be only that window, which can leave the label out.
+   */
+  adMarker?: boolean;
 };
 
 /** The post's text with its title and location tag: where its words about the place may be. */
@@ -85,7 +90,8 @@ export function postContext(post: CheckedPost): string {
  * Code checks what the model claims (Meta's "verifiable agents"): the evidence must be in the post
  * (its text, title or location tag) and the quote in its text, word for word apart from whitespace,
  * or nothing the model said is trusted. Then checks that need no model: the post names the place
- * (one of `placeNames`, in any language or script) and carries no advert label. Then the model's
+ * (one of `placeNames`, in any language or script) and carries no advert label, whether found in
+ * the stored text or flagged by the collector on the whole page. Then the model's
  * rules: about this place, a story or a tip, no private person named. Last, the quote that would be
  * shown must fit and carry no address, email, phone number or handle.
  */
@@ -97,7 +103,7 @@ export function decideMention(
   const text = post.text;
   const evidence = normaliseWhitespace(reported.evidence);
   const quote = normaliseWhitespace(reported.quote);
-  const adMarker = hasAdMarker(postContext(post));
+  const adMarker = postHasAdMarker(post);
   const verdict: StoredVerdict = {
     aboutThisPlace: reported.aboutThisPlace,
     evidence: evidence.slice(0, EVIDENCE_MAX),

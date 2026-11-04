@@ -84,6 +84,12 @@ export type MentionCandidate = {
   /** The place the post is tagged with: Google's own name for the place, an Instagram location. */
   locationName?: string;
   langGuess?: string;
+  /**
+   * True when the whole post, before its text was cut to the stored window, carried an ad label
+   * (postHasAdMarker). Set by the collector, which sees the whole page; the check and the attach
+   * reject a flagged post as sponsored.
+   */
+  adMarker?: boolean;
   placeId: string;
   /** One run of the collect script; the per-author limit counts within it. */
   collectionId: string;
@@ -151,17 +157,84 @@ export function mentionCanonicalUrl(
 }
 
 /**
+ * A letter that, directly before a label, makes a compound word instead of a label: "自己PR" (a
+ * personal pitch), "看板広告" (a signboard), "ネット広告". Hiragana is not in it: "記事は広告です" and
+ * "この記事はPRです" have a particle there.
+ */
+const NOT_COMPOUND = String.raw`(?<![\p{Script=Han}\p{Script=Katakana}ーA-Za-z0-9])`;
+
+/** The polite ways a disclosure says "contains": 含みます, 含んでいます, 含まれています ... (not 含みません). */
+const CONTAINS = String.raw`含(?:みます|む|んでいます|んでおります|んでいる|まれています|まれております|まれます|まれる)`;
+const CONTAINS_POLITE = String.raw`含(?:みます|んでいます|んでおります|まれています|まれております|まれます)`;
+
+/**
  * Words that mark a post as an advert or a sponsored visit. Japan's rules on stealth marketing
- * (2023) make "PR" and "広告" the usual labels; the model is asked too, and either one rejects.
+ * (2023) make "PR", "広告", "宣伝" and "プロモーション" the usual labels; the model is asked too, and
+ * either one rejects. Text is compared in NFKC (see hasAdMarker), so full-width "ＰＲ", "［PR］",
+ * "＃ＰＲ" and "：" are read as their plain forms. Every pattern asks for a label or a disclosure, not
+ * the bare word: "広告", "提供", "タイアップ" and "PR" are all ordinary words too ("看板広告",
+ * "コーヒーを提供しています", "ドラマとのタイアップ", "自己PR"), and a false match costs a story.
  */
 const AD_MARKERS = [
-  /[#＃](?:ad|ads|pr|sponsored|promotion|promo|gifted|提供|案件|タイアップ|プロモーション|広告)(?![\p{L}\p{N}_])/iu,
-  /[【[(（〔](?:PR|ＰＲ|AD|広告|Sponsored|プロモーション|タイアップ)[】\])）〕]/iu,
-  /paid partnership|sponsored by|有料パートナーシップ|商品提供|ご招待いただ/iu,
+  // A hashtag: #PR, #広告, #提供 ... (a tag that only starts with one, such as #prague, is not one).
+  /[#＃](?:ad|ads|pr|sponsored|promotion|promo|gifted|affiliate|提供|商品提供|無償提供|案件|タイアップ|プロモーション|広告|宣伝|アフィリエイト|スポンサード|協賛|モニター)(?![\p{L}\p{N}_])/iu,
+  // A label in brackets: 【PR】, [広告], (宣伝), 【提供】, 【案件】 ... The whole bracket is the label.
+  /[【[(〔]\s*(?:PR|AD|ADS|Advertisement|Sponsored(?: post| content)?|Affiliate|広告|宣伝|プロモーション|タイアップ|スポンサード|アフィリエイト|提供|商品提供|案件|協賛)\s*[】\])〕]/iu,
+  // A label that is a line of its own, or starts one with a colon: "PR", "※広告", "PR：株式会社テスト".
+  /^[\s※*■□◆◇●○▼▽★☆▶►・\-–—]*(?:PR|広告|宣伝|プロモーション|タイアップ|スポンサード|アフィリエイト|Sponsored|Advertisement)(?:記事|広告|投稿)?\s*(?:[:|]|$)/imu,
+  // English disclosures.
+  /paid partnership|sponsored by|sponsored (?:post|content)|affiliate links?/iu,
+  // A sponsored visit or product: 商品提供, 商品をご提供いただき, 無償でご提供いただき, ご招待いただき.
+  /有料パートナーシップ|商品提供|ご招待(?:いただ|頂)/u,
+  /(?:商品|製品|サンプル|試供品|無償|無料)(?:を|で|の)?(?:ご)?提供(?:いただ|頂|を受け|して(?:いただ|頂|もら))/u,
+  // "提供" as a credit line: "提供：株式会社テスト", "提供 by". Not "写真提供：長崎市" (a photo credit:
+  // a letter before it) and not "コーヒーを提供しています" (no colon).
+  /(?<![\p{L}\p{N}])提供\s*(?::|by\b)/iu,
+  // A named kind of post: PR記事, 広告記事, プロモーション記事, タイアップ記事, PR案件, 企業案件.
+  new RegExp(
+    String.raw`${NOT_COMPOUND}(?:PR|広告|プロモーション|アフィリエイト)(?:記事|案件|投稿|表記)|タイアップ(?:記事|広告|案件|投稿)|(?:PR|企業|スポンサー|広告)案件|案件(?:記事|投稿)|スポンサード`,
+    "iu",
+  ),
+  // The usual disclosure sentence: 「※この記事はプロモーションを含みます」, 「本記事には広告を含む」,
+  // 「このページは広告です」. A subject noun comes first, so "広告を含みません" (no ads) never matches.
+  new RegExp(
+    String.raw`(?:記事|ページ|投稿|ブログ|サイト|動画|コンテンツ|レビュー|内容|本稿)(?:は|には|では|内には|にも)?[^。\n]{0,12}?(?:プロモーション|広告|PR|宣伝|アフィリエイト(?:広告|リンク)?|タイアップ)(?:(?:を|が|も)?${CONTAINS}|(?:記事|投稿)?(?:です|になります|となります))`,
+    "iu",
+  ),
+  // The same without a subject, in the polite form only: 「※プロモーションを含みます」.
+  new RegExp(
+    String.raw`${NOT_COMPOUND}(?:プロモーション|広告|PR|宣伝|アフィリエイト(?:広告|リンク)?)(?:を|が)${CONTAINS_POLITE}`,
+    "iu",
+  ),
+  // Affiliate disclosures: 「アフィリエイト広告を利用しています」.
+  /アフィリエイト(?:広告|リンク)?(?:を|が)(?:利用|使用|使って|用いて|貼って|掲載|含)/u,
 ];
 
+/**
+ * Whether a text carries an advertising label or disclosure (AD_MARKERS). Run it on the whole post:
+ * Japanese sponsored posts put theirs at the top or the bottom of the page, which a long page's
+ * stored window (storedPostText) cuts off.
+ */
 export function hasAdMarker(text: string): boolean {
-  return AD_MARKERS.some((pattern) => pattern.test(text));
+  const folded = text.normalize("NFKC");
+  return AD_MARKERS.some((pattern) => pattern.test(folded));
+}
+
+/**
+ * Whether a post carries an ad label: its flag, set by the collector from the whole page before the
+ * text was cut to a window, or a label in the text, title or location tag it still has. The one test
+ * the collector, the check and the attach all use, so they agree.
+ */
+export function postHasAdMarker(post: {
+  text: string;
+  title?: string;
+  locationName?: string;
+  adMarker?: boolean;
+}): boolean {
+  return (
+    post.adMarker === true ||
+    hasAdMarker([post.text, post.title, post.locationName].filter(Boolean).join("\n"))
+  );
 }
 
 /** Whether a text names the place by one of its names, in any language or script (ignoring width,
