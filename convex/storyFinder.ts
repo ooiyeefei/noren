@@ -27,7 +27,8 @@ import { writeAudit } from "./lib/audit";
 import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
-import { eraseFoundQuote, queueExcerptCheck } from "./lib/translationChecks";
+import { eraseCandidate, eraseFoundPost } from "./lib/foundPosts";
+import { queueExcerptCheck } from "./lib/translationChecks";
 import { readMapNames, readMapPin } from "./lib/mapCopies";
 import { withMock } from "./lib/mock";
 import { regionConfig } from "./lib/region";
@@ -1118,13 +1119,14 @@ export const requeue = internalMutation({
  * Brings rows made before these rules up to date, and is safe to run again. A blog post gets its
  * blogger's author key, and if the old key held it back it may be linked again. A linked post's
  * source gets its kind, and its quote if it had none (embeddable posts used to show none), which is
- * then translated.
+ * then translated. A post that already came off the page has its words erased.
  */
 export const repairFoundPosts = internalMutation({
   args: { paginationOpts: paginationOptsValidator },
   returns: v.object({
     authors: v.number(),
     sources: v.number(),
+    erased: v.number(),
     isDone: v.boolean(),
     continueCursor: v.string(),
   }),
@@ -1132,6 +1134,7 @@ export const repairFoundPosts = internalMutation({
     const result = await ctx.db.query("mentionCandidate").paginate(paginationOpts);
     let authors = 0;
     let sources = 0;
+    let erased = 0;
     const places: Id<"place">[] = [];
     for (const row of result.page) {
       const key = authorKey(row);
@@ -1143,9 +1146,16 @@ export const repairFoundPosts = internalMutation({
         authors++;
       }
       const quote = row.verdict?.quote;
-      if (row.status !== "attached" || row.sourceId === undefined || !quote) continue;
-      const source = await ctx.db.get("source", row.sourceId);
-      if (source === null || source.status !== "live") continue;
+      const source = row.sourceId === undefined ? null : await ctx.db.get("source", row.sourceId);
+      const offThePage = row.status === "hidden" || (source !== null && source.status !== "live");
+      if (offThePage && (row.text || quote || source?.excerpt)) {
+        if (source !== null) await eraseFoundPost(ctx, source);
+        else await eraseCandidate(ctx, row);
+        erased++;
+        continue;
+      }
+      if (row.status !== "attached" || !quote || source === null || source.status !== "live")
+        continue;
       if (source.foundKind !== undefined && source.excerpt) continue;
       await ctx.db.patch("source", source._id, {
         foundKind: foundKindOf(row),
@@ -1155,14 +1165,19 @@ export const repairFoundPosts = internalMutation({
       if (!source.excerpt) places.push(row.placeId);
     }
     await enqueueExcerptTranslations(ctx, places);
-    return { authors, sources, isDone: result.isDone, continueCursor: result.continueCursor };
+    return {
+      authors,
+      sources,
+      erased,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
   },
 });
 
 /**
  * Takes a found post down: its source is hidden through the same change `sources.remove` makes, and
- * the candidate is never linked again. Its quote, translations and stored text are erased. What stays
- * is steward-only: the check's verdict, and the fingerprint that keeps a copy of the post out.
+ * the words Noren holds of it are erased (lib/foundPosts.ts), so it is never linked again.
  */
 async function hideCandidate(
   ctx: MutationCtx,
@@ -1172,27 +1187,20 @@ async function hideCandidate(
   const candidate = await ctx.db.get("mentionCandidate", candidateId);
   if (candidate === null) throw appError("not_found", "candidate not found");
   if (candidate.status === "hidden") return;
-  if (candidate.sourceId !== undefined) {
-    const source = await ctx.db.get("source", candidate.sourceId);
-    if (source !== null && source.status === "live") {
-      await ctx.db.patch("source", source._id, { status: "hidden" });
-      await writeAudit(ctx, {
-        actorKind: "person",
-        actorPersonId: steward._id,
-        action: "source.remove",
-        targetType: "source",
-        targetId: source._id,
-      });
-    }
-    if (source !== null) await eraseFoundQuote(ctx, source);
+  const source =
+    candidate.sourceId === undefined ? null : await ctx.db.get("source", candidate.sourceId);
+  if (source !== null && source.status === "live") {
+    await ctx.db.patch("source", source._id, { status: "hidden" });
+    await writeAudit(ctx, {
+      actorKind: "person",
+      actorPersonId: steward._id,
+      action: "source.remove",
+      targetType: "source",
+      targetId: source._id,
+    });
   }
-  await ctx.db.patch("mentionCandidate", candidateId, {
-    status: "hidden",
-    text: "",
-    hiddenAt: Date.now(),
-    hiddenBy: steward._id,
-    checkStartedAt: undefined,
-  });
+  if (source !== null) await eraseFoundPost(ctx, source, steward._id);
+  else await eraseCandidate(ctx, candidate, steward._id);
   await writeAudit(ctx, {
     actorKind: "person",
     actorPersonId: steward._id,

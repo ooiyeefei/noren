@@ -17,7 +17,8 @@ import { internalMutation, mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
 import { limitContribution } from "./lib/rateLimit";
 import { isRegionLocale, regionConfig } from "./lib/region";
-import { eraseFoundQuote, isExcerptHeld } from "./lib/translationChecks";
+import { eraseFoundPost } from "./lib/foundPosts";
+import { isExcerptHeld } from "./lib/translationChecks";
 import { literals, sourceStatusValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
 
@@ -270,7 +271,7 @@ export const remove = mutation({
       }
     }
     await ctx.db.patch("source", sourceId, { status: "hidden" });
-    await eraseFoundQuote(ctx, source);
+    await eraseFoundPost(ctx, source, person._id);
     if (person.role === "steward" && source.addedBy !== person._id) {
       await writeAudit(ctx, {
         actorKind: "person",
@@ -289,8 +290,9 @@ export const markGone = mutation({
   returns: v.null(),
   handler: async (ctx, { sourceId }) => {
     const steward = await requireRole(ctx, ["steward"]);
-    await loadSource(ctx, sourceId);
+    const source = await loadSource(ctx, sourceId);
     await ctx.db.patch("source", sourceId, { status: "gone" });
+    await eraseFoundPost(ctx, source, steward._id);
     await writeAudit(ctx, {
       actorKind: "person",
       actorPersonId: steward._id,
@@ -377,7 +379,7 @@ export const recordCheck = internalMutation({
       ...(result === "gone" ? { status: "gone" as const } : {}),
     });
     if (result === "gone") {
-      await eraseFoundQuote(ctx, source);
+      await eraseFoundPost(ctx, source);
       await writeAudit(ctx, {
         actorKind: "system",
         action: "source.gone",
