@@ -1,6 +1,7 @@
 import {
   guessLang,
   mentionCanonicalUrl,
+  postHasAdMarker,
   storedPostText,
   type MentionCandidate,
   type MentionPlatform,
@@ -63,6 +64,10 @@ function candidate(
   },
 ): MentionCandidate | null {
   const canonicalUrl = mentionCanonicalUrl(fields.url, ALL_ADAPTERS);
+  // The ad screen runs on the whole post first: a label at the top or bottom of a long page is
+  // outside the window cut below. (A web page arrives already cut by the page reader, which sets
+  // fields.adMarker from the whole page.)
+  const adMarker = postHasAdMarker(fields);
   // Cut here as storyFinder.ingest cuts it, so a long page is not sent whole.
   const text = storedPostText(fields.text, planned.names);
   if (!canonicalUrl || !text) return null;
@@ -78,6 +83,7 @@ function candidate(
     ...(fields.title ? { title: fields.title } : {}),
     ...(fields.locationName ? { locationName: fields.locationName } : {}),
     langGuess: fields.langGuess ?? guessLang(text),
+    ...(adMarker ? { adMarker } : {}),
     placeId: planned.placeId,
     searchedFor: planned.searchedFor,
     query: planned.query,
@@ -547,7 +553,7 @@ export const web: Collector & {
  */
 export function webCandidate(
   hit: WebHit,
-  page: { url?: string; text: string; author?: string; publishedAt?: number },
+  page: { url?: string; text: string; author?: string; publishedAt?: number; adMarker?: boolean },
   run: PlannedRun,
   context: NormaliseContext,
 ): MentionCandidate | null {
@@ -558,6 +564,7 @@ export function webCandidate(
     title: hit.title,
     authorName: page.author ?? new URL(url).hostname,
     postedAt: page.publishedAt,
+    ...(page.adMarker ? { adMarker: true } : {}),
   });
 }
 
