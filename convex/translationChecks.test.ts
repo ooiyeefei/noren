@@ -109,11 +109,20 @@ async function setup() {
     (await b.t.run((ctx) => ctx.db.query("auditLog").collect())).filter(
       (row) => row.action === action,
     );
+  const setConsent = (patch: { textVersion?: string; withdrawnAt?: number }) =>
+    b.run(async (ctx) => {
+      const consent = await ctx.db
+        .query("consent")
+        .withIndex("by_interviewId", (q) => q.eq("interviewId", interviewId))
+        .unique();
+      await ctx.db.patch("consent", consent!._id, patch);
+    });
   return {
     b,
     steward,
     placeId,
     claimId,
+    setConsent,
     claim,
     save,
     checks,
@@ -555,5 +564,62 @@ describe("the check action", () => {
     await s.b.t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(RETRY_AFTER_MS), 10);
     expect(checker.doGenerateCalls).toHaveLength(4);
     expect((await s.checks()).map(({ status }) => status)).toEqual(["passed", "passed", "passed"]);
+  });
+
+  describe("consent", () => {
+    it("an owner who agreed to a text that does not name Modal: no check, and nothing reaches the adapter", async () => {
+      const s = await setup();
+      await s.setConsent({ textVersion: "draft-2" });
+      const checker = toolModel([() => ({ faithful: false, added: ADDED, missing: MISSING })]);
+      const translator = translatorModel(FAITHFUL);
+      const factory = models(checker, translator);
+      await s.save(UNFAITHFUL);
+      expect(await s.checks()).toEqual([]);
+      expect(await s.runs()).toEqual([]);
+      // Even a run started by hand finds nothing it may send.
+      await s.b.t.action(internal.aiActions.checkTranslations, {});
+      expect(factory).not.toHaveBeenCalled();
+      expect(checker.doGenerateCalls).toEqual([]);
+      expect(translator.doGenerateCalls).toEqual([]);
+      // The translation stays as it is today: shown and labelled machine, neither held nor checked.
+      expect(await s.translation()).toMatchObject({ text: UNFAITHFUL, origin: "machine" });
+      const [view] = await s.asSteward.query(api.claims.listForPlace, { placeId: s.placeId });
+      expect(view!.translations).toEqual([
+        expect.not.objectContaining({ check: expect.anything() }),
+      ]);
+      expect(view!.translations[0]).toMatchObject({ text: UNFAITHFUL, origin: "machine" });
+      expect(await s.audit("claim.translation_check")).toEqual([]);
+    });
+
+    it("a check queued before the owner withdrew consent is dropped when its run starts, unsent", async () => {
+      const s = await setup();
+      const checker = toolModel([() => ({ faithful: true, added: [], missing: [] })]);
+      const factory = models(checker, translatorModel(FAITHFUL));
+      await s.save(FAITHFUL);
+      expect(await s.checks()).toHaveLength(1);
+      await s.setConsent({ withdrawnAt: Date.now() });
+      await runScheduled(s.b);
+      expect(factory).not.toHaveBeenCalled();
+      expect(checker.doGenerateCalls).toEqual([]);
+      expect(await s.checks()).toEqual([]);
+      expect(await s.translation()).toMatchObject({ text: FAITHFUL, origin: "machine" });
+    });
+
+    it("a steward cannot queue again a check the owner's consent no longer covers", async () => {
+      const s = await setup();
+      await s.save(FAITHFUL);
+      const [item] = await s.b.t.mutation(internal.translationChecks.startBatch, {});
+      await s.record(item!.checkId, FAITHFUL, { kind: "fail", error: "Error: mock" });
+      await s.setConsent({ withdrawnAt: Date.now() });
+      expect(
+        await errorCode(
+          s.asSteward.mutation(api.translationChecks.checkAgain, {
+            claimId: s.claimId,
+            lang: "en",
+          }),
+        ),
+      ).toBe("conflict");
+      expect(await s.runs()).toHaveLength(1);
+    });
   });
 });

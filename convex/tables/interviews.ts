@@ -107,7 +107,8 @@ export const interviewTables = {
 
   /**
    * A second model's check of one machine translation against the person's own words, run when
-   * AI_MODEL_CHECK_TRANSLATION is set. Only a `held` translation leaves the public page, and only
+   * AI_MODEL_CHECK_TRANSLATION is set and the owner's consent names Modal (consentCoversCheck in
+   * convex/lib/translationChecks.ts). Only a `held` translation leaves the public page, and only
    * while `text` still equals its row's text; a person then decides. One row per translation.
    */
   translationCheck: defineTable({

@@ -48,6 +48,20 @@ describe("region loader", () => {
     );
   });
 
+  it("lists a consent version as naming Modal only when its text names Modal in every language", () => {
+    expect(nagasaki().consent.versionsNamingModal).toContain(nagasaki().consent.textVersion);
+    const unnamed = (r: RegionConfig) =>
+      (r.consent.text.ja = r.consent.text.ja!.replaceAll("Modal", "米国の事業者"));
+    expect(problemOf(parse(unnamed))).toContain("must name Modal");
+    // A text that does not name Modal is valid as long as it is not listed: the check stays off.
+    expect(
+      parse((r) => {
+        unnamed(r);
+        r.consent.versionsNamingModal = [];
+      }).ok,
+    ).toBe(true);
+  });
+
   it("takes aerial photos only from an HTTPS tile template, and they are optional", () => {
     expect(parse((r) => delete r.geo.aerialPhoto).ok).toBe(true);
     for (const tiles of [
