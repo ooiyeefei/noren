@@ -51,6 +51,10 @@ replay
 check
   --limit 500              Most staged posts to check in this request.
   --no-attach              Only check; link later with the attach command.
+  --requeue                Instead of checking: set back to pending every accepted post, and every
+                           post rejected as place_not_named whose check did not say it is about
+                           another place, so the next check reads them again. Linked and hidden
+                           posts are never touched. Run check again afterwards.
 
 attach
   --limit 100              Most checked posts to link in one call.`;
@@ -72,6 +76,7 @@ export type Flags = {
   dryRun: boolean;
   skipSearched: boolean;
   attach: boolean;
+  requeue: boolean;
   from?: string;
   prod: boolean;
   deployment?: string;
@@ -108,6 +113,7 @@ export function parseFlags(argv: readonly string[]): Flags {
     dryRun: false,
     skipSearched: false,
     attach: true,
+    requeue: false,
     prod: false,
   };
   for (let i = 0; i < rest.length; i++) {
@@ -116,6 +122,7 @@ export function parseFlags(argv: readonly string[]): Flags {
     else if (flag === "--skip-searched") flags.skipSearched = true;
     else if (flag === "--prod") flags.prod = true;
     else if (flag === "--no-attach") flags.attach = false;
+    else if (flag === "--requeue") flags.requeue = true;
     else {
       const value = rest[++i];
       if (value === undefined || value.startsWith("--"))
@@ -190,6 +197,8 @@ export function parseFlags(argv: readonly string[]): Flags {
   if (flags.prod && flags.deployment)
     throw new Error("Use either --prod or --deployment, not both");
   if (flags.command === "replay" && !flags.from) throw new Error("replay needs --from <folder>");
+  if (flags.requeue && flags.command !== "check")
+    throw new Error("--requeue belongs to the check command");
   if (flags.perPlace > 50) throw new Error("--per-place is at most 50");
   if (flags.batchSize > 100) throw new Error("--batch-size is at most 100");
   return flags;
@@ -269,6 +278,28 @@ export async function runStoryFinder(
     createCliRunner({ prod: flags.prod, deployment: flags.deployment, cwd: options.cwd });
   const target = flags.prod ? "production" : (flags.deployment ?? "the default dev deployment");
 
+  if (flags.command === "check" && flags.requeue) {
+    options.log({ target });
+    const requeued = { accepted: 0, rejected: 0 };
+    for (const status of ["accepted", "rejected"] as const) {
+      let cursor: string | null = null;
+      for (;;) {
+        const page = (await convex("storyFinder:requeue", {
+          stewardPersonId: flags.steward,
+          status,
+          paginationOpts: { numItems: 100, cursor },
+        })) as { requeued: number; isDone: boolean; continueCursor: string };
+        requeued[status] += page.requeued;
+        if (page.isDone) break;
+        cursor = page.continueCursor;
+      }
+    }
+    options.log({
+      requeued: { ...requeued, total: requeued.accepted + requeued.rejected },
+      next: "run check again to read them",
+    });
+    return requeued;
+  }
   if (flags.command === "check") {
     options.log({ target });
     options.log(

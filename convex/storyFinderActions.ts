@@ -13,6 +13,9 @@ import { internalAction } from "./_generated/server";
 const CHECK_BATCH = 12;
 /** Posts checked at the same time within a batch. */
 const PARALLEL = 3;
+/** Posts one linking call considers, and how many such calls the end of a run makes at most. */
+const ATTACH_LIMIT = 100;
+const ATTACH_ROUNDS = 20;
 
 async function mapLimit<T, R>(items: readonly T[], limit: number, work: (item: T) => Promise<R>) {
   const results: R[] = new Array(items.length);
@@ -31,7 +34,8 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, work: (item: T
 /**
  * Checks one batch of pending candidates with the AI_MODEL_CHECK_MENTION model, one call per post,
  * records each result, then schedules the next batch until `remaining` runs out or nothing is
- * pending. Each result goes through recordCheck, which applies the code checks before writing.
+ * pending, and then links what passed. Each result goes through recordCheck, which applies the code
+ * checks before writing.
  */
 export const checkBatch = internalAction({
   args: { stewardPersonId: v.id("person"), remaining: v.number(), attach: v.boolean() },
@@ -47,61 +51,73 @@ export const checkBatch = internalAction({
       limit: Math.min(CHECK_BATCH, args.remaining),
       now: Date.now(),
     });
-    if (!batch.length) return null;
-    const checker = createMentionChecker({
-      model: createLanguageModel(config.config),
-      // Meta's Model API accepts only tool_choice "auto" (see check.ts).
-      forceTool: config.config.provider !== "meta",
-    });
-    const results = await mapLimit(batch, PARALLEL, async (candidate) => {
-      const started = Date.now();
-      try {
-        const reported = await checker.check({
-          place: { names: candidate.placeNames, category: candidate.category },
-          post: {
-            platform: candidate.platform,
-            text: candidate.text,
-            author: candidate.author,
-            title: candidate.title,
-            locationName: candidate.locationName,
-          },
-        });
-        return {
-          candidate,
-          latencyMs: Date.now() - started,
-          result: { ok: true as const, reported },
-        };
-      } catch (error) {
-        // Name and status only: an SDK error can carry the post or the response.
-        const failure = describeCheckFailure(error);
-        console.error(`story finder check failed for ${candidate.candidateId}: ${failure}`);
-        return {
-          candidate,
-          latencyMs: Date.now() - started,
-          result: { ok: false as const, error: failure },
-        };
-      }
-    });
-    const translate: Id<"place">[] = [];
-    for (const { candidate, latencyMs, result } of results) {
-      const recorded = await ctx.runMutation(internal.storyFinder.recordCheck, {
-        candidateId: candidate.candidateId,
-        stewardPersonId: args.stewardPersonId,
-        attach: args.attach,
-        modelSetting,
-        latencyMs,
-        result,
+    if (batch.length) {
+      const checker = createMentionChecker({
+        model: createLanguageModel(config.config),
+        // Meta's Model API accepts only tool_choice "auto" (see check.ts).
+        forceTool: config.config.provider !== "meta",
       });
-      if (recorded.excerptPlaceId) translate.push(recorded.excerptPlaceId);
+      const results = await mapLimit(batch, PARALLEL, async (candidate) => {
+        const started = Date.now();
+        try {
+          const reported = await checker.check({
+            place: { names: candidate.placeNames, category: candidate.category },
+            post: {
+              platform: candidate.platform,
+              text: candidate.text,
+              author: candidate.author,
+              title: candidate.title,
+              locationName: candidate.locationName,
+            },
+          });
+          return {
+            candidate,
+            latencyMs: Date.now() - started,
+            result: { ok: true as const, reported },
+          };
+        } catch (error) {
+          // Name and status only: an SDK error can carry the post or the response.
+          const failure = describeCheckFailure(error);
+          console.error(`story finder check failed for ${candidate.candidateId}: ${failure}`);
+          return {
+            candidate,
+            latencyMs: Date.now() - started,
+            result: { ok: false as const, error: failure },
+          };
+        }
+      });
+      for (const { candidate, latencyMs, result } of results) {
+        // Nothing is linked here: the posts that pass are linked together when the whole run has
+        // been checked, stories first (see below), so the order of the checks decides nothing.
+        await ctx.runMutation(internal.storyFinder.recordCheck, {
+          candidateId: candidate.candidateId,
+          stewardPersonId: args.stewardPersonId,
+          attach: false,
+          modelSetting,
+          latencyMs,
+          result,
+        });
+      }
     }
-    if (translate.length)
-      await ctx.runMutation(internal.storyFinder.enqueueTranslations, { placeIds: translate });
     const remaining = args.remaining - batch.length;
-    if (remaining > 0)
+    if (batch.length > 0 && remaining > 0) {
       await ctx.scheduler.runAfter(0, internal.storyFinderActions.checkBatch, {
         ...args,
         remaining,
       });
+      return null;
+    }
+    // The run is over: link what passed, stories before tips and the newest first within each kind
+    // (attachOrder), so a place with room for a few gets its best. A batch of 100 at a time; a
+    // call that linked nothing ends it.
+    if (args.attach)
+      for (let round = 0; round < ATTACH_ROUNDS; round++) {
+        const { attached, considered } = await ctx.runMutation(
+          internal.storyFinder.attachAcceptedBatch,
+          { stewardPersonId: args.stewardPersonId, limit: ATTACH_LIMIT },
+        );
+        if (attached === 0 || considered < ATTACH_LIMIT) break;
+      }
     return null;
   },
 });
