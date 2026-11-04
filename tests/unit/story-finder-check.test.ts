@@ -21,6 +21,9 @@ import {
   guessLang,
   hasAdMarker,
   isVerbatim,
+  listingHoldsWholeName,
+  listingNamesPlace,
+  namePartsOf,
   namesPlace,
   normaliseWhitespace,
   isCopy,
@@ -846,5 +849,143 @@ describe("ad labels on the whole post, not only the stored window", () => {
       "#adventure",
     ])
       expect(hasAdMarker(text), text).toBe(false);
+  });
+});
+
+describe("namesPlace: names with several parts, and old-form kanji", () => {
+  // Every name here is made up.
+  it("splits a name on brackets, middle dots, spaces and a change between Latin and Japanese", () => {
+    expect(namePartsOf("架空屋（屋台）")).toEqual(["架空屋"]);
+    expect(namePartsOf("架空餃子専門店 カクウの門 Kakunomon")).toEqual([
+      "架空餃子専門店",
+      "カクウの門",
+      "kakunomon",
+    ]);
+    expect(namePartsOf("架空ラメン・麺やテストガーデン")).toEqual([
+      "架空ラメン",
+      "麺やテストガーデン",
+      "テストガーデン",
+    ]);
+    expect(namePartsOf("架空食堂Kakuu")).toEqual(["架空食堂", "kakuu"]);
+  });
+
+  it("matches a text that names only a part of a composite name", () => {
+    expect(namesPlace("昨日は架空屋でお昼を食べました", ["架空屋（屋台）"])).toBe(true);
+    expect(namesPlace("カクウの門の餃子は小さい", ["架空餃子専門店 カクウの門 Kakunomon"])).toBe(
+      true,
+    );
+    expect(namesPlace("テストガーデンに行った", ["架空ラメン・麺やテストガーデン"])).toBe(true);
+    expect(namesPlace("I went to Kakunomon", ["架空餃子専門店 カクウの門 Kakunomon"])).toBe(true);
+  });
+
+  it("does not take a part shorter than three characters, or a katakana run shorter than four, for the place", () => {
+    expect(namePartsOf("架空・夢")).toEqual([]);
+    expect(namesPlace("夢を見た", ["架空・夢"])).toBe(false);
+    // ラメン is a three-letter katakana run inside a longer part: only the part counts.
+    expect(namesPlace("ラメンを食べた", ["架空ラメン・麺や"])).toBe(false);
+  });
+
+  it("does not take a generic word for the place", () => {
+    for (const [name, text] of [
+      ["ラーメン 架空堂", "近所のラーメンを食べた"],
+      ["Hotel Kakuu", "the hotel was clean"],
+      ["架空食堂 長崎本店", "長崎の本店に寄った"],
+      ["カフェ・レストラン・架空庵", "カフェとレストランが並ぶ通り"],
+      ["ダイニングバー テスト", "ダイニングバーで飲んだ"],
+    ] as const)
+      expect(namesPlace(text, [name]), text).toBe(false);
+    // A generic word is still the place when it is the whole name.
+    expect(namesPlace("ラーメンを食べた", ["ラーメン"])).toBe(true);
+  });
+
+  it("folds old-form kanji to the current form, in both directions", () => {
+    expect(namesPlace("架空楼の話", ["架空樓"])).toBe(true);
+    expect(namesPlace("架空樓の話", ["架空楼"])).toBe(true);
+    for (const [old, current] of [
+      ["國", "国"],
+      ["澤", "沢"],
+      ["濱", "浜"],
+      ["廣", "広"],
+      ["齋", "斎"],
+      ["眞", "真"],
+    ] as const)
+      expect(namesPlace(`テスト${current}亭`, [`テスト${old}亭`]), old).toBe(true);
+  });
+
+  it("windows a long post around a part of the name, as around the whole", () => {
+    const names = ["架空餃子専門店 カクウの門"];
+    const text = `${"架空の前置き。".repeat(2_000)}カクウの門の餃子は小さい。${"架空の後書き。".repeat(2_000)}`;
+    expect(firstMention(text, names)).toBe(text.indexOf("カクウの門"));
+    expect(storedPostText(text, names)).toContain("カクウの門");
+  });
+
+  it("listingNamesPlace lets a one-character name be settled by position", () => {
+    expect(listingNamesPlace("ダイニングバー架", ["Kakuu", "架"])).toBe(true);
+    expect(listingNamesPlace("ダイニングバー架", ["Kakuu", "架空"])).toBe(false);
+    expect(listingNamesPlace("架空屋 本店", ["架空屋（屋台）"])).toBe(true);
+  });
+
+  it("listingHoldsWholeName wants the name as a word of its own", () => {
+    expect(listingHoldsWholeName("カステラ本家 架空屋 長崎本店", ["架空屋"])).toBe(true);
+    expect(listingHoldsWholeName("大波止 架空園", ["大波止架空園"])).toBe(true);
+    // Kanji compounds join freely, and old-form kanji are folded.
+    expect(listingHoldsWholeName("中華料理架空樓", ["架空楼"])).toBe(true);
+    // A katakana name inside a longer katakana word is another name.
+    expect(listingHoldsWholeName("ネオ·プレイステスビオス壱番館", ["テスビ"])).toBe(false);
+    expect(listingHoldsWholeName("テスビ 一番館", ["テスビ"])).toBe(true);
+    // Latin names likewise, and names under three characters never count.
+    expect(listingHoldsWholeName("Kakuuland Hotel", ["Kakuu"])).toBe(false);
+    expect(listingHoldsWholeName("Kakuu Hotel", ["Kakuu"])).toBe(true);
+    expect(listingHoldsWholeName("架空 本店", ["架空"])).toBe(false);
+  });
+});
+
+describe("normaliseWhitespace: line-break tags", () => {
+  it("reads <br>, <br/> and <br /> as whitespace, so the verbatim check passes without them", () => {
+    const text =
+      "初めて行きました。<br><br>靴を預けて<br/>裸足で上がります。<BR />とても静かです。";
+    expect(normaliseWhitespace(text)).toBe(
+      "初めて行きました。 靴を預けて 裸足で上がります。 とても静かです。",
+    );
+    expect(isVerbatim(text, "靴を預けて 裸足で上がります。")).toBe(true);
+    expect(isVerbatim(text, "靴を預けて\n裸足で上がります。")).toBe(true);
+    expect(isVerbatim(text, "靴を預けて<br>裸足で上がります。")).toBe(true);
+  });
+
+  it("a quote taken from such a text never carries the tags", () => {
+    const post =
+      "架空珈琲 試験堂に行きました。<br><br>店主の祖父が始めた焙煎所です。<br>朝九時から開いています。";
+    const decision = decide(
+      post,
+      report({ quote: "店主の祖父が始めた焙煎所です。<br>朝九時から開いています。" }),
+    );
+    expect(decision.status).toBe("accepted");
+    if (decision.status === "accepted")
+      expect(decision.quote).toBe("店主の祖父が始めた焙煎所です。 朝九時から開いています。");
+  });
+});
+
+describe("the kind rules the model is given", () => {
+  it("the report schema and the system prompt separate a tip from praise, and ask for the sentence itself", async () => {
+    const kind = reportMentionSchema.shape.kind.description!;
+    expect(kind).toMatch(/tip: a concrete practical detail a visitor can act on/);
+    expect(kind).toMatch(/rating_only:.*what someone ate.*satisfied/);
+    expect(reportMentionSchema.shape.quote.description).toMatch(
+      /itself carries the story or the tip/,
+    );
+    let system = "";
+    const model = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        system = JSON.stringify(options.prompt[0]);
+        return toolCall(report());
+      },
+    });
+    await createMentionChecker({ model }).check(input);
+    expect(system).toContain(
+      "Praise, taste, what someone ate or that they were satisfied or full is rating_only",
+    );
+    expect(system).toContain(
+      "The quote must be the sentence that carries the story or the detail itself",
+    );
   });
 });

@@ -1,5 +1,7 @@
 import {
   guessLang,
+  listingHoldsWholeName,
+  listingNamesPlace,
   mentionCanonicalUrl,
   postHasAdMarker,
   storedPostText,
@@ -21,12 +23,13 @@ import {
   withCity,
   type CollectOptions,
   type Collector,
+  type ListingProblem,
   type FinderPlace,
   type NormaliseContext,
   type PlannedQuery,
   type PlannedRun,
 } from "./types";
-import { isSkippedHost } from "./web-page";
+import { decodeEntities, isSkippedHost } from "./web-page";
 
 // Prices are the Apify Free-plan tier (the highest) from each actor's `pricingInfos`, read on
 // 2026-11-04 with GET https://api.apify.com/v2/acts/<user>~<actor>. All six actors are
@@ -67,9 +70,10 @@ function candidate(
   // The ad screen runs on the whole post first: a label at the top or bottom of a long page is
   // outside the window cut below. (A web page arrives already cut by the page reader, which sets
   // fields.adMarker from the whole page.)
-  const adMarker = postHasAdMarker(fields);
+  const plain = plainText(fields.text);
+  const adMarker = postHasAdMarker({ ...fields, text: plain });
   // Cut here as storyFinder.ingest cuts it, so a long page is not sent whole.
-  const text = storedPostText(fields.text, planned.names);
+  const text = storedPostText(plain, planned.names);
   if (!canonicalUrl || !text) return null;
   return {
     platform,
@@ -80,8 +84,8 @@ function candidate(
     ...(fields.authorUrl ? { authorUrl: fields.authorUrl } : {}),
     ...(fields.postedAt !== undefined ? { postedAt: fields.postedAt } : {}),
     text,
-    ...(fields.title ? { title: fields.title } : {}),
-    ...(fields.locationName ? { locationName: fields.locationName } : {}),
+    ...(fields.title ? { title: plainText(fields.title) } : {}),
+    ...(fields.locationName ? { locationName: plainText(fields.locationName) } : {}),
     langGuess: fields.langGuess ?? guessLang(text),
     ...(adMarker ? { adMarker } : {}),
     placeId: planned.placeId,
@@ -91,6 +95,15 @@ function candidate(
     runId: context.runId,
     collectionId: context.collectionId,
   };
+}
+
+/**
+ * A scraped text as plain text: line-break tags (Google's review text carries <br>) become line
+ * breaks, then common HTML entities (&amp;, &#39;) are decoded. In that order, so an escaped
+ * "&lt;br&gt;" stays the words it is.
+ */
+export function plainText(text: string): string {
+  return decodeEntities(text.replace(/<br\s*\/?>/giu, "\n"));
 }
 
 function dedupe(candidates: (MentionCandidate | null)[]): MentionCandidate[] {
@@ -124,8 +137,43 @@ function placesWithName(places: readonly FinderPlace[], lang = "ja") {
 // review-scraped $0.0005, start $0.00005/GB; minimal maxTotalChargeUsd $0.50.
 // ---------------------------------------------------------------------------------------------
 
-/** How far the place Google found may be from our pin and still be the same place. */
-const SAME_PLACE_M = 400;
+/** A listing this close to our pin is the place if its name fits (listingNamesPlace). */
+export const SAME_PLACE_M = 300;
+/**
+ * A listing further than that, up to here, is still taken for the place when its name holds the
+ * place's whole name as a word (listingHoldsWholeName): a pin on a shop's side street can be a few
+ * hundred metres from the point Google gives its main store, but a different shop that merely
+ * contains the name's letters (トレビ in トレビオス) is not.
+ */
+export const NAMED_PLACE_M = 3000;
+
+/**
+ * Whether the listing Google found is our place, and if it is, whether it is still open. A
+ * listing that is not the place leaves a search for 「椿 長崎」 attaching some other 椿; a
+ * permanently closed one is not ingested, and its place is listed at the end of the run.
+ */
+export function judgeListing(
+  item: Record<string, unknown>,
+  planned: PlannedQuery,
+): ListingProblem | null {
+  const name = str(item.title) ?? "";
+  const location = record(item.location);
+  const lat = Number(location?.lat);
+  const lng = Number(location?.lng);
+  const hasPoint = Number.isFinite(lat) && Number.isFinite(lng);
+  let isPlace: boolean;
+  if (!planned.pin) isPlace = namesPlace(name, planned.names);
+  else if (!hasPoint) isPlace = false;
+  else {
+    const metres = distanceM(planned.pin, { lat, lng });
+    isPlace =
+      metres <= SAME_PLACE_M
+        ? listingNamesPlace(name, planned.names)
+        : metres <= NAMED_PLACE_M && listingHoldsWholeName(name, planned.names);
+  }
+  if (!isPlace) return "wrong_listing";
+  return item.permanentlyClosed === true ? "closed_listing" : null;
+}
 
 export const googleReviews: Collector = {
   platform: "google_reviews",
@@ -164,17 +212,30 @@ export const googleReviews: Collector = {
       const item = record(raw);
       const planned = run.queries.find((q) => sameQuery(str(item?.searchString), q.query));
       if (!item || !planned) continue;
-      // Code checks that Google found our place: near our pin, or named like it when we have none.
-      const location = record(item.location);
-      const lat = Number(location?.lat);
-      const lng = Number(location?.lng);
-      const near =
-        planned.pin && Number.isFinite(lat) && Number.isFinite(lng)
-          ? distanceM(planned.pin, { lat, lng }) <= SAME_PLACE_M
-          : false;
-      if (!near && !(planned.pin === null && namesPlace(str(item.title) ?? "", planned.names)))
+      const problem = judgeListing(item, planned);
+      const reviews = Array.isArray(item.reviews) ? item.reviews : [];
+      const listing = str(item.title);
+      if (problem !== null) {
+        const tally = context.listings;
+        if (tally) {
+          tally.listings.push({
+            problem,
+            place: planned.searchedFor,
+            slug: planned.slug,
+            listing: listing ?? "",
+          });
+          for (const reviewRaw of reviews) {
+            const url = str(record(reviewRaw)?.reviewUrl);
+            const canonicalUrl = url ? mentionCanonicalUrl(url, ALL_ADAPTERS) : null;
+            if (!canonicalUrl || !str(record(reviewRaw)?.text)) continue;
+            if (problem === "wrong_listing") tally.wrongListing++;
+            else tally.closedListing++;
+            tally.excluded.push({ placeId: planned.placeId, canonicalUrl, problem });
+          }
+        }
         continue;
-      for (const reviewRaw of Array.isArray(item.reviews) ? item.reviews : []) {
+      }
+      for (const reviewRaw of reviews) {
         const review = record(reviewRaw);
         const url = str(review?.reviewUrl);
         const text = str(review?.text);
@@ -187,8 +248,10 @@ export const googleReviews: Collector = {
             authorUrl: str(review.reviewerUrl),
             postedAt: time(review.publishedAtDate),
             langGuess: str(review.originalLanguage),
-            // Google's own name for the place these reviews are on (checked against our pin).
-            locationName: str(item.title),
+            // Google's own name for the place these reviews are on: a review rarely names its
+            // shop, so the check reads this name beside the text (judgeListing has matched it to
+            // our place).
+            ...(listing ? { title: listing, locationName: listing } : {}),
           }),
         );
       }

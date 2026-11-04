@@ -527,6 +527,174 @@ describe("replay sets the ad flag from the whole saved post", () => {
   });
 });
 
+describe("replay --sources google_reviews repairs the rows already ingested", () => {
+  const query = (n: number) => `架空の店${n} 長崎`;
+  const review = (tag: string) => ({
+    name: "Mock",
+    text: `架空の店2のテスト用の口コミ ${tag}`,
+    reviewUrl: `https://www.google.com/maps/reviews/data=${tag}`,
+  });
+  const saved: SavedRun = {
+    version: 1,
+    savedAt: "2026-11-04T00:00:00.000Z",
+    collectionId: "mock-collection-9",
+    run: {
+      platform: "google_reviews",
+      actorId: "compass/crawler-google-places",
+      input: {},
+      queries: [2, 3].map((n) => ({
+        placeId: "oldid",
+        slug: `fictional-place-${n}`,
+        query: query(n),
+        searchedFor: `架空の店${n}`,
+        names: [`架空の店${n}`],
+        pin: null,
+      })),
+      estimatedUsd: 0.03,
+      maxTotalChargeUsd: 0.5,
+      maxItems: 2,
+    },
+    apifyRun: { id: "mockgoogle", status: "SUCCEEDED", costUsd: 0.03 },
+    items: [
+      { searchString: query(2), title: "架空の店2 本店", reviews: [review("kept")] },
+      {
+        searchString: query(3),
+        title: "架空の店3",
+        permanentlyClosed: true,
+        reviews: [review("closed1"), review("closed2")],
+      },
+      { searchString: query(2), title: "別の店", reviews: [review("wrong")] },
+    ],
+  };
+
+  function repairing(result: Record<string, unknown>) {
+    const base = fakeConvex();
+    const convex = vi.fn(async (fn: string, args: unknown) =>
+      fn === "storyFinder:repairListings"
+        ? (base.calls.push({ fn, args: args as Record<string, unknown> }), result)
+        : base.convex(fn, args),
+    );
+    return { convex, calls: base.calls };
+  }
+
+  it("sends the listing's name for kept reviews and a rejection for the others, and prints the closed places", async () => {
+    const { convex, calls } = repairing({
+      retitled: 1,
+      rejected: 3,
+      missing: 0,
+      notChanged: [
+        { canonicalUrl: "https://www.google.com/maps/reviews/data=closed2", status: "attached" },
+      ],
+    });
+    const logs: unknown[] = [];
+    const result = await replay(
+      [saved],
+      { steward: STEWARD, regionId: "nagasaki", platforms: ["google_reviews"] },
+      { convex, log: (value) => logs.push(value) },
+    );
+    // Only the kept review is ingested; the other three never are.
+    const sent = ingestCalls(calls).flatMap((call) => call.args.candidates as MentionCandidate[]);
+    expect(sent.map((c) => [c.placeId, c.title])).toEqual([["mockplace2", "架空の店2 本店"]]);
+    const fixes = calls.filter((call) => call.fn === "storyFinder:repairListings");
+    expect(fixes).toHaveLength(1);
+    expect(fixes[0]!.args).toMatchObject({ stewardPersonId: STEWARD });
+    expect(fixes[0]!.args.fixes).toEqual([
+      {
+        placeId: "mockplace2",
+        canonicalUrl: sent[0]!.canonicalUrl,
+        title: "架空の店2 本店",
+      },
+      {
+        placeId: "mockplace3",
+        canonicalUrl: expect.stringContaining("closed1"),
+        reject: "closed_listing",
+      },
+      {
+        placeId: "mockplace3",
+        canonicalUrl: expect.stringContaining("closed2"),
+        reject: "closed_listing",
+      },
+      {
+        placeId: "mockplace2",
+        canonicalUrl: expect.stringContaining("wrong"),
+        reject: "wrong_listing",
+      },
+    ]);
+    expect(result).toMatchObject({
+      wrongListing: 1,
+      closedListing: 2,
+      repaired: { retitled: 1, rejected: 3, notChanged: [{ status: "attached" }] },
+    });
+    // The places to review are printed last.
+    expect(logs.at(-1)).toEqual({
+      googleListingsLeftOut: expect.objectContaining({
+        closedPlaces: [{ place: "架空の店3", slug: "fictional-place-3", listing: "架空の店3" }],
+      }),
+    });
+  });
+
+  it("makes no repair call when no Google run is replayed", async () => {
+    const { convex, calls } = repairing({});
+    await replay(
+      [saved],
+      { steward: STEWARD, regionId: "nagasaki", platforms: ["web"] },
+      { convex, log: () => {} },
+    );
+    expect(calls.some((call) => call.fn === "storyFinder:repairListings")).toBe(false);
+  });
+});
+
+describe("check --requeue", () => {
+  it("is parsed for the check command only", () => {
+    expect(parseFlags(["check", "--steward", STEWARD, "--requeue"])).toMatchObject({
+      command: "check",
+      requeue: true,
+    });
+    expect(parseFlags(["check", "--steward", STEWARD]).requeue).toBe(false);
+    expect(() => parseFlags(["attach", "--steward", STEWARD, "--requeue"])).toThrow(
+      /check command/,
+    );
+  });
+
+  it("pages through accepted then rejected posts and starts no check", async () => {
+    const pages = [
+      { requeued: 40, isDone: false, continueCursor: "c1" },
+      { requeued: 57, isDone: true, continueCursor: "c2" },
+      { requeued: 30, isDone: true, continueCursor: "c3" },
+    ];
+    const calls: { fn: string; args: Record<string, unknown> }[] = [];
+    const convex = vi.fn(async (fn: string, args: unknown) => {
+      calls.push({ fn, args: args as Record<string, unknown> });
+      return pages.shift();
+    });
+    const logs: unknown[] = [];
+    const result = await runStoryFinder(["check", "--steward", STEWARD, "--requeue"], {
+      cwd: process.cwd(),
+      env: {},
+      now: () => 0,
+      loadEnvFile: vi.fn(),
+      convex,
+      log: (value) => logs.push(value),
+    });
+    expect(
+      calls.map((call) => [
+        call.fn,
+        call.args.status,
+        (call.args.paginationOpts as { cursor: unknown }).cursor,
+      ]),
+    ).toEqual([
+      ["storyFinder:requeue", "accepted", null],
+      ["storyFinder:requeue", "accepted", "c1"],
+      ["storyFinder:requeue", "rejected", null],
+    ]);
+    expect(result).toEqual({ accepted: 97, rejected: 30 });
+    expect(calls.some((call) => call.fn === "storyFinder:startCheck")).toBe(false);
+    expect(logs).toContainEqual(
+      expect.objectContaining({ requeued: { accepted: 97, rejected: 30, total: 127 } }),
+    );
+  });
+});
+
 describe("--skip-searched", () => {
   const five: FinderPlace[] = [1, 2, 3, 4, 5].map((n) => ({
     ...places[0]!,

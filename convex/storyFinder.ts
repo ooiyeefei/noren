@@ -45,7 +45,7 @@ const MAX_ATTEMPTS = 3;
 /** The most candidates one claim takes (storyFinderActions.checkBatch asks for a dozen). */
 const MAX_CLAIM = 24;
 /** At most this many found posts are linked to one place, so they never crowd out members' own. */
-const MAX_FOUND_PER_PLACE = 12;
+const MAX_FOUND_PER_PLACE = 6;
 /** At most this many posts by one author are attached from one collection, so no one can flood it. */
 const AUTHOR_LIMIT = 3;
 const INGEST_MAX = 100;
@@ -709,13 +709,26 @@ async function enqueueExcerptTranslations(ctx: MutationCtx, placeIds: Iterable<I
     await ctx.scheduler.runAfter(0, internal.storyFinderActions.translateExcerpts, { placeId });
 }
 
+/**
+ * The order accepted posts are linked in: stories before tips, and within each kind the newest post
+ * first, so that when a place has room for only a few (MAX_FOUND_PER_PLACE) thin posts do not crowd
+ * out stories. A post with no date counts as the oldest. Posts that tie keep the order they were
+ * read in (checked first, linked first), as the sort is stable.
+ */
+export function attachOrder(a: Doc<"mentionCandidate">, b: Doc<"mentionCandidate">): number {
+  const rank = (row: Doc<"mentionCandidate">) => (row.verdict?.kind === "story" ? 0 : 1);
+  return rank(a) - rank(b) || (b.postedAt ?? 0) - (a.postedAt ?? 0);
+}
+
 async function attachAccepted(ctx: MutationCtx, steward: Doc<"person">, limit: number) {
   // Posts stuck on a full place or an author's limit are passed over, so they cannot hold the
   // batch up; at most `limit` are tried.
-  const accepted = await ctx.db
-    .query("mentionCandidate")
-    .withIndex("by_status_and_checkedAt", (q) => q.eq("status", "accepted"))
-    .take(500);
+  const accepted = (
+    await ctx.db
+      .query("mentionCandidate")
+      .withIndex("by_status_and_checkedAt", (q) => q.eq("status", "accepted"))
+      .take(500)
+  ).sort(attachOrder);
   const places: Id<"place">[] = [];
   let attached = 0;
   let considered = 0;
@@ -968,6 +981,127 @@ export const stewardOverview = query({
       accepted: await rows("accepted"),
       rejected: await rows("rejected"),
     };
+  },
+});
+
+const listingFix = v.object({
+  placeId: v.id("place"),
+  canonicalUrl: v.string(),
+  title: v.optional(v.string()),
+  reject: v.optional(v.union(v.literal("wrong_listing"), v.literal("closed_listing"))),
+});
+
+/**
+ * Brings rows already ingested from Google reviews in line with what the collector now does (the
+ * repair step of `replay`): a fix with a `title` gives the row for that place and address the
+ * Google listing's name, and one with `reject` marks it rejected as a listing that is not the place
+ * or is permanently closed. A row that is linked or hidden is left as it is and reported back (a
+ * steward takes a linked one down with the hide button); the place is never changed.
+ */
+export const repairListings = internalMutation({
+  args: { stewardPersonId: v.id("person"), fixes: v.array(listingFix) },
+  returns: v.object({
+    retitled: v.number(),
+    rejected: v.number(),
+    missing: v.number(),
+    notChanged: v.array(v.object({ canonicalUrl: v.string(), status: v.string() })),
+  }),
+  handler: async (ctx, { stewardPersonId, fixes }) => {
+    const steward = await finderSteward(ctx, stewardPersonId);
+    if (fixes.length > INGEST_MAX)
+      throw appError("invalid_input", `send at most ${INGEST_MAX} fixes at a time`);
+    const totals = { retitled: 0, rejected: 0, missing: 0 };
+    const notChanged: { canonicalUrl: string; status: string }[] = [];
+    for (const fix of fixes) {
+      const row = await ctx.db
+        .query("mentionCandidate")
+        .withIndex("by_placeId_and_canonicalUrl", (q) =>
+          q.eq("placeId", fix.placeId).eq("canonicalUrl", fix.canonicalUrl),
+        )
+        .first();
+      if (row === null) {
+        totals.missing++;
+        continue;
+      }
+      if (fix.reject !== undefined) {
+        if (row.status === "attached" || row.status === "hidden") {
+          notChanged.push({ canonicalUrl: row.canonicalUrl, status: row.status });
+        } else if (row.status !== "rejected" || row.reason !== fix.reject) {
+          await ctx.db.patch("mentionCandidate", row._id, {
+            status: "rejected",
+            reason: fix.reject,
+            attachError: undefined,
+            checkStartedAt: undefined,
+          });
+          totals.rejected++;
+        }
+        continue;
+      }
+      const title = cap(fix.title, 300);
+      if (title !== undefined && row.title !== title) {
+        await ctx.db.patch("mentionCandidate", row._id, { title });
+        totals.retitled++;
+      }
+    }
+    if (totals.retitled + totals.rejected > 0)
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: steward._id,
+        action: "story_finder.listings_repaired",
+        targetType: "mentionCandidate",
+        diff: { ...totals, notChanged: notChanged.length },
+      });
+    return { ...totals, notChanged };
+  },
+});
+
+/**
+ * Sends posts back to be checked again (`check --requeue`), a page of one status at a time: every
+ * `accepted` post, and every post rejected as place_not_named whose check did not say it is about
+ * another place. Their old verdict is cleared. A linked or hidden post is never touched.
+ */
+export const requeue = internalMutation({
+  args: {
+    stewardPersonId: v.id("person"),
+    status: v.union(v.literal("accepted"), v.literal("rejected")),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: v.object({ requeued: v.number(), isDone: v.boolean(), continueCursor: v.string() }),
+  handler: async (ctx, { stewardPersonId, status, paginationOpts }) => {
+    const steward = await finderSteward(ctx, stewardPersonId);
+    const result = await ctx.db
+      .query("mentionCandidate")
+      .withIndex("by_status_and_checkedAt", (q) => q.eq("status", status))
+      .paginate(paginationOpts);
+    let requeued = 0;
+    for (const row of result.page) {
+      const wanted =
+        status === "accepted" ||
+        (row.reason === "place_not_named" && row.verdict?.aboutThisPlace !== "no");
+      if (!wanted) continue;
+      await ctx.db.patch("mentionCandidate", row._id, {
+        status: "pending",
+        reason: undefined,
+        verdict: undefined,
+        attachError: undefined,
+        checkStartedAt: undefined,
+        checkAttempts: undefined,
+        lastCheckError: undefined,
+        checkedAt: undefined,
+        modelSetting: undefined,
+        latencyMs: undefined,
+      });
+      requeued++;
+    }
+    if (requeued > 0)
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: steward._id,
+        action: "story_finder.requeued",
+        targetType: "mentionCandidate",
+        diff: { status, requeued },
+      });
+    return { requeued, isDone: result.isDone, continueCursor: result.continueCursor };
   },
 });
 

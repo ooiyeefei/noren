@@ -6,7 +6,13 @@ import {
 import type { ConvexRunner } from "../convex-run";
 import { Budget, runCostUsd, type ApifyClient, type ApifyRun } from "./apify";
 import { COLLECTORS, web, webCandidate, type WebHit } from "./collectors";
-import type { FinderPlace, PlannedRun } from "./types";
+import {
+  newListingTally,
+  summariseListings,
+  type FinderPlace,
+  type ListingTally,
+  type PlannedRun,
+} from "./types";
 import type { PageReader } from "./web-page";
 
 export type CollectFlags = {
@@ -218,6 +224,59 @@ async function ingest(
   return totals;
 }
 
+type ListingFix = {
+  placeId: string;
+  canonicalUrl: string;
+  title?: string;
+  reject?: "wrong_listing" | "closed_listing";
+};
+/** Fixes per storyFinder:repairListings call (each is a place id, an address and a name). */
+const REPAIR_BATCH = 100;
+
+/**
+ * Brings the rows already ingested from saved Google results in line with the collector's current
+ * rules (replay only sends new rows): each kept review's row gets the listing's name as its title,
+ * and each review of a listing that is not the place, or is permanently closed, is rejected. The
+ * place itself is not changed. A row that is already linked or hidden is reported, not touched.
+ */
+async function repairListings(
+  convex: ConvexRunner,
+  steward: string,
+  candidates: readonly MentionCandidate[],
+  listings: ListingTally,
+) {
+  const fixes = new Map<string, ListingFix>();
+  const key = (placeId: string, canonicalUrl: string) => `${placeId} ${canonicalUrl}`;
+  for (const candidate of candidates)
+    if (candidate.platform === "google_reviews" && candidate.title)
+      fixes.set(key(candidate.placeId, candidate.canonicalUrl), {
+        placeId: candidate.placeId,
+        canonicalUrl: candidate.canonicalUrl,
+        title: candidate.title,
+      });
+  for (const left of listings.excluded)
+    fixes.set(key(left.placeId, left.canonicalUrl), {
+      placeId: left.placeId,
+      canonicalUrl: left.canonicalUrl,
+      reject: left.problem,
+    });
+  if (!fixes.size) return null;
+  const totals = { retitled: 0, rejected: 0, missing: 0 };
+  const notChanged: { canonicalUrl: string; status: string }[] = [];
+  const all = [...fixes.values()];
+  for (let i = 0; i < all.length; i += REPAIR_BATCH) {
+    const result = (await convex("storyFinder:repairListings", {
+      stewardPersonId: steward,
+      fixes: all.slice(i, i + REPAIR_BATCH),
+    })) as typeof totals & { notChanged: typeof notChanged };
+    totals.retitled += result.retitled;
+    totals.rejected += result.rejected;
+    totals.missing += result.missing;
+    notChanged.push(...result.notChanged);
+  }
+  return { ...totals, notChanged };
+}
+
 /** Reads every web result page once (sequentially, politely) and keeps what it said. */
 async function readPages(
   hits: readonly WebHit[],
@@ -248,8 +307,12 @@ async function readPages(
 }
 
 /** The candidates a saved run yields; works the same on a fresh run and a replayed one. */
-export function candidatesFrom(saved: SavedRun): MentionCandidate[] {
-  const context = { runId: saved.apifyRun.id, collectionId: saved.collectionId };
+export function candidatesFrom(saved: SavedRun, listings?: ListingTally): MentionCandidate[] {
+  const context = {
+    runId: saved.apifyRun.id,
+    collectionId: saved.collectionId,
+    ...(listings ? { listings } : {}),
+  };
   const collector = COLLECTORS[saved.run.platform];
   if (saved.run.platform !== "web") return collector.normalise(saved.items, saved.run, context);
   return (saved.pages ?? []).flatMap((page) => {
@@ -309,6 +372,8 @@ export async function collect(flags: CollectFlags, deps: RunnerDeps) {
   };
   // What this run has searched, saved after each actor run so --skip-searched can read it later.
   const searchedNow = new Map<string, Set<MentionPlatform>>();
+  // The Google listings left out (not the place, or permanently closed), over the whole run.
+  const listings = newListingTally();
   let stoppedByBudget = false;
   for (const run of runs) {
     if (!budget.allows(run)) {
@@ -348,7 +413,7 @@ export async function collect(flags: CollectFlags, deps: RunnerDeps) {
     // Recorded once the results are saved, before ingesting: a failed ingest can be replayed.
     for (const query of run.queries) addSearched(searchedNow, query.slug, run.platform);
     await deps.save("places.json", placesFile(flags.collectionId, searchedNow));
-    const candidates = candidatesFrom(saved);
+    const candidates = candidatesFrom(saved, listings);
     await deps.save(`candidates/${run.platform}-${finished.id}.json`, candidates);
     const result = await ingest(deps.convex, flags.steward, candidates);
     totals.candidates += candidates.length;
@@ -369,8 +434,17 @@ export async function collect(flags: CollectFlags, deps: RunnerDeps) {
       saved: file,
     });
   }
-  const summary = { ...plan, ...totals, spentUsd: money(budget.spentUsd), stoppedByBudget };
+  const summary = {
+    ...plan,
+    ...totals,
+    wrongListing: listings.wrongListing,
+    closedListing: listings.closedListing,
+    spentUsd: money(budget.spentUsd),
+    stoppedByBudget,
+  };
   deps.log({ done: summary });
+  // Last, so it is the last thing on the screen: a steward reviews these places by hand.
+  if (listings.listings.length) deps.log({ googleListingsLeftOut: summariseListings(listings) });
   return summary;
 }
 
@@ -439,6 +513,7 @@ export async function replay(
   });
   const bySlug = new Map(places.map((place) => [place.slug, place.placeId]));
   const all: MentionCandidate[] = [];
+  const listings = newListingTally();
   let unmatched = 0;
   for (const saved of chosen) {
     const queries = saved.run.queries.flatMap((q) => {
@@ -446,16 +521,21 @@ export async function replay(
       if (placeId === undefined) unmatched++;
       return placeId === undefined ? [] : [{ ...q, placeId }];
     });
-    all.push(...candidatesFrom({ ...saved, run: { ...saved.run, queries } }));
+    all.push(...candidatesFrom({ ...saved, run: { ...saved.run, queries } }, listings));
   }
   const result = await ingest(deps.convex, flags.steward, all);
+  const repaired = await repairListings(deps.convex, flags.steward, all, listings);
   const summary = {
     files: chosen.length,
     filesOtherPlatforms: savedRuns.length - chosen.length,
     candidates: all.length,
     unmatchedSearches: unmatched,
     ...result,
+    wrongListing: listings.wrongListing,
+    closedListing: listings.closedListing,
+    ...(repaired ? { repaired } : {}),
   };
   deps.log({ replayed: summary });
+  if (listings.listings.length) deps.log({ googleListingsLeftOut: summariseListings(listings) });
   return summary;
 }
