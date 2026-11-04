@@ -75,9 +75,10 @@ const inheritsMockFlag = [
 ];
 const notPersonCreated = [
   "seedOsmCandidate",
-  // Public posts the story finder collected for real places only, and their counts.
+  // Public posts the story finder collected for real places only, their counts, and shown quotes.
   "mentionCandidate",
   "mentionCount",
+  "shownQuote",
   "openTextSnippet",
   "phraseCard",
   "takedownRequest",
@@ -101,12 +102,18 @@ it("every table is classified for the mock flag", () => {
   );
 
   for (const [tableName, table] of Object.entries(schema.tables)) {
-    const fields: Record<string, GenericValidator> = table.validator.fields;
-    if (hasMockFlag.includes(tableName)) {
-      expect(fields.isMock?.kind, `${tableName}.isMock must be a boolean`).toBe("boolean");
-      expect(fields.isMock?.isOptional, `${tableName}.isMock must be required`).toBe("required");
-    } else {
-      expect(Object.hasOwn(fields, "isMock"), `${tableName} must not have isMock`).toBe(false);
+    // A table whose documents take one of several shapes is checked shape by shape.
+    const validator: GenericValidator = table.validator;
+    const shapes: GenericValidator[] = validator.kind === "union" ? validator.members : [validator];
+    for (const shape of shapes) {
+      expect(shape.kind, `${tableName} documents must be objects`).toBe("object");
+      const fields: Record<string, GenericValidator> = shape.kind === "object" ? shape.fields : {};
+      if (hasMockFlag.includes(tableName)) {
+        expect(fields.isMock?.kind, `${tableName}.isMock must be a boolean`).toBe("boolean");
+        expect(fields.isMock?.isOptional, `${tableName}.isMock must be required`).toBe("required");
+      } else {
+        expect(Object.hasOwn(fields, "isMock"), `${tableName} must not have isMock`).toBe(false);
+      }
     }
   }
 });

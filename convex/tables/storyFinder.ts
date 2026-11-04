@@ -53,7 +53,10 @@ export const storyFinderTables = {
     runId: v.string(),
     /** One run of the collect script; at most a few posts per author are attached from one. */
     collectionId: v.string(),
-    /** The platform and the author's address, handle or name, normalised (lib/story-finder). */
+    /**
+     * Who wrote it, from identifiers the platform vouches for: a web page's registrable host, or a
+     * profile address or handle; never a display name (authorKey in lib/story-finder/mention.ts).
+     */
     authorKey: v.string(),
     /** The steward who ran the finder; an attached post is linked in their name. */
     collectedBy: v.id("person"),
@@ -70,9 +73,6 @@ export const storyFinderTables = {
     modelSetting: v.optional(v.string()),
     latencyMs: v.optional(v.number()),
     verdict: v.optional(mentionVerdictValidator),
-    /** The start and end of the accepted quote's fingerprint, to find copies of it. */
-    quoteHead: v.optional(v.string()),
-    quoteTail: v.optional(v.string()),
     sourceId: v.optional(v.id("source")),
     attachedAt: v.optional(v.number()),
     hiddenAt: v.optional(v.number()),
@@ -83,8 +83,6 @@ export const storyFinderTables = {
     .index("by_status_and_checkedAt", ["status", "checkedAt"])
     .index("by_status_and_attachedAt", ["status", "attachedAt"])
     .index("by_collectionId_and_authorKey_and_status", ["collectionId", "authorKey", "status"])
-    .index("by_quoteHead", ["quoteHead"])
-    .index("by_quoteTail", ["quoteTail"])
     .index("by_sourceId", ["sourceId"]),
 
   /** How many candidates there are per status and platform, kept by a trigger (lib/rules/storyFinder). */
@@ -93,6 +91,24 @@ export const storyFinderTables = {
     platform: mentionPlatformValidator,
     count: v.number(),
   }).index("by_status_and_platform", ["status", "platform"]),
+
+  /**
+   * The quote of every found post that is shown or was hidden, kept small so the copy check can read
+   * all of a region's at once (copiesShownQuote in convex/storyFinder.ts). A trigger on
+   * mentionCandidate writes it (lib/rules/storyFinder.ts); a hidden post's quote stays, so hiding a
+   * post does not let a copy of it in.
+   */
+  shownQuote: defineTable({
+    regionId: v.string(),
+    candidateId: v.id("mentionCandidate"),
+    status: v.union(v.literal("attached"), v.literal("hidden")),
+    /** The quote reduced to its letters and digits (quoteFingerprint). */
+    fingerprint: v.string(),
+    /** How many distinct character trigrams the fingerprint has (quoteGrams). */
+    grams: v.number(),
+  })
+    .index("by_regionId_and_status", ["regionId", "status"])
+    .index("by_candidateId", ["candidateId"]),
 
   /** A machine translation of a found post's quote, made by the translation job (labelled machine). */
   sourceExcerptTranslation: defineTable({

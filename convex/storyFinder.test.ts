@@ -2,10 +2,11 @@
 import { MockLanguageModelV4 } from "ai/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as languageModels from "../src/lib/ai/claim-extractor";
-import { textWeight } from "../src/lib/story-finder/mention";
+import { quoteFingerprint, quoteGrams, textWeight } from "../src/lib/story-finder/mention";
 import { addPerson, addPlace, addSource, errorCode, newBackend } from "../tests/convex/fixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { MAX_SHOWN_QUOTES } from "./storyFinder";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -135,6 +136,27 @@ async function world() {
     place,
     audits,
     record,
+  };
+}
+
+/** A bare candidate row, only for seeding shown quotes. */
+function stub(w: Awaited<ReturnType<typeof world>>, slug: string) {
+  return {
+    placeId: w.placeId,
+    regionId: "nagasaki",
+    platform: "web" as const,
+    url: `https://seed.example.com/${slug}`,
+    canonicalUrl: `https://seed.example.com/${slug}`,
+    text: "seed",
+    searchedFor: "",
+    query: "",
+    actorId: "",
+    runId: "",
+    collectionId: "seed",
+    authorKey: `web:seed-${slug}`,
+    collectedBy: w.steward,
+    status: "rejected" as const,
+    reason: "unrelated" as const,
   };
 }
 
@@ -623,6 +645,125 @@ describe("checks that do not depend on the model", () => {
     expect(await w.record(google!._id, {})).toMatchObject({ status: "attached" });
     expect(await w.record(instagram!._id, {})).toEqual({ status: "rejected" });
     expect((await w.rows())[1]).toMatchObject({ reason: "duplicate_quote" });
+  });
+
+  it("an edited copy of a quote shown and then hidden is still refused", async () => {
+    const w = await world();
+    const original =
+      "Test Shop roasts its beans by hand every morning before the harbour ferries leave.";
+    // A word changed, other punctuation: posted again by another account.
+    const edited =
+      "Test Shop roasts its beans by hand each morning, before the harbour ferries leave!";
+    await w.ingest([
+      w.candidate(posts.reddit, { text: `${MARKER} ${original}` }),
+      w.candidate(
+        { platform: "reddit", url: "https://www.reddit.com/r/mocktravel/comments/mock03/again/" },
+        { text: `${MARKER} ${edited}`, authorHandle: "u/other", authorUrl: undefined },
+      ),
+    ]);
+    const [first, copy] = await w.rows();
+    expect(await w.record(first!._id, { evidence: "Test Shop", quote: original })).toMatchObject({
+      status: "attached",
+    });
+    await w.b.as("steward").mutation(api.storyFinder.hide, { candidateId: first!._id });
+    expect(await w.b.t.run((ctx) => ctx.db.query("shownQuote").collect())).toEqual([
+      expect.objectContaining({ candidateId: first!._id, status: "hidden" }),
+    ]);
+    expect(await w.record(copy!._id, { evidence: "Test Shop", quote: edited })).toEqual({
+      status: "rejected",
+    });
+    expect((await w.rows())[1]).toMatchObject({ reason: "duplicate_quote" });
+  });
+
+  it("compares with every shown quote in the region, not only those sharing a start or end", async () => {
+    const w = await world();
+    const target = "Test Shop keeps the harbour pilots' old coffee tins on a shelf above the till.";
+    const copied =
+      "At Test Shop, keeps the harbour pilots' old coffee tins on a shelf above its till!";
+    expect(quoteFingerprint(copied).slice(0, 16)).not.toBe(quoteFingerprint(target).slice(0, 16));
+    expect(quoteFingerprint(copied).slice(-16)).not.toBe(quoteFingerprint(target).slice(-16));
+    // Thirty other quotes shown in the region, the copied one stored last.
+    await w.b.t.run(async (ctx) => {
+      for (let i = 0; i < 30; i++) {
+        const fingerprint = quoteFingerprint(`Test Shop story number ${i}: ${"xyz".repeat(i)}`);
+        await ctx.db.insert("shownQuote", {
+          regionId: "nagasaki",
+          candidateId: await ctx.db.insert("mentionCandidate", stub(w, `seed${i}`)),
+          status: "attached",
+          fingerprint,
+          grams: quoteGrams(fingerprint).size,
+        });
+      }
+      // Edited at both ends, so it shares neither its first nor its last words with the target.
+      const fingerprint = quoteFingerprint(copied);
+      await ctx.db.insert("shownQuote", {
+        regionId: "nagasaki",
+        candidateId: await ctx.db.insert("mentionCandidate", stub(w, "seed-copy")),
+        status: "hidden",
+        fingerprint,
+        grams: quoteGrams(fingerprint).size,
+      });
+    });
+    await w.ingest([w.candidate(posts.reddit, { text: `${MARKER} ${target}` })]);
+    const row = (await w.rows()).find((candidate) => candidate.status === "pending")!;
+    expect(await w.record(row._id, { evidence: "Test Shop", quote: target })).toEqual({
+      status: "rejected",
+    });
+  });
+
+  it("holds a post rather than guess when the region has more shown quotes than it can read", async () => {
+    const w = await world();
+    await w.b.t.run(async (ctx) => {
+      const candidateId = await ctx.db.insert("mentionCandidate", stub(w, "seed-many"));
+      for (let i = 0; i <= MAX_SHOWN_QUOTES; i++)
+        await ctx.db.insert("shownQuote", {
+          regionId: "nagasaki",
+          candidateId,
+          status: i % 2 ? "attached" : "hidden",
+          fingerprint: `q${i}`,
+          grams: 1,
+        });
+    });
+    await w.ingest([w.candidate(posts.reddit, { text: `${MARKER} ${EN_QUOTE}` })]);
+    const row = (await w.rows()).find((candidate) => candidate.status === "pending")!;
+    expect(await w.record(row._id, { evidence: "Test Shop", quote: EN_QUOTE })).toEqual({
+      status: "accepted",
+    });
+    expect((await w.rows()).find((c) => c._id === row._id)).toMatchObject({
+      status: "accepted",
+      attachError: "copy_check_full",
+    });
+  });
+
+  it("counts authors by what the platform vouches for, never by display name", async () => {
+    const w = await world();
+    const quotes = [
+      "Test Shop roasts its beans by hand every morning before the harbour ferries leave.",
+      "At Test Shop the owner keeps her grandfather's tin coffee scoop on the counter.",
+      "Test Shop serves a cinnamon toast that regulars order with the dark roast.",
+      "Upstairs at Test Shop there is a small library of old Nagasaki travel guides.",
+    ];
+    // Four blog pages on subdomains of one site, each claiming a different author name.
+    await w.ingest(
+      quotes.map((quote, i) =>
+        w.candidate(
+          { platform: "reddit", url: `https://mock${i}.example-blog.jp/entry/${i}` },
+          {
+            platform: "web",
+            text: `${MARKER} ${quote}`,
+            authorName: `Mock Writer ${i}`,
+            authorHandle: undefined,
+            authorUrl: undefined,
+          },
+        ),
+      ),
+    );
+    const rows = await w.rows();
+    expect(new Set(rows.map((row) => row.authorKey))).toEqual(new Set(["web:example-blog.jp"]));
+    const statuses = [];
+    for (const [i, row] of rows.entries())
+      statuses.push((await w.record(row._id, { evidence: "Test Shop", quote: quotes[i] })).status);
+    expect(statuses).toEqual(["attached", "attached", "attached", "accepted"]);
   });
 
   it("shows at most three posts by one author in one run; the rest wait", async () => {

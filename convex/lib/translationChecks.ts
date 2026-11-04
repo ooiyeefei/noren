@@ -32,7 +32,28 @@ export async function consentCoversCheck(ctx: QueryCtx, claim: Doc<"claim">): Pr
   );
 }
 
-export async function checkFor(ctx: QueryCtx, translationId: Id<"claimTranslation">) {
+/**
+ * A found post's quote is a stranger's public words, not an owner's: no consent text covers it and
+ * none is needed, so its machine translation is checked whenever the check is on, for as long as
+ * the quote is shown on a live found-post card. This is a separate branch from consentCoversCheck,
+ * which still decides alone for every interview statement.
+ */
+export function excerptIsCheckable(
+  source: Doc<"source"> | null,
+): source is Doc<"source"> & { excerpt: string; excerptLang: string } {
+  return (
+    source !== null &&
+    source.origin === "story_finder" &&
+    source.status === "live" &&
+    !!source.excerpt &&
+    !!source.excerptLang
+  );
+}
+
+export async function checkFor(
+  ctx: QueryCtx,
+  translationId: Id<"claimTranslation"> | Id<"sourceExcerptTranslation">,
+) {
   return await ctx.db
     .query("translationCheck")
     .withIndex("by_translationId", (q) => q.eq("translationId", translationId))
@@ -46,7 +67,16 @@ export async function isHeld(ctx: QueryCtx, translation: Doc<"claimTranslation">
   return check?.status === "held" && check.text === translation.text;
 }
 
-export async function dropCheck(ctx: MutationCtx, translationId: Id<"claimTranslation">) {
+/** The same rule for a found post's quote: a held translation is left off; the quote is shown. */
+export async function isExcerptHeld(ctx: QueryCtx, translation: Doc<"sourceExcerptTranslation">) {
+  const check = await checkFor(ctx, translation._id);
+  return check?.status === "held" && check.text === translation.text;
+}
+
+export async function dropCheck(
+  ctx: MutationCtx,
+  translationId: Id<"claimTranslation"> | Id<"sourceExcerptTranslation">,
+) {
   const check = await checkFor(ctx, translationId);
   if (check !== null) await ctx.db.delete("translationCheck", check._id);
 }
@@ -98,6 +128,37 @@ export async function queueCheck(
     modelSetting: setting,
     attempts: 0,
     retranslated: options.retranslated ?? false,
+    added: [],
+    missing: [],
+    nextAttemptAt: Date.now(),
+  });
+  await scheduleCheckRun(ctx, 0);
+}
+
+/**
+ * Starts a fresh check of a found post's quote's machine translation when the check is on, replacing
+ * any earlier check of it. No consent applies (excerptIsCheckable); the check joins the same queue,
+ * run and endpoint wake as statements' checks.
+ */
+export async function queueExcerptCheck(
+  ctx: MutationCtx,
+  translation: Doc<"sourceExcerptTranslation">,
+) {
+  await dropCheck(ctx, translation._id);
+  const setting = checkSetting();
+  if (setting === undefined) return;
+  const source = await ctx.db.get("source", translation.sourceId);
+  if (!excerptIsCheckable(source) || translation.sourceText !== source.excerpt) return;
+  await ctx.db.insert("translationCheck", {
+    subject: "excerpt",
+    translationId: translation._id,
+    sourceId: source._id,
+    lang: translation.lang,
+    text: translation.text,
+    status: "pending",
+    modelSetting: setting,
+    attempts: 0,
+    retranslated: false,
     added: [],
     missing: [],
     nextAttemptAt: Date.now(),

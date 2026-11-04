@@ -7,6 +7,7 @@ import { LatestStories } from "@/components/public/latest-stories";
 import { toEmbedSource } from "@/components/public/mapping";
 import { StoryFinderView, type StoryFinderProps } from "@/components/steward/story-finder-view";
 import { format } from "@/lib/i18n";
+import { badgeMessages } from "@/lib/i18n/messages/badges";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { publicMessages } from "@/lib/i18n/messages/public";
 import { storyFinderMessages } from "@/lib/i18n/messages/story-finder";
@@ -56,6 +57,15 @@ describe("a found post on the place page", () => {
       expect(html.includes("テスト用の架空の訳です。")).toBe(locale === "ja");
     },
   );
+
+  it("with its translation held back, the card shows the quote alone, unlabelled", () => {
+    const html = render({ ...reddit, excerptTranslations: [] }, "ja");
+    expect(html).toContain(`<blockquote lang="en"`);
+    expect(html).toContain(encoded(`“${QUOTE}”`));
+    expect(html).not.toContain("テスト用の架空の訳です。");
+    expect(html).not.toContain(encoded(badgeMessages.ja.machineTranslation));
+    expect(render(reddit, "ja")).toContain(encoded(badgeMessages.ja.machineTranslation));
+  });
 
   it("Japanese quotes use corner brackets", () => {
     expect(quoted("テストです。", "ja")).toBe("「テストです。」");
