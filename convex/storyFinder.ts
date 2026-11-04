@@ -46,8 +46,11 @@ const LEASE_MS = 12 * 60 * 1000;
 const MAX_ATTEMPTS = 3;
 /** The most candidates one claim takes (storyFinderActions.checkBatch asks for a dozen). */
 const MAX_CLAIM = 24;
-/** At most this many found posts are linked to one place, so they never crowd out members' own. */
-const MAX_FOUND_PER_PLACE = 10;
+/**
+ * At most this many found posts are linked to one place, so they never crowd out members' own. The
+ * story agent reads only linked posts, so this is also how much of a place it gets to read.
+ */
+const MAX_FOUND_PER_PLACE = 20;
 /** At most this many posts by one author are attached from one collection, so no one can flood it. */
 const AUTHOR_LIMIT = 3;
 const INGEST_MAX = 100;
@@ -765,6 +768,22 @@ async function attachAccepted(ctx: MutationCtx, steward: Doc<"person">, limit: n
   await enqueueExcerptTranslations(ctx, places);
   return { attached, considered };
 }
+
+/** Lets a batch try again the posts it passed over because their place was full, after the cap rises. */
+export const retryPlaceFull = internalMutation({
+  args: { limit: v.number() },
+  returns: v.object({ cleared: v.number() }),
+  handler: async (ctx, { limit }) => {
+    const rows = await ctx.db
+      .query("mentionCandidate")
+      .withIndex("by_status_and_attachedAt", (q) => q.eq("status", "accepted"))
+      .take(Math.max(0, Math.min(1000, Math.floor(limit))));
+    const full = rows.filter(({ attachError }) => attachError === "place_full");
+    for (const { _id } of full)
+      await ctx.db.patch("mentionCandidate", _id, { attachError: undefined });
+    return { cleared: full.length };
+  },
+});
 
 /** Links candidates the check accepted while it ran without linking (`--no-attach`). */
 export const attachAcceptedBatch = internalMutation({

@@ -1194,6 +1194,16 @@ describe("attach order and the per-place cap", () => {
     "テスト店の椅子は、先代が港の船から譲り受けたものです。",
     "テスト店のお茶は、冬だけ急須で出てきます。",
     "テスト店の看板は、毎年春に塗り直されます。",
+    "テスト店の暖簾は、雨が降ると奥へしまわれます。",
+    "テスト店の窓口では、古い切手も買い取ってくれます。",
+    "テスト店の棚には、常連が置いていった本が並びます。",
+    "テスト店の水は、裏の井戸から汲んでいるそうです。",
+    "テスト店の時計は、わざと五分進めてあります。",
+    "テスト店の猫は、夕方になると店先に座ります。",
+    "テスト店の箸は、向かいの職人が作ったものです。",
+    "テスト店の皿は、先代の頃から同じ窯のものです。",
+    "テスト店のラジオは、いつも民謡を流しています。",
+    "テスト店の入口は、午後だけ裏通りに変わります。",
   ];
   const kinds = [
     "story",
@@ -1208,11 +1218,21 @@ describe("attach order and the per-place cap", () => {
     "tip",
     "tip",
     "tip",
+    "tip",
+    "tip",
+    "tip",
+    "tip",
+    "tip",
+    "tip",
+    "tip",
+    "tip",
+    "tip",
+    "tip",
   ] as const;
   // Posted in this order, the first being the oldest.
   const day = (n: number) => Date.UTC(2026, 9, n + 1);
 
-  it("links stories before tips and the newest first within each kind, up to ten", async () => {
+  it("links stories before tips and the newest first within each kind, up to twenty", async () => {
     const w = await world();
     await w.ingest(
       quotes.map((quote, i) =>
@@ -1238,12 +1258,14 @@ describe("attach order and the per-place cap", () => {
         stewardPersonId: w.steward,
         limit: 100,
       }),
-    ).toEqual({ attached: 10, considered: 12 });
+    ).toEqual({ attached: 20, considered: 22 });
     const status = new Map((await w.rows()).map((row) => [row.verdict?.quote, row.status]));
-    // Three stories (0, 2, 6) first, then the seven newest tips; tips 3 and 1 wait.
-    expect([0, 2, 6, 11, 10, 9, 8, 7, 5, 4].map((i) => status.get(quotes[i]))).toEqual(
-      Array(10).fill("attached"),
-    );
+    // Three stories (0, 2, 6) first, then the seventeen newest tips; tips 3 and 1 wait.
+    expect(
+      [0, 2, 6, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 5, 4].map((i) =>
+        status.get(quotes[i]),
+      ),
+    ).toEqual(Array(20).fill("attached"));
     expect([1, 3].map((i) => status.get(quotes[i]))).toEqual(["accepted", "accepted"]);
   });
 
@@ -1533,6 +1555,28 @@ describe("found Instagram and Facebook posts", () => {
     const [row] = await w.rows();
     await w.record(row!._id, {});
     expect(await w.b.t.query(api.sources.listForPlace, { placeId: w.placeId })).toHaveLength(1);
+  });
+});
+
+describe("retryPlaceFull", () => {
+  it("lets a batch try again only the posts passed over because their place was full", async () => {
+    const w = await world();
+    const add = (slug: string, attachError: string) =>
+      w.b.t.run((ctx) =>
+        ctx.db.insert("mentionCandidate", {
+          ...stub(w, slug),
+          status: "accepted",
+          attachError,
+        } as never),
+      );
+    const full = await add("full", "place_full");
+    const author = await add("author", "author_limit");
+    expect(await w.b.t.mutation(internal.storyFinder.retryPlaceFull, { limit: 100 })).toEqual({
+      cleared: 1,
+    });
+    const row = (id: typeof full) => w.b.t.run((ctx) => ctx.db.get("mentionCandidate", id));
+    expect((await row(full))?.attachError).toBeUndefined();
+    expect((await row(author))?.attachError).toBe("author_limit");
   });
 });
 
