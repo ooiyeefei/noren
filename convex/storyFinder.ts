@@ -1216,6 +1216,46 @@ async function hideCandidate(
   });
 }
 
+/**
+ * Takes one platform's found posts off the page, or puts them back. Every other way off the page
+ * erases a post's words, so this is the way for a decision that may change: the words stay in their
+ * private rows, and the candidate stays attached so nothing links the post twice while it's away. An
+ * erased post has no quote left, so it can't come back this way.
+ */
+export const setPlatformShown = internalMutation({
+  args: {
+    stewardPersonId: v.id("person"),
+    platform: v.string(),
+    shown: v.boolean(),
+    reason: v.string(),
+  },
+  returns: v.object({ changed: v.number() }),
+  handler: async (ctx, { stewardPersonId, platform, shown, reason }) => {
+    const steward = await finderSteward(ctx, stewardPersonId);
+    const rows = await ctx.db
+      .query("source")
+      .withIndex("by_status_and_origin_and_sharedAt", (q) =>
+        q.eq("status", shown ? "hidden" : "live").eq("origin", "story_finder"),
+      )
+      .take(2000);
+    let changed = 0;
+    for (const source of rows) {
+      if (source.platform !== platform || source.excerpt === undefined) continue;
+      await ctx.db.patch("source", source._id, { status: shown ? "live" : "hidden" });
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: steward._id,
+        action: shown ? "source.found_shown" : "source.found_taken_off",
+        targetType: "source",
+        targetId: source._id,
+        diff: { platform, reason },
+      });
+      changed++;
+    }
+    return { changed };
+  },
+});
+
 /** One click on the steward's page. */
 export const hide = mutation({
   args: { candidateId: v.id("mentionCandidate") },

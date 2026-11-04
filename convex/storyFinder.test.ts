@@ -1330,6 +1330,63 @@ describe("repairFoundPosts", () => {
   });
 });
 
+describe("setPlatformShown", () => {
+  type World = Awaited<ReturnType<typeof world>>;
+  const found = async (w: World, platform: string) => {
+    const sourceId = await addSource(w.b, { placeId: w.placeId, addedBy: w.steward });
+    await w.b.run((ctx) =>
+      ctx.db.patch("source", sourceId, {
+        platform,
+        origin: "story_finder",
+        sharedAt: 1,
+        excerpt: QUOTE,
+        excerptLang: "ja",
+      }),
+    );
+    return sourceId;
+  };
+  const set = (w: World, platform: string, shown: boolean, stewardPersonId = w.steward) =>
+    w.b.t.mutation(internal.storyFinder.setPlatformShown, {
+      stewardPersonId,
+      platform,
+      shown,
+      reason: "test",
+    });
+  const row = (w: World, id: Id<"source">) => w.b.run((ctx) => ctx.db.get("source", id));
+
+  it("takes one platform off the page with its words kept, and puts them back", async () => {
+    const w = await world();
+    const instagram = await found(w, "instagram");
+    const google = await found(w, "google_maps");
+
+    expect(await set(w, "instagram", false)).toEqual({ changed: 1 });
+    expect(await row(w, instagram)).toMatchObject({ status: "hidden", excerpt: QUOTE });
+    expect((await row(w, google))?.status).toBe("live");
+
+    expect(await set(w, "instagram", true)).toEqual({ changed: 1 });
+    expect(await row(w, instagram)).toMatchObject({ status: "live", excerpt: QUOTE });
+  });
+
+  it("never brings back a post whose words were erased", async () => {
+    const w = await world();
+    const erased = await found(w, "instagram");
+    await w.b.run((ctx) =>
+      ctx.db.patch("source", erased, {
+        status: "hidden",
+        excerpt: undefined,
+        excerptLang: undefined,
+      }),
+    );
+    expect(await set(w, "instagram", true)).toEqual({ changed: 0 });
+    expect((await row(w, erased))?.status).toBe("hidden");
+  });
+
+  it("refuses a mock steward", async () => {
+    const w = await world();
+    expect(await errorCode(set(w, "instagram", false, w.mockSteward))).toBeTruthy();
+  });
+});
+
 describe("repairListings", () => {
   async function googleRows() {
     const w = await world();
