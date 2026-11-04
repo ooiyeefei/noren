@@ -4,6 +4,7 @@ import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createPageReader,
+  htmlScreenText,
   htmlText,
   isPublicAddress,
   MAX_REDIRECTS,
@@ -168,6 +169,24 @@ const METADATA = "169.254.169.254";
 const sentTo = (requests: { url: string; address: string }[], pattern: RegExp) =>
   requests.filter((request) => pattern.test(request.url) || pattern.test(request.address));
 
+describe("htmlScreenText", () => {
+  it("keeps footers, side bars and menus, drops scripts, styles and comments, and joins inline tags", () => {
+    const text = htmlScreenText(
+      `<head><title>題</title><style>p{}</style></head><body><nav>メニュー</nav><p>本文<b>プロ</b>モーション</p>` +
+        `<script>var a = "x < y";</script><!-- 隠し --><aside>横</aside><footer>下<br>端&amp;</footer></body>`,
+    );
+    expect(text).toBe("題\nメニュー\n本文プロモーション\n横\n下\n端&");
+  });
+
+  it("handles unclosed blocks and stray brackets in linear time", () => {
+    for (const unit of ["<script ", "<style ", "<!-- ", "<a", "<p <"]) {
+      const started = performance.now();
+      htmlScreenText(unit.repeat(250_000));
+      expect(performance.now() - started, unit).toBeLessThan(2_000);
+    }
+  });
+});
+
 describe("createPageReader: the ad screen sees the whole page", () => {
   const DISCLOSURE = "※この記事はプロモーションを含みます";
   const body = (before: string, after: string) =>
@@ -188,6 +207,47 @@ describe("createPageReader: the ad screen sees the whole page", () => {
     });
     const page = await net.read("https://blog.example.com/top", NAMES);
     expect(page).toMatchObject({ ok: true, adMarker: true });
+  });
+
+  const wrap = (inArticle: string, afterArticle: string) =>
+    `<html><head><title>Mock</title></head><body><nav>Home</nav><article><p>架空珈琲 試験堂に行きました。</p>${"<p>架空の旅行記の前置きです。</p>".repeat(900)}${inArticle}</article>${afterArticle}</body></html>`;
+
+  it("flags a disclosure in a footer or an aside, which the page text leaves out", async () => {
+    const net = fakeInternet({
+      "https://blog.example.com/footer": html(wrap("", `<footer><p>${DISCLOSURE}</p></footer>`)),
+      "https://blog.example.com/aside": html(wrap("", `<aside><p>${DISCLOSURE}</p></aside>`)),
+    });
+    for (const where of ["footer", "aside"]) {
+      const page = await net.read(`https://blog.example.com/${where}`, NAMES);
+      expect(page, where).toMatchObject({ ok: true, adMarker: true });
+      if (page.ok) expect(page.text, where).not.toContain("プロモーション");
+    }
+  });
+
+  it("flags a disclosure that inline tags split into pieces", async () => {
+    const net = fakeInternet({
+      "https://blog.example.com/inline": html(
+        wrap("<p>※この記事は<b>プロモーション</b>を<em>含み</em>ます</p>", ""),
+      ),
+    });
+    expect(await net.read("https://blog.example.com/inline", NAMES)).toMatchObject({
+      ok: true,
+      adMarker: true,
+    });
+  });
+
+  it("does not take a script, a style or a comment for a disclosure", async () => {
+    const net = fakeInternet({
+      "https://blog.example.com/hidden": html(
+        wrap(
+          `<script>var s = "${DISCLOSURE}";</script><style>/* ${DISCLOSURE} */</style><!-- ${DISCLOSURE} -->`,
+          "",
+        ),
+      ),
+    });
+    const page = await net.read("https://blog.example.com/hidden", NAMES);
+    expect(page.ok).toBe(true);
+    if (page.ok) expect(page).not.toHaveProperty("adMarker");
   });
 
   it("sets no flag on a page without a label", async () => {
