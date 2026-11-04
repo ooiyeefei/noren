@@ -930,6 +930,41 @@ describe("story-finder CLI", () => {
     });
   });
 
+  it("--places searches only the named places, and --limit defaults to all of them", async () => {
+    const scratch = join(fileURLToPath(new URL("../..", import.meta.url)), ".scratch");
+    mkdirSync(scratch, { recursive: true });
+    const cwd = mkdtempSync(join(scratch, "places-test-"));
+    try {
+      writeFileSync(join(cwd, "places.txt"), `# chosen by hand\n${places[1]!.slug}  # second\n`);
+      const logs: unknown[] = [];
+      const { convex } = fakeConvex();
+      const result = await runStoryFinder(
+        [
+          "collect",
+          "--steward",
+          STEWARD,
+          "--sources",
+          "web",
+          "--places",
+          "places.txt",
+          "--dry-run",
+        ],
+        {
+          cwd,
+          env: {},
+          now: () => 0,
+          loadEnvFile: vi.fn(),
+          convex,
+          log: (value) => logs.push(value),
+        },
+      );
+      expect(logs).toContainEqual(expect.objectContaining({ places: 1 }));
+      expect(result).toMatchObject({ byPlatform: { web: { searches: 1 } } });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("a dry run plans and prices with no call to Apify and no token", async () => {
     const network = vi.fn();
     vi.stubGlobal("fetch", network);
