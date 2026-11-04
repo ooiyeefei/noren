@@ -17,6 +17,22 @@ for (const locale of ["ja", "en"] as const) {
         operatorName={null}
       />,
     );
+  it(`the notice carries Overture's attribution for every Places provider (${locale})`, () => {
+    const html = notice();
+    expect(html).toContain(publicMessages[locale].overtureData);
+    expect(html).toContain('href="https://docs.overturemaps.org/attribution/"');
+    for (const provider of ["Meta", "Microsoft", "Uberall", "OpenTravel Alliance", "AllThePlaces"])
+      expect(html).toContain(`>${provider}</a>`);
+    // CDLA-Permissive-2.0, Apache-2.0 with the Foursquare notice, CC0.
+    expect(html).toContain('href="https://cdla.dev/permissive-2-0/"');
+    expect(html).toContain('href="https://www.apache.org/licenses/LICENSE-2.0"');
+    expect(html).toContain("Copyright 2024 Foursquare Labs, Inc. All rights reserved.");
+    expect(html).toContain(publicMessages[locale].overtureTransformed);
+    expect(html).toContain('href="https://opensource.foursquare.com/places-notice-txt/"');
+    expect(html).toContain('href="https://creativecommons.org/publicdomain/zero/1.0/"');
+    // The OSM credit stays.
+    expect(html).toContain('href="https://www.openstreetmap.org/copyright"');
+  });
   it(`the notice links to the form (${locale})`, () => {
     const html = notice();
     for (const name of noticePlatforms(config, locale)) expect(html).toContain(name);
