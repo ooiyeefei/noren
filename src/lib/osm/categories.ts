@@ -92,7 +92,7 @@ export const VISIT_CRAFT_TYPES: readonly string[] = [
 ];
 // A chain shop or restaurant is the same in every town, so it is an errand; a chain hotel still gives
 // a traveller a bed, and a museum or sight is never a chain.
-const CHAIN_IS_ERRAND = new Set<string>([
+export const CHAIN_IS_ERRAND: ReadonlySet<string> = new Set<string>([
   "shop",
   "restaurant",
   "cafe",
