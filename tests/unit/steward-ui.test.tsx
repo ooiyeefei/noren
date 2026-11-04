@@ -10,6 +10,7 @@ import { PeopleView } from "@/components/steward/people-view";
 import { OpenTextView, type OpenTextProps } from "@/components/steward/open-text-view";
 import { candidateMessages } from "@/lib/i18n/messages/candidates";
 import { takedownsMessages } from "@/lib/i18n/messages/takedowns";
+import { storyFinderMessages } from "@/lib/i18n/messages/story-finder";
 import { stewardMessages } from "@/lib/i18n/messages/steward";
 import { regionSchema } from "@/lib/region/schema";
 import type { Locale } from "@/lib/i18n";
@@ -507,6 +508,7 @@ it.each(["ja", "en"] as const)(
       ["/people", stewardMessages[locale].people],
       ["/candidates", candidateMessages[locale].title],
       ["/takedowns", takedownsMessages[locale].title],
+      ["/story-finder", storyFinderMessages[locale].title],
     ];
     for (const page of pages) {
       const nav = page.html.match(/<nav\b[^>]*>[\s\S]*?<\/nav>/)![0];

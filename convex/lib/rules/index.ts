@@ -6,6 +6,7 @@ import { registerInterviewRules } from "./interviews";
 import { registerMapCopyRules } from "./mapCopies";
 import { registerPageRules } from "./pages";
 import { registerPlaceRules } from "./places";
+import { registerStoryFinderRules } from "./storyFinder";
 
 /** Registers every rule in specs/001-noren-mvp/data-model.md that a validator cannot express. */
 export function registerRules(triggers: Triggers<DataModel>) {
@@ -14,5 +15,6 @@ export function registerRules(triggers: Triggers<DataModel>) {
   registerClaimRules(triggers);
   registerPageRules(triggers);
   registerCommunityRules(triggers);
+  registerStoryFinderRules(triggers);
   registerMapCopyRules(triggers);
 }

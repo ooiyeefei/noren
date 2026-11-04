@@ -23,6 +23,8 @@ const BODY_LIMIT = 1000;
 /** How many of the newest stories and shared posts the home page looks through, and shows. */
 const LATEST_SCAN = 40;
 const LATEST_LIMIT = 8;
+/** Found posts arrive in batches; at most this many show, so members' own stories stay in view. */
+const LATEST_FOUND_LIMIT = 4;
 
 const storyView = v.object({
   _id: v.id("story"),
@@ -109,11 +111,17 @@ const latestEntry = v.object({
       isPrimary: v.boolean(),
     }),
   ),
-  /** A written story, or the member's own line about a post they shared; never the post itself. */
+  /**
+   * A written story, or the member's own line about a post they shared; never the post itself, apart
+   * from the short verbatim quote of a post the story finder found.
+   */
   text: v.optional(v.string()),
   lang: v.optional(v.string()),
   platform: v.optional(v.string()),
+  /** The member who shared it, or for a found post its author as the platform shows them. */
   sharedBy: v.string(),
+  /** The story finder found it in a public post. */
+  found: v.optional(v.boolean()),
   addedAt: v.number(),
 });
 
@@ -162,23 +170,39 @@ export const latest = query({
         addedAt: story._creationTime,
       });
     }
+    // Members' posts and found posts are read apart, so a batch of found posts never pushes the
+    // members' out of the scan.
     const shared = await ctx.db
       .query("source")
-      .withIndex("by_status_and_sharedAt", (q) => q.eq("status", "live").gte("sharedAt", 0))
+      .withIndex("by_status_and_origin_and_sharedAt", (q) =>
+        q.eq("status", "live").eq("origin", undefined).gte("sharedAt", 0),
+      )
       .order("desc")
       .take(LATEST_SCAN);
-    for (const source of shared) {
+    const found = await ctx.db
+      .query("source")
+      .withIndex("by_status_and_origin_and_sharedAt", (q) =>
+        q.eq("status", "live").eq("origin", "story_finder").gte("sharedAt", 0),
+      )
+      .order("desc")
+      .take(LATEST_SCAN);
+    let foundShown = 0;
+    for (const source of [...shared, ...found]) {
+      const isFound = source.origin === "story_finder";
+      if (isFound && foundShown >= LATEST_FOUND_LIMIT) break;
       const place = await readable(source.placeId);
       if (place === null || !isSharedPublicly(place, source)) continue;
+      if (isFound) foundShown++;
       entries.push({
         kind: "post",
         id: source._id,
         placeSlug: place.slug,
         placeNames: place.mapNames ?? (await readMapNames(ctx, place._id)),
-        text: source.creatorNote,
-        lang: source.noteLang,
+        text: isFound ? source.excerpt : source.creatorNote,
+        lang: isFound ? source.excerptLang : source.noteLang,
         platform: source.platform,
-        sharedBy: await nameOf(source.addedBy),
+        sharedBy: isFound ? (source.authorHandle ?? "") : await nameOf(source.addedBy),
+        ...(isFound ? { found: true } : {}),
         addedAt: source.sharedAt ?? source._creationTime,
       });
     }

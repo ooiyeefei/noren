@@ -7,6 +7,7 @@ const PLATFORMS: Record<string, string> = {
   tiktok: "TikTok",
   x: "X",
   google_maps: "Google Maps",
+  reddit: "Reddit",
 };
 
 /** The service a post is on, by name; a plain web page has none. */
