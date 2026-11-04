@@ -159,6 +159,32 @@ export const request = mutation({
 });
 
 /**
+ * Forgets a place's story, which puts the place back on the ready list to be written from nothing. A
+ * story keeps its row even when withdrawn, so without this a place never returns to that list.
+ */
+export const forgetStory = internalMutation({
+  args: { stewardPersonId: v.id("person"), placeId: v.id("place") },
+  returns: v.object({ forgotten: v.boolean() }),
+  handler: async (ctx, { stewardPersonId, placeId }) => {
+    const steward = await batchSteward(ctx, stewardPersonId);
+    const story = await ctx.db
+      .query("placeStory")
+      .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
+      .first();
+    if (story === null) return { forgotten: false };
+    await ctx.db.delete("placeStory", story._id);
+    await writeAudit(ctx, {
+      actorKind: "person",
+      actorPersonId: steward._id,
+      action: "story_agent.forgotten",
+      targetType: "place",
+      targetId: placeId,
+    });
+    return { forgotten: true };
+  },
+});
+
+/**
  * Starts the agent, spaced out, on the places that are ready or on exactly the places named (for a
  * batch from the command line). A named place must be on the map, and may already have a story, which
  * the run replaces.
