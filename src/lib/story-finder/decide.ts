@@ -8,6 +8,7 @@ import {
   MENTION_KINDS,
   namesPlace,
   normaliseWhitespace,
+  isBareFact,
   postHasAdMarker,
   type MentionKind,
   type RejectReason,
@@ -93,7 +94,8 @@ export function postContext(post: CheckedPost): string {
  * (one of `placeNames`, in any language or script) and carries no advert label, whether found in
  * the stored text or flagged by the collector on the whole page. Then the model's
  * rules: about this place, a story or a tip, no private person named. Last, the quote that would be
- * shown must fit and carry no address, email, phone number or handle.
+ * shown must fit, carry no address, email, phone number or handle, and be more than an address or
+ * opening hours.
  */
 export function decideMention(
   post: CheckedPost,
@@ -135,5 +137,6 @@ export function decideMention(
   const capped = capQuote(quote);
   if (capped === null) return reject("quote_too_long");
   if (contactIn(capped) !== null) return reject("quote_has_contact");
+  if (isBareFact(capped)) return reject("bare_fact");
   return { status: "accepted", verdict: { ...verdict, quote: capped }, quote: capped };
 }

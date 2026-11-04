@@ -53,6 +53,7 @@ export const REJECT_REASONS = [
   "quote_has_contact",
   "duplicate_quote",
   "quote_too_long",
+  "bare_fact",
   "check_failed",
   // Set by the repair replay on a row whose Google listing is not this place, or is permanently
   // closed (the collector leaves such reviews out, so new ones never get this far):
@@ -60,6 +61,28 @@ export const REJECT_REASONS = [
   "closed_listing",
 ] as const;
 export type RejectReason = (typeof REJECT_REASONS)[number];
+
+/** What a line of opening hours is made of, once its times are gone. */
+const HOURS_WORDS =
+  /営業時間|営業|定休日|定休|休業|年中無休|無休|ランチ|ディナー|モーニング|最終入店|入店|ラストオーダー|オーダーストップ|平日|祝前日|祝日|土日|[月火水木金土日]曜日?|[朝昼夜]|open|closed?|hours?|l\.?o\.?/giu;
+const HOUR_MARK = /\d{1,2}:\d{2}|\d{1,2}時半?|\d{1,2}分/gu;
+/** Japanese address: prefecture, city, then block numbers, and perhaps a building and its floor. */
+const BARE_ADDRESS =
+  /^(?:\d{3}-?\d{4})?(?:\p{L}{1,6}[都道府県])?\p{L}{1,10}[市区町村郡]\p{L}{0,12}\d[\d\-−ー‐丁目番地号の]*(?:\p{L}{0,15}\d+(?:F|階))?$/iu;
+
+/**
+ * Whether a quote only repeats what the map already holds: an address, or opening hours, which go
+ * stale besides. The model is told so too, but it took "長崎市…6-17" for a tip, so code decides.
+ * Labels and emoji don't count: "📍住所：…" is as bare as the address alone.
+ */
+export function isBareFact(quote: string): boolean {
+  const folded = quote.normalize("NFKC");
+  const hasHour = /\d{1,2}:\d{2}|\d{1,2}時/u.test(folded);
+  if (hasHour && !/[\p{L}\p{N}]/u.test(folded.replace(HOUR_MARK, "").replace(HOURS_WORDS, "")))
+    return true;
+  const line = folded.replace(/住所|所在地/gu, "").replace(/[^\p{L}\p{N}\-−ー‐]/gu, "");
+  return BARE_ADDRESS.test(line);
+}
 
 /** The longest quote shown on a card, in characters. */
 export const QUOTE_MAX = 280;

@@ -143,6 +143,42 @@ describe("collect", () => {
     expect(logs).toContainEqual(expect.objectContaining({ stopped: "budget", runsLeft: 1 }));
   });
 
+  it("searches once for branches that share a name", async () => {
+    const twin = { ...places[0]!, placeId: "mockplace9", slug: "fictional-place-9" };
+    const { convex } = fakeConvex([places[0]!, twin, places[1]!]);
+    const { apify } = fakeApify(0);
+    const logs: unknown[] = [];
+    await collect(flags({ platforms: ["reddit"] }), {
+      convex,
+      apify,
+      readPage: vi.fn(),
+      save: async (name) => name,
+      log: (value) => logs.push(value),
+    });
+    expect(logs).toContainEqual(expect.objectContaining({ places: 2 }));
+  });
+
+  it("a branch searched earlier still speaks for a later one of the same name", async () => {
+    const twin = { ...places[0]!, placeId: "mockplace9", slug: "fictional-place-9" };
+    const { convex } = fakeConvex([places[0]!, twin, places[1]!]);
+    const { apify } = fakeApify(0);
+    const logs: unknown[] = [];
+    await collect(
+      flags({
+        platforms: ["reddit"],
+        searched: new Map([[places[0]!.slug, new Set(["reddit" as const])]]),
+      }),
+      {
+        convex,
+        apify,
+        readPage: vi.fn(),
+        save: async (name) => name,
+        log: (value) => logs.push(value),
+      },
+    );
+    expect(logs).toContainEqual(expect.objectContaining({ places: 1 }));
+  });
+
   it("a cap larger than the whole budget starts nothing", async () => {
     const { convex } = fakeConvex();
     const { apify, started } = fakeApify(0);
@@ -641,6 +677,48 @@ describe("replay --sources google_reviews repairs the rows already ingested", ()
       { convex, log: () => {} },
     );
     expect(calls.some((call) => call.fn === "storyFinder:repairListings")).toBe(false);
+  });
+});
+
+describe("hide", () => {
+  it("needs a file of ids", () => {
+    expect(() => parseFlags(["hide", "--steward", STEWARD])).toThrow(/--ids/);
+  });
+
+  it("sends the file's ids in batches, leaving out comments and blank lines", async () => {
+    const scratch = fileURLToPath(new URL("../../.scratch/", import.meta.url));
+    mkdirSync(scratch, { recursive: true });
+    const cwd = mkdtempSync(join(scratch, "hide-test-"));
+    try {
+      const ids = Array.from({ length: 51 }, (_, i) => `mockcandidate${i}`);
+      writeFileSync(
+        join(cwd, "ids.txt"),
+        `# thin\n\n${ids.map((id) => `${id}  # a reason`).join("\n")}\n`,
+      );
+      const calls: { fn: string; args: { candidateIds: string[] } }[] = [];
+      const convex = vi.fn(async (fn: string, args: unknown) => {
+        const sent = args as { candidateIds: string[] };
+        calls.push({ fn, args: sent });
+        return { hidden: sent.candidateIds.length };
+      });
+      const logs: unknown[] = [];
+      await runStoryFinder(["hide", "--steward", STEWARD, "--ids", "ids.txt"], {
+        cwd,
+        env: {},
+        now: () => 0,
+        loadEnvFile: vi.fn(),
+        convex,
+        log: (value) => logs.push(value),
+      });
+      expect(calls.map((call) => [call.fn, call.args.candidateIds.length])).toEqual([
+        ["storyFinder:hideMany", 50],
+        ["storyFinder:hideMany", 1],
+      ]);
+      expect(calls.flatMap((call) => call.args.candidateIds)).toEqual(ids);
+      expect(logs).toContainEqual({ hidden: 51 });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });
 
