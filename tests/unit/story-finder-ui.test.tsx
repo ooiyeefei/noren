@@ -10,6 +10,7 @@ import { format } from "@/lib/i18n";
 import { badgeMessages } from "@/lib/i18n/messages/badges";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { publicMessages } from "@/lib/i18n/messages/public";
+import { stewardMessages } from "@/lib/i18n/messages/steward";
 import { storyFinderMessages } from "@/lib/i18n/messages/story-finder";
 
 // Made-up posts only.
@@ -221,9 +222,48 @@ const props = (locale: "ja" | "en"): StoryFinderProps => ({
   onCheck: () => {},
   onAttach: () => {},
   onHide: () => {},
+  held: [],
+  onRelease: () => {},
 });
 
 describe("the steward's story finder page", () => {
+  it.each(["ja", "en"] as const)(
+    "%s: a held quote shows why, with the choice to show it",
+    (locale) => {
+      const m = storyFinderMessages[locale];
+      const none = renderToStaticMarkup(<StoryFinderView {...props(locale)} />);
+      expect(none).not.toContain(encoded(m.heldTitle));
+      const html = renderToStaticMarkup(
+        <StoryFinderView
+          {...props(locale)}
+          held={[
+            {
+              id: "c1",
+              placeSlug: "test-shop",
+              placeName: "Test Shop",
+              url: "https://blog.example.com/mock-entry",
+              quote: QUOTE,
+              translation: "A made-up translation.",
+              added: ["A made-up addition."],
+              missing: ["A made-up omission."],
+            },
+          ]}
+        />,
+      );
+      for (const text of [
+        m.heldTitle,
+        m.heldIntro,
+        m.heldTranslation,
+        "A made-up translation.",
+        "A made-up addition.",
+        "A made-up omission.",
+        stewardMessages[locale].checkRelease,
+      ])
+        expect(html).toContain(encoded(text));
+      expect(html).toContain('data-steward-card="held-quote"');
+    },
+  );
+
   it.each(["ja", "en"] as const)(
     "%s: counts, both actions, linked posts with Hide, and reasons",
     (locale) => {

@@ -1,11 +1,13 @@
 import { v, type Infer } from "convex/values";
 import { translationFits } from "../src/lib/story-finder/mention";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import { query, type MutationCtx } from "./_generated/server";
 import { writeAudit } from "./lib/audit";
 import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
+import { readMapNames } from "./lib/mapCopies";
+import { scriptValidator } from "./lib/validators";
 import {
   checkFor,
   checkSetting,
@@ -408,6 +410,87 @@ export const release = mutation({
       targetType: "claim",
       targetId: claimId,
       diff: { lang },
+    });
+    return null;
+  },
+});
+
+const HELD_LIST_LIMIT = 100;
+
+/** The found posts' quotes whose translation the check held back, for a steward to decide on. */
+export const heldExcerpts = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      checkId: v.id("translationCheck"),
+      placeSlug: v.string(),
+      placeNames: v.array(
+        v.object({
+          lang: v.string(),
+          script: scriptValidator,
+          value: v.string(),
+          isPrimary: v.boolean(),
+        }),
+      ),
+      url: v.string(),
+      quote: v.string(),
+      lang: v.string(),
+      translation: v.string(),
+      added: v.array(v.string()),
+      missing: v.array(v.string()),
+    }),
+  ),
+  handler: async (ctx) => {
+    await requireRole(ctx, ["steward"]);
+    const checks = await ctx.db
+      .query("translationCheck")
+      .withIndex("by_status_and_nextAttemptAt", (q) => q.eq("status", "held"))
+      .take(HELD_LIST_LIMIT);
+    const rows = [];
+    for (const check of checks) {
+      if (check.subject !== "excerpt") continue;
+      const source = await ctx.db.get("source", check.sourceId);
+      if (source?.status !== "live" || !source.excerpt) continue;
+      const place = await ctx.db.get("place", source.placeId);
+      if (place === null) continue;
+      rows.push({
+        checkId: check._id,
+        placeSlug: place.slug,
+        placeNames: place.mapNames ?? (await readMapNames(ctx, place._id)),
+        url: source.url,
+        quote: source.excerpt,
+        lang: check.lang,
+        translation: check.text,
+        added: check.added,
+        missing: check.missing,
+      });
+    }
+    return rows;
+  },
+});
+
+/** A steward decides a quote's held translation is fair; it stays labelled machine-translated. */
+export const releaseExcerpt = mutation({
+  args: { checkId: v.id("translationCheck") },
+  returns: v.null(),
+  handler: async (ctx, { checkId }) => {
+    const steward = await requireRole(ctx, ["steward"]);
+    if (steward.isMock) throw appError("forbidden", "a demo account may not change found posts");
+    const check = await ctx.db.get("translationCheck", checkId);
+    if (check?.subject !== "excerpt")
+      throw appError("not_found", "no translation check for this quote");
+    if (check.status !== "held") throw appError("conflict", "only a held translation is released");
+    await ctx.db.patch("translationCheck", check._id, {
+      status: "released",
+      decidedBy: steward._id,
+    });
+    await writeAudit(ctx, {
+      actorKind: "person",
+      actorPersonId: steward._id,
+      action: "source.translation_released",
+      targetType: "source",
+      targetId: check.sourceId,
+      diff: { lang: check.lang },
     });
     return null;
   },
