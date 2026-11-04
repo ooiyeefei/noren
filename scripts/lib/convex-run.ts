@@ -15,15 +15,20 @@ export type ExecFileLike = (
 
 export function createCliRunner(options: {
   prod: boolean;
+  /** A deployment name such as careful-bee-139; the CLI's --deployment, for scripts that take one. */
+  deployment?: string;
   cwd: string;
   exec?: ExecFileLike;
 }): ConvexRunner {
+  if (options.prod && options.deployment !== undefined)
+    throw new Error("Name a deployment or use prod, not both");
   const execute: ExecFileLike = options.exec ?? execFile;
   return (fn, args, runOptions) =>
     new Promise((resolve, reject) => {
       const argv = ["convex", "run", fn, JSON.stringify(args)];
       if (runOptions?.identity) argv.push("--identity", JSON.stringify(runOptions.identity));
       if (options.prod) argv.push("--prod");
+      if (options.deployment !== undefined) argv.push("--deployment", options.deployment);
       execute(
         "npx",
         argv,
