@@ -9,6 +9,11 @@ export const placePageMessages = defineMessages({
     copied: "Link copied",
     copyFailed: "Could not copy the link.",
     manage: "Manage",
+    agentStory: "What people wrote about this place",
+    agentStoryLabel:
+      "Written by AI from {count} posts. Each number leads to the exact words behind that sentence, and code checked those words are in the post. AI can still misread them, so go and read the posts.",
+    agentStoryNote: "Source {number}",
+    agentStoryWebPage: "A web page",
     stories: "Stories from people who've been here",
     noStories: "No one has shared a story here yet.",
     writtenBy: "By {name}",
@@ -32,6 +37,11 @@ export const placePageMessages = defineMessages({
     copied: "リンクをコピーしました",
     copyFailed: "リンクをコピーできませんでした。",
     manage: "管理",
+    agentStory: "この場所について書かれていること",
+    agentStoryLabel:
+      "{count}件の投稿をもとに AI が書きました。番号をたどると、その文のもとになった言葉そのものが読めます。その言葉が投稿にあることはプログラムで確かめていますが、AI が読み違えることもあるので、元の投稿もお読みください。",
+    agentStoryNote: "出典 {number}",
+    agentStoryWebPage: "ウェブページ",
     stories: "訪れた人たちの話",
     noStories: "まだ誰も話を共有していません。",
     writtenBy: "書いた人：{name}",

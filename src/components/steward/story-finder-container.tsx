@@ -9,7 +9,44 @@ import type { RegionConfig } from "@/lib/region/schema";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useStewardAction } from "./steward-home-container";
+import { StoryAgentView } from "./story-agent-view";
 import { StoryFinderView, type FoundRow } from "./story-finder-view";
+
+/** The story agent's panel: reads its own query, so a run's steps appear as they happen. */
+function StoryAgentContainer({ locale, region }: { locale: Locale; region: RegionConfig }) {
+  const panel = useQuery(api.placeStories.stewardPanel, {});
+  const request = useMutation(api.placeStories.request);
+  const { state, run } = useStewardAction(locale);
+  const m = messagesFor(storyFinderMessages, locale);
+  if (!panel) return null;
+  const named = (names: (typeof panel.ready)[number]["placeNames"], slug: string) =>
+    pickPlaceName(names, locale, region).primary?.value ?? slug;
+  return (
+    <StoryAgentView
+      locale={locale}
+      ready={panel.ready.map((row) => ({
+        id: row.placeId,
+        placeName: named(row.placeNames, row.placeSlug),
+        placeSlug: row.placeSlug,
+        posts: row.posts,
+      }))}
+      runs={panel.runs.map(({ runId, placeNames, placeSlug, ...rest }) => ({
+        ...rest,
+        id: runId,
+        placeSlug,
+        placeName: named(placeNames, placeSlug),
+      }))}
+      pending={state.pending}
+      error={state.error}
+      onWrite={(placeId) =>
+        void run(`write:${placeId}`, async () => {
+          await request({ placeId: placeId as Id<"place"> });
+          return m.agentStarted;
+        })
+      }
+    />
+  );
+}
 
 export function StoryFinderContainer({ locale, region }: { locale: Locale; region: RegionConfig }) {
   const overview = useQuery(api.storyFinder.stewardOverview, {});
@@ -43,6 +80,7 @@ export function StoryFinderContainer({ locale, region }: { locale: Locale; regio
   return (
     <StoryFinderView
       locale={locale}
+      agent={<StoryAgentContainer locale={locale} region={region} />}
       counts={overview.counts}
       attached={overview.attached.map(toRow)}
       accepted={overview.accepted.map(toRow)}

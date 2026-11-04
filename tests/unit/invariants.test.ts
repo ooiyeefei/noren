@@ -72,6 +72,9 @@ const inheritsMockFlag = [
   "noteTranslation",
   // From its source: only story finder sources on real places have one.
   "sourceExcerptTranslation",
+  // From their place and the found posts they read: the agent only runs on real places.
+  "placeStory",
+  "placeStoryRun",
 ];
 const notPersonCreated = [
   "seedOsmCandidate",

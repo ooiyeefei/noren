@@ -7,6 +7,7 @@ import {
   MENTION_STATUSES,
   REJECT_REASONS,
 } from "../../src/lib/story-finder/mention";
+import { STORY_RUN_STATUSES, STORY_STEP_KINDS } from "../../src/lib/story-agent/agent";
 import { literals } from "../lib/validators";
 
 export const mentionPlatformValidator = literals(MENTION_PLATFORMS);
@@ -23,6 +24,17 @@ export const mentionVerdictValidator = v.object({
   quote: v.string(),
   topics: v.array(v.string()),
   adMarker: v.optional(v.boolean()),
+});
+
+export const storyRunStatusValidator = literals(STORY_RUN_STATUSES);
+export const storyStepValidator = v.object({
+  at: v.number(),
+  kind: literals(STORY_STEP_KINDS),
+  count: v.optional(v.number()),
+  detail: v.optional(v.string()),
+  sentence: v.optional(v.string()),
+  words: v.optional(v.string()),
+  added: v.optional(v.array(v.string())),
 });
 
 export const storyFinderTables = {
@@ -124,4 +136,41 @@ export const storyFinderTables = {
     origin: v.literal("machine"),
     modelVersion: v.string(),
   }).index("by_sourceId_and_lang", ["sourceId", "lang"]),
+
+  /**
+   * A place's story as the story agent wrote it from the posts about it. Public, labelled as written
+   * by AI. Every sentence cites live found posts with words code found in them (lib/story-agent);
+   * erasing a post takes out every sentence citing it (lib/foundPosts).
+   */
+  placeStory: defineTable({
+    placeId: v.id("place"),
+    sentences: v.array(
+      v.object({
+        en: v.string(),
+        ja: v.string(),
+        citations: v.array(v.object({ sourceId: v.id("source"), words: v.string() })),
+      }),
+    ),
+    postsRead: v.number(),
+    /** The model settings, such as meta:muse-spark-1.3 and modal:noren-glimmer. */
+    writer: v.string(),
+    checker: v.string(),
+    publishedAt: v.number(),
+  }).index("by_placeId", ["placeId"]),
+
+  /** One run of the story agent and what it did, step by step. Steward-only. */
+  placeStoryRun: defineTable({
+    placeId: v.id("place"),
+    requestedBy: v.id("person"),
+    status: storyRunStatusValidator,
+    platforms: v.array(mentionPlatformValidator),
+    steps: v.array(storyStepValidator),
+    /** How many times this run found the second reader asleep and came back later. */
+    wakeAttempts: v.number(),
+    writer: v.optional(v.string()),
+    checker: v.optional(v.string()),
+    published: v.optional(v.number()),
+    error: v.optional(v.string()),
+    finishedAt: v.optional(v.number()),
+  }).index("by_placeId", ["placeId"]),
 };
