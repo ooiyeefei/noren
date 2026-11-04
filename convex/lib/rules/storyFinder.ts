@@ -2,7 +2,6 @@ import type { Triggers } from "convex-helpers/server/triggers";
 import {
   QUOTE_MAX,
   quoteFingerprint,
-  quoteGrams,
   type MentionPlatform,
   type MentionStatus,
 } from "../../../src/lib/story-finder/mention";
@@ -42,13 +41,11 @@ async function syncShownQuote(db: MutationCtx["db"], candidate: Doc<"mentionCand
       await db.patch("shownQuote", row._id, { status: candidate.status });
     return;
   }
-  const fingerprint = quoteFingerprint(quote);
   await db.insert("shownQuote", {
     regionId: candidate.regionId,
     candidateId: candidate._id,
     status: candidate.status,
-    fingerprint,
-    grams: quoteGrams(fingerprint).size,
+    fingerprint: quoteFingerprint(quote),
   });
 }
 
