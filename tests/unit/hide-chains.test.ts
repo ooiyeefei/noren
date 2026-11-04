@@ -184,11 +184,76 @@ describe("a dry run", () => {
     expect(json.kept).toHaveLength(1);
     const markdown = await readFile(join(cwd, ".scratch/chains-report.md"), "utf8");
     expect(markdown).toContain("| 独立珈琲 | cafe | Overture brand field: 架空ブランド |");
-    expect(markdown).toContain("Spared by the local multi-branch rule (1)");
+    expect(markdown).toContain("## Spared (1)");
+    expect(markdown).toContain("| 地元亭 大村店 | restaurant | local_multi_branch |");
     const request = JSON.parse(
       await readFile(join(cwd, ".scratch/chains-evidence-request.json"), "utf8"),
     );
     expect(request.bases.map((item: { base: string }) => item.base)).toContain("地元亭");
+  });
+});
+
+describe("the Nagasaki-born and flagship rules", () => {
+  it("spares what Nagasaki holds 30% of and a head shop, and reports each reason", async () => {
+    const areas = ["大村", "時津", "諫早", "長与", "琴海", "多良見"];
+    await setup({
+      snapshot: [
+        ...areas.map((area, i) => record(20 + i, `架空堂 ${area}店`)),
+        ...areas.map((area, i) => record(30 + i, `全国亭 ${area}店`)),
+        record(40, "全国亭 本店"),
+      ],
+      places: [
+        place(1, "架空堂 大村店"),
+        place(2, "全国亭 大村店"),
+        place(3, "全国亭 本店"),
+        place(4, "ミモザ食堂 時津店"),
+      ],
+    });
+    await writeFile(
+      join(cwd, "evidence.json"),
+      JSON.stringify({
+        release: RELEASE,
+        bases: {
+          架空堂: { base: "架空堂", outside: 10, nagasakiOutsideBox: 2, examples: [] },
+          全国亭: { base: "全国亭", outside: 400, nagasakiOutsideBox: 3, examples: [] },
+        },
+        brands: {
+          "mimosa-1": { name: "ミモザ食堂", elsewhere: 900, nagasakiOutsideBox: 5, examples: [] },
+        },
+      }),
+    );
+    const log = vi.fn();
+    await runHideChains(
+      [
+        "--dry-run",
+        "--export-dir",
+        "export",
+        "--snapshot",
+        "snapshot/places-nagasaki.jsonl",
+        "--evidence",
+        "evidence.json",
+      ],
+      { cwd, nsi: async () => nsi, log },
+    );
+    const printed = log.mock.calls.map(([value]) => value);
+    expect(printed[0]).toMatchObject({
+      toHide: 2,
+      sparedAsNagasakiBorn: 1,
+      sparedAsFlagship: 1,
+      sparedAsLocalMultiBranch: 0,
+    });
+    expect(printed).toContainEqual(
+      expect.stringContaining("SPARE 架空堂 大村店 | restaurant | nagasaki_born"),
+    );
+    expect(printed).toContainEqual(
+      expect.stringContaining("SPARE 全国亭 本店 | restaurant | flagship"),
+    );
+    expect(printed).toContainEqual(expect.stringContaining("HIDE  全国亭 大村店"));
+    expect(printed).toContainEqual(expect.stringContaining("HIDE  ミモザ食堂 時津店"));
+    const request = JSON.parse(
+      await readFile(join(cwd, ".scratch/chains-evidence-request.json"), "utf8"),
+    );
+    expect(request.brands).toMatchObject([{ id: "mimosa-1", keys: ["ミモザ食堂"] }]);
   });
 });
 

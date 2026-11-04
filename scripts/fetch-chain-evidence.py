@@ -1,14 +1,24 @@
-"""Count, across Japan, the places that share each base name the chain rules looked at.
+"""Count, across Japan, the places that share each name the chain rules looked at.
 
 The chain rules (src/lib/chains) call a base name a chain when three or more places share it and one
 carries a branch suffix. The Overture snapshot of Nagasaki shows only Nagasaki, so a chain with two
 branches here and forty in Fukuoka looks local. This script reads the same Overture release for the
-whole of Japan, outside the snapshot's box and outside Nagasaki prefecture, and counts, for each base
-name, the places whose name is that base followed by a branch suffix ("outside"), and separately the
-places whose name is the bare base ("outsideNamesakes": a namesake or a head office, not counted as a
-branch).
+whole of Japan, outside the snapshot's box, and counts for each base name:
+  outside            places elsewhere in Japan whose name is that base followed by a branch suffix
+  outsideNamesakes   places elsewhere whose name is the bare base (a namesake or a head office)
+  nagasakiOutsideBox places in Nagasaki prefecture, but outside the snapshot's box (Sasebo, the
+                     islands), whose name is that base followed by a branch suffix
+  nagasakiNamesakes  the same, for the bare base
+Branches are counted on both sides, not bare names, which are as often an unrelated shop of the same name.
+The rule that spares businesses born in Nagasaki needs the Nagasaki side as well as the rest of Japan.
+For each brand of the Name Suggestion Index that matched a place it counts, the same way, the places
+whose name starts with any of the brand's names ("elsewhere", "nagasakiOutsideBox").
+
+"Nagasaki prefecture" is what an address says (region 長崎県 or a postcode starting 85); a place with
+neither counts as Nagasaki only inside a box around the prefecture.
 
 Input: the request that `scripts/hide-chains.ts --dry-run` writes (.scratch/chains-evidence-request.json).
+A brand name is matched by its start only; a Latin name is not checked for a word boundary here.
 Output: scripts/data/chain-evidence-japan.json, which the dry run and the real run read.
 
 A place counts as a branch of a base when its normalised name (NFKC, lower case, spaces, punctuation and
@@ -91,6 +101,8 @@ def main() -> None:
     release = request["release"]
     generic = set(request.get("genericSuffixes", []))
     bases = {item["key"]: item["base"] for item in request["bases"]}
+    brands = {item["id"]: [name_key(key) for key in item["keys"]] for item in request.get("brands", [])}
+    brand_labels = {item["id"]: item.get("name", item["id"]) for item in request.get("brands", [])}
     manifest_path = args.snapshot_manifest or os.path.join(
         REPO_ROOT, ".scratch", "overture", release, "places-nagasaki.manifest.json"
     )
@@ -100,6 +112,10 @@ def main() -> None:
     by_start: dict[str, list[str]] = {}
     for key in bases:
         by_start.setdefault(key[:1], []).append(key)
+    brand_by_start: dict[str, list[tuple[str, str]]] = {}
+    for brand_id, keys in brands.items():
+        for key in keys:
+            brand_by_start.setdefault(key[:1], []).append((key, brand_id))
 
     import duckdb  # imported late so --help works without the dependency
 
@@ -120,7 +136,9 @@ def main() -> None:
     # One pass over Japan: count the areas people write after a space before 店, and keep the places
     # whose name starts like a base, to judge their suffix once every area is counted.
     area_counts: dict[str, int] = {}
-    pending: list[tuple[str, str, str, str, str]] = []
+    pending: list[tuple[str, str, str, str, str, bool]] = []
+    brand_counts: dict[str, list[int]] = {brand_id: [0, 0] for brand_id in brands}  # elsewhere, nagasaki
+    brand_examples: dict[str, list[str]] = {brand_id: [] for brand_id in brands}
     scanned = 0
     while True:
         rows = cursor.fetchmany(20000)
@@ -137,19 +155,29 @@ def main() -> None:
             if inside(snapshot_box, lng, lat):
                 continue  # already in the snapshot
             where = prefecture(region, postcode)
-            if where == "nagasaki" or (where == "unknown" and inside(NAGASAKI_BOX, lng, lat)):
-                continue
+            in_nagasaki = where == "nagasaki" or (where == "unknown" and inside(NAGASAKI_BOX, lng, lat))
             key = name_key(text)
             for base_key in by_start.get(key[:1], []):
                 if key.startswith(base_key):
-                    pending.append((base_key, key, text, region or "", postcode or ""))
+                    pending.append((base_key, key, text, region or "", postcode or "", in_nagasaki))
+            matched = {brand_id for brand_key, brand_id in brand_by_start.get(key[:1], []) if key.startswith(brand_key)}
+            for brand_id in matched:
+                brand_counts[brand_id][1 if in_nagasaki else 0] += 1
+                if not in_nagasaki and len(brand_examples[brand_id]) < 3:
+                    brand_examples[brand_id].append(f"{text} ({region or postcode or 'no address'})")
 
     known_areas = {area for area, count in area_counts.items() if count >= KNOWN_AREA_MIN}
     counts: dict[str, int] = {}
     exact: dict[str, int] = {}
+    in_prefecture: dict[str, int] = {}
+    in_prefecture_namesakes: dict[str, int] = {}
     examples: dict[str, list[str]] = {}
-    for base_key, key, text, region, postcode in pending:
+    for base_key, key, text, region, postcode, in_nagasaki in pending:
         if not is_branch_of(base_key, key, text, generic, known_areas):
+            continue
+        if in_nagasaki:
+            bucket = in_prefecture_namesakes if key == base_key else in_prefecture
+            bucket[base_key] = bucket.get(base_key, 0) + 1
             continue
         if key == base_key:
             exact[base_key] = exact.get(base_key, 0) + 1  # a namesake or the head office, not a branch
@@ -161,22 +189,33 @@ def main() -> None:
     result = {
         "release": release,
         "retrievedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "source": f"{source}, Japan box {list(JAPAN)}, outside the Nagasaki snapshot box and Nagasaki prefecture; {scanned} places scanned",
+        "source": f"{source}, Japan box {list(JAPAN)}, outside the Nagasaki snapshot box; {scanned} places scanned",
         "bases": {
             key: {
                 "base": base,
                 "outside": counts.get(key, 0),
                 "outsideNamesakes": exact.get(key, 0),
+                "nagasakiOutsideBox": in_prefecture.get(key, 0),
+                "nagasakiNamesakes": in_prefecture_namesakes.get(key, 0),
                 "examples": examples.get(key, []),
             }
             for key, base in sorted(bases.items())
+        },
+        "brands": {
+            brand_id: {
+                "name": brand_labels[brand_id],
+                "elsewhere": brand_counts[brand_id][0],
+                "nagasakiOutsideBox": brand_counts[brand_id][1],
+                "examples": brand_examples[brand_id],
+            }
+            for brand_id in sorted(brands)
         },
     }
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", encoding="utf8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=1, sort_keys=True)
         handle.write("\n")
-    print(f"{len(bases)} bases, {sum(1 for key in bases if counts.get(key))} found outside Nagasaki, {scanned} places scanned", file=sys.stderr)
+    print(f"{len(bases)} bases and {len(brands)} brands, {sum(1 for key in bases if counts.get(key))} bases found outside Nagasaki, {scanned} places scanned", file=sys.stderr)
     print(args.out)
 
 
