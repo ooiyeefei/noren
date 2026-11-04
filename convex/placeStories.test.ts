@@ -321,6 +321,23 @@ describe("placeStories runs", () => {
     expect(await b.t.mutation(internal.placeStories.writeReadyStories, {})).toEqual({ started: 0 });
   });
 
+  it("puts a place back on the ready list when its story is forgotten", async () => {
+    const b = await setup();
+    await b.post("google_reviews", { n: 1 });
+    await b.post("web", { n: 2 });
+    const runId = await b.startRun();
+    await b.begin(runId);
+    await b.t.mutation(internal.placeStories.saveStory, { runId, sentences: [], postsRead: 2 });
+    const forget = () =>
+      b.t.mutation(internal.placeStories.forgetStory, {
+        stewardPersonId: b.steward,
+        placeId: b.placeId,
+      });
+    expect(await forget()).toEqual({ forgotten: true });
+    expect(await forget()).toEqual({ forgotten: false });
+    expect(await b.t.mutation(internal.placeStories.writeReadyStories, {})).toEqual({ started: 1 });
+  });
+
   it("leaves out a place whose posts are all tips", async () => {
     const b = await setup();
     await b.post("google_reviews", { n: 1, kind: "tip" });
