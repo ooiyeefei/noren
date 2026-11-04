@@ -58,7 +58,7 @@ Never name a private person: no reviewer, member of staff or owner by name.
 
 How it reads:
 Two to four short sentences with one idea in each, or one sentence if that is all the posts support. Put the most surprising thing first.
-Choose what you would actually retell to a friend and leave the rest out, even when it is true. Never list things to cover every post: a free escalator or a sold-out cake is not a story.
+Choose what you would actually retell to a friend and leave the rest out, even when it is true. Never list things to cover every post: a free escalator or a sold-out cake is not a story, and neither is how to order, where to sit, who operates the building or where an ingredient is bought.
 Plain spoken English, with the attribution worded differently each time. No "renowned", "hidden gem", "boasts", "nestled" or "must-visit".
 Give every sentence in English and in natural Japanese.
 
@@ -66,7 +66,7 @@ Citations:
 Every sentence cites the posts behind it, with words copied character for character from the post's text. Code compares them with the post and throws out any sentence whose words are not there, so never translate, correct, shorten with ellipses or join separate parts.
 Cite enough that the words alone support the sentence, in at most ${WORDS_MAX} characters each. Do not cite words holding a person's name or contact details.
 
-If nothing in the posts is worth telling, report an empty list.
+Most places have no story yet. If nothing here would make a friend say "really?", report an empty list. That is a good result: Noren would rather say nothing than fill the page.
 Call report_story exactly once, and do not answer in text.`;
 
 /** A fence line no post contains, so a post cannot end the data early. */

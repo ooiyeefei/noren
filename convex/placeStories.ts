@@ -43,26 +43,35 @@ async function batchSteward(ctx: QueryCtx, personId: Id<"person">) {
   return person;
 }
 
-/** Places on the map with enough checked posts and no story yet, the most written about first. */
+/**
+ * Places on the map with no story yet, enough checked posts and at least one the check called a story,
+ * those with the most stories first. A place with only tips has nothing for the agent to retell.
+ */
 async function readyPlaces(
   ctx: QueryCtx,
   platforms: readonly MentionPlatform[],
   limit: number,
   minPosts = MIN_POSTS,
 ) {
-  const counts = new Map<Id<"place">, number>();
+  const counts = new Map<Id<"place">, { posts: number; stories: number }>();
   const rows = await ctx.db
     .query("mentionCandidate")
     .withIndex("by_status_and_attachedAt", (q) => q.eq("status", "attached"))
     .order("desc")
     .take(READY_SCAN);
-  for (const row of rows)
-    if (platforms.includes(row.platform) && row.text)
-      counts.set(row.placeId, (counts.get(row.placeId) ?? 0) + 1);
+  for (const row of rows) {
+    if (!platforms.includes(row.platform) || !row.text) continue;
+    const count = counts.get(row.placeId) ?? { posts: 0, stories: 0 };
+    count.posts += 1;
+    if (row.verdict?.kind === "story") count.stories += 1;
+    counts.set(row.placeId, count);
+  }
+  const ranked = [...counts]
+    .filter(([, count]) => count.stories > 0 && count.posts >= minPosts)
+    .sort(([, a], [, b]) => b.stories - a.stories || b.posts - a.posts);
   const ready: { place: Doc<"place">; posts: number }[] = [];
-  for (const [placeId, posts] of [...counts].sort((a, b) => b[1] - a[1])) {
+  for (const [placeId, { posts }] of ranked) {
     if (ready.length >= limit) break;
-    if (posts < minPosts) break;
     const place = await ctx.db.get("place", placeId);
     if (place === null || !isPubliclyReadablePlace(place) || place.hiddenReason !== undefined)
       continue;
@@ -117,21 +126,32 @@ export const request = mutation({
   },
 });
 
-/** Starts the agent on the places that are ready, spaced out (for a batch from the command line). */
+/**
+ * Starts the agent, spaced out, on the places that are ready or on exactly the places named (for a
+ * batch from the command line). A named place must be on the map, and may already have a story, which
+ * the run replaces.
+ */
 export const enqueue = internalMutation({
   args: {
     stewardPersonId: v.id("person"),
     limit: v.number(),
+    placeIds: v.optional(v.array(v.id("place"))),
     platforms: v.optional(v.array(mentionPlatformValidator)),
     minPosts: v.optional(v.number()),
     spacingMs: v.optional(v.number()),
   },
   returns: v.object({ started: v.number() }),
-  handler: async (ctx, { stewardPersonId, limit, platforms, minPosts, spacingMs }) => {
+  handler: async (ctx, { stewardPersonId, limit, placeIds, platforms, minPosts, spacingMs }) => {
     const steward = await batchSteward(ctx, stewardPersonId);
     if (limit > MAX_BATCH) throw appError("invalid_input", `start at most ${MAX_BATCH}`);
     const reading = platforms ?? DEFAULT_PLATFORMS;
-    const ready = await readyPlaces(ctx, reading, limit, minPosts);
+    const named = placeIds && (await Promise.all(placeIds.map((id) => ctx.db.get("place", id))));
+    const ready = named
+      ? named
+          .filter((place) => place !== null && isPubliclyReadablePlace(place))
+          .slice(0, limit)
+          .map((place) => ({ place: place! }))
+      : await readyPlaces(ctx, reading, limit, minPosts);
     let delay = 0;
     for (const { place } of ready) {
       await startRun(ctx, place._id, steward._id, reading, delay);
@@ -145,6 +165,30 @@ export const enqueue = internalMutation({
       diff: { started: ready.length, platforms: reading },
     });
     return { started: ready.length };
+  },
+});
+
+/** Takes a story off its page, for one a person read and found not worth telling. */
+export const withdraw = internalMutation({
+  args: { stewardPersonId: v.id("person"), placeId: v.id("place"), reason: v.string() },
+  returns: v.object({ withdrawn: v.boolean() }),
+  handler: async (ctx, { stewardPersonId, placeId, reason }) => {
+    const steward = await batchSteward(ctx, stewardPersonId);
+    const story = await ctx.db
+      .query("placeStory")
+      .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
+      .first();
+    if (story === null) return { withdrawn: false };
+    await ctx.db.delete("placeStory", story._id);
+    await writeAudit(ctx, {
+      actorKind: "person",
+      actorPersonId: steward._id,
+      action: "story_agent.withdrawn",
+      targetType: "place",
+      targetId: placeId,
+      diff: { reason },
+    });
+    return { withdrawn: true };
   },
 });
 
