@@ -11,7 +11,7 @@ Locked by the owner (2026-10-29):
 4. Invite-only until the legal pack exists.
 5. Stories, not scores.
 
-On 4 November 2026 the owner changed 1 and 2 for public posts found about a place: see FR-034 in `specs/001-noren-mvp/spec.md`.
+On 4 November 2026 the owner changed 1 and 2 for public posts found about a place, and let a model write a place's story from those posts: see FR-034 and FR-035 in `specs/001-noren-mvp/spec.md`.
 
 Name: Noren (product). Backlane is the phase 2 AI walking companion; Footnote is the citation under every sentence.
 
