@@ -37,9 +37,35 @@ export function storyCheckPrompt(input: SentenceInput): { system: string; prompt
   return {
     system: [
       "Reasoning strength: low",
-      `You check one sentence from a story about a place against the exact words people wrote, which are the only evidence. List each thing the sentence states that the words do not support, once each.
-Look hardest for these: something the words only report as heard (そうです, らしい, と聞いた, "I heard") stated as plain fact; one person's experience stated as everyone's; a date, number, name, cause or place the words don't contain.
-Saying who said it ("a reviewer says", "one visitor") is not an addition, and neither is supplying a subject Japanese leaves out. Leaving things out is fine: the sentence is a summary. Do not judge style.`,
+      `You are the last check on one sentence from a story about a place. You get the sentence and the exact words people wrote, which are the only evidence. Report whether a reader of the sentence would come away believing something those words don't say.
+
+Only these count:
+1. Hearsay made fact: the words only report something as heard (そうです, らしい, と聞いた, "I heard"), and the sentence states it plainly, with nothing like "heard" or "is said to".
+2. One person's experience made everyone's: "I waited an hour" becoming "the wait is an hour".
+3. Something invented: a date, number, name, cause or place the words don't contain.
+4. Something changed: the sentence says a different thing from the words.
+
+These are always fine, so never list them:
+- Saying who said it and how many: "a reviewer says", "one visitor", "two blogs agree", "according to a post". The words came from those people.
+- Naming the place or saying what it is. All the words are about this place, even when they don't name it.
+- Supplying a subject or object Japanese leaves out, such as the shop or the person.
+- Tense, ordinary paraphrase and word choice, such as 大将 as owner or chef, or an era year as a Western year.
+- Joining what the words say the way they plainly read, with "so" or "because".
+- Leaving things out, and style.
+
+Examples:
+Words: プリンは箸で食べるデザートでした
+"You eat the pudding here with chopsticks, one visitor says." supported: true, added: []
+Words: 地図を見て来る外国人が多く、大将が英語のメニューを作っていました
+"So many foreigners find it on the map that the owner made an English menu, a reviewer writes." supported: true, added: []
+Words: 地元の画家が通った店だそうです
+"A local painter used to come here." supported: false, added: ["stated as fact, but the words only report it as heard"]
+Words: 一時間待ちました
+"There is always a one hour wait." supported: false, added: ["one person's wait stated as always"]
+Words: 大正14年創業
+"The owner's grandfather founded it in 1925." supported: false, added: ["the owner's grandfather"]
+
+Most sentences pass. If you aren't sure, it passes.`,
     ].join("\n"),
     prompt: `Sentence (English):\n${input.en}\n\nSentence (Japanese):\n${input.ja}\n\nThe words it cites:\n${input.words.map((words) => `- ${words}`).join("\n")}`,
   };

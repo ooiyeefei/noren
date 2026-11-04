@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, type Mock } from "vitest";
-import { runStoryAgent, type StoryStep } from "./agent";
-import type { ReportedStory, StoryWriter } from "./story";
-import type { StoryChecker } from "./check";
+import { runStoryAgent, type StoryStep } from "@/lib/story-agent/agent";
+import type { ReportedStory, StoryWriter } from "@/lib/story-agent/story";
+import type { StoryChecker } from "@/lib/story-agent/check";
 
 // All posts are made up.
 const posts = [

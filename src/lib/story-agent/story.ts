@@ -58,6 +58,9 @@ Never name a private person: no reviewer, member of staff or owner by name.
 
 How it reads:
 Two to four short sentences with one idea in each, or one sentence if that is all the posts support. Put the most surprising thing first.
+Lead with the thing itself and say whose word it is lightly, at the end if that reads better: "You eat the pudding here with chopsticks, two blogs say." "The owner's grandfather started it as a street stall, one reviewer heard." Not "One reviewer writes that".
+Each sentence must make sense alone, because any one of them may be removed later. Never lean on another sentence: no "the same writer", "another post", "that account", and no "they" or "it" for something only another sentence names.
+Call the place what it is, such as "the shop", "the stone" or "the bridge": never spell out its name, because a wrong reading is worse than none. The English is all in English, so any other Japanese word goes in Latin letters or gets translated.
 Choose what you would actually retell to a friend and leave the rest out, even when it is true. Never list things to cover every post: a free escalator or a sold-out cake is not a story, and neither is how to order, where to sit, who operates the building or where an ingredient is bought.
 Plain spoken English, with the attribution worded differently each time. No "renowned", "hidden gem", "boasts", "nestled" or "must-visit".
 Give every sentence in English and in natural Japanese.
@@ -167,6 +170,11 @@ export function createStoryWriter(options: {
 
 export type CitationProblem = { sentence: string; post: number; words: string; problem: string };
 
+const JAPANESE_SCRIPT = /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u;
+/** Any sentence can be dropped later, and one that leans on it would then make no sense. */
+const LEANS_ON_ANOTHER =
+  /\b(?:(?:the|that|this) same|another|a different|the other)\s+(?:write-?up|writer|post|review|reviewer|visitor|account|blog|blogger|person|passage|page|source|one)\b|\bthat\s+(?:write-?up|writer|post|review|reviewer|visitor|account|blog|blogger|person|passage|page|source)\b/i;
+
 /** Why a citation can't stand, in words the writer can act on; null when it holds. */
 function citationProblem(posts: readonly StoryPost[], post: number, words: string): string | null {
   const cited = posts[post - 1];
@@ -182,7 +190,8 @@ function citationProblem(posts: readonly StoryPost[], post: number, words: strin
 
 /**
  * Keeps the sentences that hold up. One bad citation fails the whole sentence: it may be the one thing
- * the sentence rests on. A sentence with no citation, or missing a language, fails too.
+ * the sentence rests on. So does one with no citation, missing a language, with Japanese in its English
+ * or leaning on another sentence.
  */
 export function verifyStory(posts: readonly StoryPost[], reported: ReportedStory) {
   const sentences: CitedSentence[] = [];
@@ -198,6 +207,15 @@ export function verifyStory(posts: readonly StoryPost[], reported: ReportedStory
       bad.push({ sentence: en || ja, post: 0, words: "", problem: "missing a language" });
     if (sentence.citations.length === 0)
       bad.push({ sentence: en, post: 0, words: "", problem: "cites nothing" });
+    if (JAPANESE_SCRIPT.test(en))
+      bad.push({ sentence: en, post: 0, words: "", problem: "the English has Japanese in it" });
+    if (LEANS_ON_ANOTHER.test(en))
+      bad.push({
+        sentence: en,
+        post: 0,
+        words: "",
+        problem: "it leans on another sentence, and each one must make sense alone",
+      });
     if (bad.length > 0) {
       problems.push(...bad);
       continue;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CheckOutputError } from "../ai/translation-check";
-import { parseSentenceReport, storyCheckPrompt } from "./check";
+import { CheckOutputError } from "@/lib/ai/translation-check";
+import { parseSentenceReport, storyCheckPrompt } from "@/lib/story-agent/check";
 
 describe("parseSentenceReport", () => {
   it("passes only a sentence the checker supports and lists nothing against", () => {
