@@ -4,7 +4,7 @@ import { EmbedView, type EmbedSourceView } from "@/components/embeds/embed-view"
 import { checkDate } from "@/components/place/check-state";
 import { quoted } from "@/components/embeds/quoted";
 import { LatestStories } from "@/components/public/latest-stories";
-import { toEmbedSource } from "@/components/public/mapping";
+import { toEmbedSource, toStoryFeed } from "@/components/public/mapping";
 import { StoryFinderView, type StoryFinderProps } from "@/components/steward/story-finder-view";
 import { format } from "@/lib/i18n";
 import { badgeMessages } from "@/lib/i18n/messages/badges";
@@ -72,26 +72,76 @@ describe("a found post on the place page", () => {
     expect(quoted("A test.", "en")).toBe("“A test.”");
   });
 
-  it("an embeddable found post keeps the official embed and shows no quote", () => {
-    const html = render(
-      {
-        ...reddit,
-        platform: "instagram",
-        canonicalUrl: "https://www.instagram.com/p/MOCKPOST1/",
-        embed: {
-          kind: "blockquote",
-          url: "https://www.instagram.com/p/MOCKPOST1/",
-          scriptUrl: "https://www.instagram.com/embed.js",
-        },
-        authorHandle: "mock_author",
-        excerpt: undefined,
-        excerptLang: undefined,
-      },
-      "en",
-    );
+  const instagram = {
+    ...reddit,
+    platform: "instagram",
+    canonicalUrl: "https://www.instagram.com/p/MOCKPOST1/",
+    embed: {
+      kind: "blockquote",
+      url: "https://www.instagram.com/p/MOCKPOST1/",
+      scriptUrl: "https://www.instagram.com/embed.js",
+    },
+    authorHandle: "mock_author",
+  } satisfies EmbedSourceView;
+
+  it("an embeddable found post shows its quote and still offers the official embed", () => {
+    const html = render(instagram, "en");
     expect(html).toContain(placeUiMessages.en.foundInPublicPost);
+    expect(html).toContain(encoded(`“${QUOTE}”`));
+    expect(html).toContain("Load this post from Instagram");
+  });
+
+  it("a found post linked before quotes were kept shows the embed alone", () => {
+    const html = render({ ...instagram, excerpt: undefined, excerptLang: undefined }, "en");
     expect(html).toContain("Load this post from Instagram");
     expect(html).not.toContain("<blockquote lang");
+  });
+
+  it("a quoted link card does not repeat the link as a box of its own", () => {
+    const html = render(reddit, "en");
+    expect(html).not.toContain("block rounded border p-4 underline");
+    expect(render({ ...reddit, excerpt: undefined }, "en")).toContain(
+      "block rounded border p-4 underline",
+    );
+  });
+
+  it("the feed opens with what members shared, then found stories, then found tips", () => {
+    const post = (
+      name: string,
+      addedAt: number,
+      fields: Partial<Parameters<typeof toEmbedSource>[0]>,
+    ) => ({ ...reddit, _id: name, addedAt, ...fields }) as Parameters<typeof toEmbedSource>[0];
+    const found = { foundInPublicPost: true };
+    const feed = toStoryFeed(
+      [
+        // The finder's order would read backwards by the time they were linked.
+        post("story-old", 9, { ...found, foundKind: "story", postedAt: 100 }),
+        post("story-new", 8, { ...found, foundKind: "story", postedAt: 200 }),
+        post("tip-new", 7, { ...found, foundKind: "tip", postedAt: 300 }),
+        post("tip-undated", 6, { ...found, foundKind: "tip", postedAt: undefined }),
+        post("member", 1, {}),
+      ],
+      [
+        {
+          _id: "written",
+          body: "x",
+          lang: "en",
+          authorName: "Mock",
+          addedAt: 2,
+          isMock: false,
+          canRemove: false,
+        },
+      ],
+      false,
+    );
+    expect(feed.map((entry) => entry.id)).toEqual([
+      "written",
+      "member",
+      "story-new",
+      "story-old",
+      "tip-new",
+      "tip-undated",
+    ]);
   });
 
   it("only a found source carries the found fields into the card", () => {

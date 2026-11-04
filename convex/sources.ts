@@ -49,7 +49,9 @@ const sourceViewValidator = v.object({
   sharedBy: v.optional(v.string()),
   /** The story finder found it in a public post; no member shared it. */
   foundInPublicPost: v.optional(v.literal(true)),
-  /** A found post's verbatim quote, for a platform with no official embed. */
+  /** A found post's kind, which orders the page: stories before tips. */
+  foundKind: v.optional(v.union(v.literal("story"), v.literal("tip"))),
+  /** A found post's verbatim quote. */
   excerpt: v.optional(v.string()),
   excerptLang: v.optional(v.string()),
   /** Machine translations of the quote into the region's other languages. */
@@ -95,6 +97,7 @@ async function sourceView(
     ...(found
       ? {
           foundInPublicPost: true as const,
+          foundKind: source.foundKind,
           excerpt: source.excerpt,
           excerptLang: source.excerptLang,
           excerptTranslations: source.excerpt ? await excerptTranslations(ctx, source) : [],

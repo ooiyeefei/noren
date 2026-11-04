@@ -24,7 +24,7 @@ export type EmbedSourceView = {
   isMock: boolean;
   /** The story finder found it in a public post; the author is as the platform shows them. */
   found?: boolean;
-  /** A found post's verbatim quote, shown for a platform with no official embed. */
+  /** A found post's verbatim quote, shown whether or not its embed has been loaded. */
   excerpt?: string;
   excerptLang?: string;
   /** Machine translations of the quote, labelled as such. */
@@ -82,7 +82,7 @@ function Post({
         author: source.authorHandle,
       })
     : undefined;
-  const excerpt = source.found && plan.kind === "link" ? source.excerpt?.trim() : undefined;
+  const excerpt = source.found ? source.excerpt?.trim() : undefined;
   const translation =
     excerpt && source.excerptLang !== locale
       ? source.excerptTranslations?.find((item) => item.lang === locale)?.text
@@ -136,7 +136,7 @@ function Post({
           )}
         </figure>
       )}
-      {plan.kind === "link" && (
+      {plan.kind === "link" && !excerpt && (
         <a href={href} {...toOriginal} className="block rounded border p-4 underline">
           {source.title || new URL(plan.url).hostname}
         </a>
