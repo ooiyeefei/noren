@@ -8,6 +8,10 @@ export const AI_CAPABILITIES = [
   "check_translation",
   // The story finder's check of a public post (AI_MODEL_CHECK_MENTION); it needs tool calling.
   "check_mention",
+  // The story agent: Spark writes a place's story from its posts (AI_MODEL_WRITE_STORY), and a second
+  // model reads each sentence against the words it cites (AI_MODEL_CHECK_STORY).
+  "write_story",
+  "check_story",
 ] as const;
 export type AiCapability = (typeof AI_CAPABILITIES)[number];
 // Each capability names its model in AI_MODEL_<CAPABILITY>, so switching provider is a settings

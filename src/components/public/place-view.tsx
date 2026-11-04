@@ -6,6 +6,7 @@ import { PlaceActions } from "@/components/place/place-actions";
 import { AddStory, type AddStoryActions } from "@/components/place/add-story";
 import { StoryFeed, type StoryFeedActions } from "@/components/place/story-feed";
 import { PlaceCheck, type PlaceCheckActions } from "@/components/place/place-check";
+import { PlaceStory, type PlaceStoryLike } from "@/components/place/place-story";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { labelForCategory } from "./category";
 import { EmbedNotice } from "@/components/embeds/embed-notice";
@@ -34,6 +35,7 @@ export function PlaceView({
   page,
   sources,
   stories,
+  placeStory,
   checks,
   story,
 }: {
@@ -44,6 +46,8 @@ export function PlaceView({
   sources?: readonly SourceViewLike[];
   /** Stories members wrote here; undefined while loading. */
   stories?: readonly WrittenStoryLike[];
+  /** What the story agent wrote from the posts about this place, when it has. */
+  placeStory?: PlaceStoryLike;
   checks?: PlaceCheckActions;
   story?: AddStoryActions & StoryFeedActions;
 }) {
@@ -145,6 +149,7 @@ export function PlaceView({
             />
           </section>
         )}
+        {placeStory && <PlaceStory locale={locale} story={placeStory} />}
         {/* The fictional demo place takes no stories about it, so it shows the section only for its own. */}
         {(feed === undefined || feed.length > 0 || !place.isMock) && (
           <section

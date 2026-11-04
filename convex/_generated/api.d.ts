@@ -48,6 +48,8 @@ import type * as osmSeed from "../osmSeed.js";
 import type * as overtureSeed from "../overtureSeed.js";
 import type * as pages from "../pages.js";
 import type * as people from "../people.js";
+import type * as placeStories from "../placeStories.js";
+import type * as placeStoryActions from "../placeStoryActions.js";
 import type * as places from "../places.js";
 import type * as seed from "../seed.js";
 import type * as sourceChecks from "../sourceChecks.js";
@@ -110,6 +112,8 @@ declare const fullApi: ApiFromModules<{
   overtureSeed: typeof overtureSeed;
   pages: typeof pages;
   people: typeof people;
+  placeStories: typeof placeStories;
+  placeStoryActions: typeof placeStoryActions;
   places: typeof places;
   seed: typeof seed;
   sourceChecks: typeof sourceChecks;

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { quoted } from "@/components/embeds/quoted";
 import { checkDate } from "@/components/place/check-state";
 import { PageContainer } from "@/components/layout/page-container";
@@ -52,6 +53,8 @@ export type FoundRow = {
 };
 export type StoryFinderProps = ActionState & {
   locale: Locale;
+  /** The story agent's panel, which keeps its own state. */
+  agent?: ReactNode;
   counts: readonly { status: MentionStatus; platform: MentionPlatform; count: number }[];
   attached: readonly FoundRow[];
   accepted: readonly FoundRow[];
@@ -289,6 +292,7 @@ function HeldQuote({
 export function StoryFinderView(props: StoryFinderProps) {
   const {
     locale,
+    agent,
     counts,
     attached,
     accepted,
@@ -325,6 +329,7 @@ export function StoryFinderView(props: StoryFinderProps) {
         <StewardNav locale={locale} current="story-finder" />
         <StewardFeedback {...props} />
         <p className="max-w-prose">{m.intro}</p>
+        {agent}
         <section className="min-w-0 space-y-3">
           <h2 className="text-[22px] font-bold">{m.counts}</h2>
           <Counts m={m} counts={counts} />
