@@ -98,6 +98,9 @@ export function AccountMenuView({
           )}
         </DropdownMenuLabel>
         <DropdownMenuItem asChild>
+          <Link href={localePath(locale, "/stamps")}>{m.stampBook}</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
           <Link href={localePath(locale, "/creator")}>{m.creatorPages}</Link>
         </DropdownMenuItem>
         {state.role === "business_owner" && (

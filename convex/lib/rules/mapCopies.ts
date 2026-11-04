@@ -4,12 +4,13 @@ import {
   readHasPeopleStories,
   readHasPublishedPage,
   readMapNames,
+  readNeighbourhood,
   writeMapCopies,
 } from "../mapCopies";
 
 /**
- * Keeps the place row's copies of its names, pin, published page and people's stories in step with
- * their tables.
+ * Keeps the place row's copies of its names, pin, neighbourhood, published page and people's stories
+ * in step with their tables.
  */
 export function registerMapCopyRules(triggers: Triggers<DataModel>) {
   triggers.register("placeName", async (ctx, change) => {
@@ -19,8 +20,11 @@ export function registerMapCopyRules(triggers: Triggers<DataModel>) {
 
   triggers.register("pin", async (ctx, change) => {
     const pin = change.newDoc;
-    await writeMapCopies(ctx.innerDb, (pin ?? change.oldDoc).placeId, {
+    const placeId = (pin ?? change.oldDoc).placeId;
+    const place = await ctx.innerDb.get("place", placeId);
+    await writeMapCopies(ctx.innerDb, placeId, {
       mapPin: pin === null ? null : { lat: pin.lat, lng: pin.lng },
+      neighbourhood: place === null ? undefined : readNeighbourhood(place.regionId, pin),
     });
   });
 

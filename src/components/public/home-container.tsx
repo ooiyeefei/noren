@@ -18,6 +18,7 @@ import {
   locateInBrowser,
   exploreItems,
   fitForFilter,
+  fitForNeighbourhood,
   guideIsVisible,
   type MapFit,
   type MapView,
@@ -28,6 +29,7 @@ import { messagesFor, type Locale } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
 import { HomeView, PublicLoading } from "./home-view";
 import { toHomeModel, type PublicRegionProps } from "./mapping";
+import { useToday } from "./use-today";
 
 function subscribeGuide(onChange: () => void) {
   window.addEventListener("storage", onChange);
@@ -90,6 +92,11 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
   );
   const places = useQuery(api.places.listForMap, { regionId: region.regionId });
   const latest = useQuery(api.stories.latest, { regionId: region.regionId });
+  const today = useToday();
+  const neighbourhoods = useQuery(
+    api.missions.forRegion,
+    today === null ? "skip" : { regionId: region.regionId, now: today },
+  );
   const all = useMemo(() => toHomeModel(places ?? [], locale, region), [places, locale, region]);
   const items = useMemo(
     () => exploreItems(all.items, { category, search, locale, position, view }),
@@ -156,6 +163,11 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
       hasDemo={all.items.some((item) => item.isMock)}
       hasStories={all.items.some((item) => item.hasStory)}
       latest={latest}
+      neighbourhoods={neighbourhoods}
+      onChooseNeighbourhood={(neighbourhood) => {
+        setFitTo(fitForNeighbourhood(neighbourhood));
+        setSheet("peek");
+      }}
       position={position}
       locationOff={locationOff}
       selectedId={selectedId}

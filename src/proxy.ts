@@ -13,7 +13,7 @@ const UNPREFIXED = /^\/(?:api|out|_next|maplibre)(?:\/|$)|^\/robots\.txt$/;
 // visitor to the sign-in page. The role is checked again inside every Convex function (research D2),
 // so a gap here cannot expose data. API routes check their own caller, so they answer 401 as JSON
 // rather than Clerk's redirect or 404.
-const ROLE_PAGES = /^\/[^/]+\/(?:creator|owner|steward)(?:\/|$)/;
+const ROLE_PAGES = /^\/[^/]+\/(?:creator|owner|steward|stamps)(?:\/|$)/;
 
 function requestLocale(request: NextRequest): string {
   return (

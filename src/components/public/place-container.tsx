@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { PageContainer } from "@/components/layout/page-container";
@@ -12,6 +12,7 @@ import type { Locale } from "@/lib/i18n";
 import { PublicQueryBoundary } from "./home-container";
 import { PublicLoading } from "./home-view";
 import { PlaceView } from "./place-view";
+import { useToday } from "./use-today";
 import type { PublicRegionProps } from "./mapping";
 
 type Props = {
@@ -35,6 +36,26 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
   const placeStory = useQuery(api.placeStories.forPlace, args);
   const page = useQuery(api.pages.getPublished, args);
   const { isLoading, isAuthenticated } = useConvexAuth();
+  const today = useToday();
+  const mission = useQuery(
+    api.missions.forPlace,
+    place && today !== null ? { placeId: place._id, now: today } : "skip",
+  );
+  const stamp = useQuery(
+    api.stampBook.forPlace,
+    place && isAuthenticated ? { placeId: place._id } : "skip",
+  );
+  const [pressedFrom, setPressedFrom] = useState<"check" | "story" | null>(null);
+  // Said before the work is done, so the stamp arrives already pressing rather than flashing first.
+  const pressing = async (from: "check" | "story", work: () => Promise<unknown>) => {
+    setPressedFrom(from);
+    try {
+      await work();
+    } catch (error) {
+      setPressedFrom(null);
+      throw error;
+    }
+  };
   const confirm = useMutation(api.checks.confirm);
   const report = useMutation(api.checks.report);
   const addSource = useMutation(api.sources.add);
@@ -50,15 +71,15 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
   const checks: PlaceCheckActions | undefined = place
     ? {
         signedIn: isLoading ? undefined : isAuthenticated,
-        confirm: () => confirm({ placeId: place._id }),
+        confirm: () => pressing("check", () => confirm({ placeId: place._id })),
         report: (problem, note) => report({ placeId: place._id, problem, note: note || undefined }),
       }
     : undefined;
   const story: (AddStoryActions & StoryFeedActions) | undefined = place
     ? {
         signedIn: isLoading ? undefined : isAuthenticated,
-        add: (args) => addSource({ ...args, placeId: place._id }),
-        write: (args) => writeStory({ ...args, placeId: place._id }),
+        add: (args) => pressing("story", () => addSource({ ...args, placeId: place._id })),
+        write: (args) => pressing("story", () => writeStory({ ...args, placeId: place._id })),
         remove: ({ kind, id }) =>
           kind === "written"
             ? removeStory({ storyId: id as Id<"story"> })
@@ -76,6 +97,8 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
       page={page}
       checks={checks}
       story={story}
+      mission={mission}
+      stamp={stamp && { stampedAt: stamp.stampedAt, pressedFrom }}
     />
   );
 }
