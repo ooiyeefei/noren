@@ -181,7 +181,10 @@ const AD_MARKERS = [
   // A label in brackets: 【PR】, [広告], (宣伝), 【提供】, 【案件】 ... The whole bracket is the label.
   /[【[(〔]\s*(?:PR|AD|ADS|Advertisement|Sponsored(?: post| content)?|Affiliate|広告|宣伝|プロモーション|タイアップ|スポンサード|アフィリエイト|提供|商品提供|案件|協賛)\s*[】\])〕]/iu,
   // A label that is a line of its own, or starts one with a colon: "PR", "※広告", "PR：株式会社テスト".
-  /^[\s※*■□◆◇●○▼▽★☆▶►・\-–—]*(?:PR|広告|宣伝|プロモーション|タイアップ|スポンサード|アフィリエイト|Sponsored|Advertisement)(?:記事|広告|投稿)?\s*(?:[:|]|$)/imu,
+  // Only spaces and tabs may come before or after it, never a line break: with \s the leading run
+  // could cross lines, and a page of "-\n" lines took quadratic time (every line start scanned on to
+  // the end). Each attempt now ends with its line.
+  /^[ \t\u3000※*■□◆◇●○▼▽★☆▶►・\-–—]*(?:PR|広告|宣伝|プロモーション|タイアップ|スポンサード|アフィリエイト|Sponsored|Advertisement)(?:記事|広告|投稿)?[ \t\u3000]*(?:[:|]|$)/imu,
   // English disclosures.
   /paid partnership|sponsored by|sponsored (?:post|content)|affiliate links?/iu,
   // A sponsored visit or product: 商品提供, 商品をご提供いただき, 無償でご提供いただき, ご招待いただき.
