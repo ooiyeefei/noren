@@ -668,3 +668,54 @@ describe("liveness", () => {
     expect(await b.t.query(internal.sources.listToCheck, { limit: 1000 })).toHaveLength(100);
   });
 });
+
+describe("a post a member links from Instagram or Facebook", () => {
+  const links = [
+    ["instagram", "https://www.instagram.com/p/FICTIONAL1/"],
+    ["facebook", "https://www.facebook.com/fictional/posts/123"],
+  ] as const;
+
+  it("shows on the place's page with its link back, unlike a found one", async () => {
+    const b = newBackend(modules);
+    const creator = await addPerson(b, "creator", "creator");
+    const member = await addPerson(b, "member", "user");
+    const placeId = await addPlace(b, {
+      createdBy: creator,
+      visibility: "public",
+      kind: "landmark",
+    });
+    for (const [, url] of links)
+      await b.as("member").mutation(api.sources.add, {
+        placeId,
+        url,
+        note: "Cats sleep on the steps here.",
+        noteLang: "en",
+      });
+    const foundUrl = "https://www.instagram.com/p/FICTIONAL2";
+    await b.run((ctx) =>
+      ctx.db.insert("source", {
+        placeId,
+        addedBy: member,
+        origin: "story_finder",
+        platform: "instagram",
+        adapter: "meta_embed",
+        url: foundUrl,
+        canonicalUrl: foundUrl,
+        status: "live",
+        isMock: false,
+      }),
+    );
+    const shown = await b.t.query(api.sources.listForPlace, { placeId });
+    expect(shown.map(({ platform, creatorNote }) => [platform, creatorNote])).toEqual([
+      ["instagram", "Cats sleep on the steps here."],
+      ["facebook", "Cats sleep on the steps here."],
+    ]);
+    expect(shown.map(({ canonicalUrl }) => canonicalUrl)).toEqual([
+      "https://www.instagram.com/p/FICTIONAL1",
+      "https://www.facebook.com/fictional/posts/123",
+    ]);
+    expect(shown.every(({ sharedBy }) => sharedBy === "Test Person (member)")).toBe(true);
+    expect(shown[0]!.embed).toMatchObject({ kind: "blockquote" });
+    expect(shown[1]!.embed).toMatchObject({ kind: "iframe" });
+  });
+});
