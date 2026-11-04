@@ -27,6 +27,7 @@ export const interviewUiMessages = defineMessages({
     saving: "Saving…",
     proposeSelection: "Propose a statement from the selection",
     unsavedChanges: "Save your changes before proposing a statement.",
+    repeatedHint: "Repeated words, often a transcription slip. Check against the recording.",
     fact: "Fact",
     story: "Story",
     caution: "Caution",
@@ -71,6 +72,8 @@ export const interviewUiMessages = defineMessages({
     saving: "保存中…",
     proposeSelection: "選んだ部分から文を提案する",
     unsavedChanges: "文を提案する前に、変更を保存してください。",
+    repeatedHint:
+      "同じ言葉が続けて書かれています。文字起こしの誤りかもしれません。録音で確かめてください。",
     fact: "お店の情報",
     story: "お店の話",
     caution: "来店時のご案内",
