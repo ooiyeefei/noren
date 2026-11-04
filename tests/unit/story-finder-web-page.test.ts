@@ -224,6 +224,19 @@ describe("createPageReader: the ad screen sees the whole page", () => {
     }
   });
 
+  it("flags a label anywhere in the article or its title, outside the stored window", async () => {
+    const long = wrap("", "").replace("<article>", "<article><p>【PR】</p>");
+    const titled = wrap("", "").replace("<title>Mock</title>", "<title>【PR】Mock</title>");
+    const net = fakeInternet({
+      "https://blog.example.com/top-label": html(long),
+      "https://blog.example.com/title-label": html(titled),
+    });
+    for (const where of ["top-label", "title-label"]) {
+      const page = await net.read(`https://blog.example.com/${where}`, NAMES);
+      expect(page, where).toMatchObject({ ok: true, adMarker: true });
+    }
+  });
+
   it("does not flag an ordinary blog for the labels on its ad slots", async () => {
     const net = fakeInternet({
       "https://blog.example.com/slots": html(

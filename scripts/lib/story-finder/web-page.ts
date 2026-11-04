@@ -5,7 +5,11 @@ import { isIP, type LookupFunction } from "node:net";
 import type { Readable } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { parseHttpUrl } from "../../../src/lib/adapters/url";
-import { hasPageDisclosure, storedPostText } from "../../../src/lib/story-finder/mention";
+import {
+  hasAdMarker,
+  hasPageDisclosure,
+  storedPostText,
+} from "../../../src/lib/story-finder/mention";
 import { namesPlace } from "./types";
 
 /** The robots.txt product token, and the User-Agent sent with it. */
@@ -581,16 +585,21 @@ export function createPageReader(
     const { response } = result;
     if (response.status !== 200) return { ok: false, reason: "http" };
     if (!/html/i.test(response.contentType)) return { ok: false, reason: "not_html" };
-    const text = textAroundPlace(htmlText(response.body), names);
+    const article = htmlText(response.body);
+    const text = textAroundPlace(article, names);
     if (text === null) return { ok: false, reason: "no_mention" };
+    const title = /<title\b[^<>]*>([^<]*)<\/title/i.exec(response.body)?.[1] ?? "";
     const published = Date.parse(metaContent(response.body, "article:published_time") ?? "");
     return {
       ok: true,
       url: result.url.href,
       text,
-      // From the whole page, footer and side bars included: the label may be at its top or bottom,
-      // outside `text`, in a part htmlText leaves out.
-      ...(hasPageDisclosure(htmlScreenText(response.body)) ? { adMarker: true } : {}),
+      // A label may sit outside `text`. The article and its title are read for any label; the rest
+      // of the page, footer and side bars included, only for a disclosure sentence, because labels
+      // there usually name an ad slot.
+      ...(hasAdMarker(`${title}\n${article}`) || hasPageDisclosure(htmlScreenText(response.body))
+        ? { adMarker: true }
+        : {}),
       author: metaContent(response.body, "author") ?? metaContent(response.body, "og:site_name"),
       ...(Number.isFinite(published) ? { publishedAt: published } : {}),
     };
