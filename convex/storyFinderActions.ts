@@ -107,23 +107,6 @@ export const checkBatch = internalAction({
 });
 
 /**
- * HOOK for the Glimmer translation check (built on another branch; not wired here). A found post's
- * quote is a stranger's words, not an owner's, so its machine translation may go through that check
- * before it is saved. Until then every translation passes here; code still bounds it (length by
- * weight, no added contact details) in the translator and again in
- * storyFinder.saveExcerptTranslation (translationFits in lib/story-finder/mention.ts).
- */
-async function checkExcerptTranslation(item: {
-  sourceId: Id<"source">;
-  lang: string;
-  sourceText: string;
-  text: string;
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
-  void item; // Read by the Glimmer check once it is wired in.
-  return { ok: true };
-}
-
-/**
  * Translates the quotes of a place's found posts into the region's other languages with the same
  * job and AI_MODEL_TRANSLATE setting that translate owners' statements, under a prompt that treats
  * the quote as a stranger's untrusted words (input kind public_post_quote). The result is shown
@@ -145,15 +128,12 @@ export const translateExcerpts = internalAction({
         createTranslator({ model: createLanguageModel(config), modelVersion: config.modelId }),
       // Framed as a stranger's untrusted words in the translator's prompt.
       inputKind: "public_post_quote",
-      saveMachineTranslation: async ({ claimId, ...args }) => {
-        const sourceId = claimId as Id<"source">;
-        const checked = await checkExcerptTranslation({ sourceId, ...args });
-        if (!checked.ok) throw new Error(`excerpt translation refused: ${checked.reason}`);
-        return await ctx.runMutation(internal.storyFinder.saveExcerptTranslation, {
-          sourceId,
+      // Saving queues the translation check (Glimmer) in the same run as statements' checks.
+      saveMachineTranslation: ({ claimId, ...args }) =>
+        ctx.runMutation(internal.storyFinder.saveExcerptTranslation, {
+          sourceId: claimId as Id<"source">,
           ...args,
-        });
-      },
+        }),
     });
     return null;
   },

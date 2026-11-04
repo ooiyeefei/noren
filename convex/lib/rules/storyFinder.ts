@@ -1,10 +1,12 @@
 import type { Triggers } from "convex-helpers/server/triggers";
 import {
   QUOTE_MAX,
+  quoteFingerprint,
+  quoteGrams,
   type MentionPlatform,
   type MentionStatus,
 } from "../../../src/lib/story-finder/mention";
-import type { DataModel } from "../../_generated/dataModel";
+import type { DataModel, Doc } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
 import { mustBeUnique, violation } from "./shared";
 
@@ -21,6 +23,33 @@ async function bump(
   if (row === null)
     await db.insert("mentionCount", { status, platform, count: Math.max(0, delta) });
   else await db.patch("mentionCount", row._id, { count: Math.max(0, row.count + delta) });
+}
+
+/**
+ * Keeps a candidate's row in shownQuote while it is attached or hidden, so the copy check sees every
+ * quote that is shown or was taken down. A row is never removed: a hidden quote still counts.
+ */
+async function syncShownQuote(db: MutationCtx["db"], candidate: Doc<"mentionCandidate">) {
+  if (candidate.status !== "attached" && candidate.status !== "hidden") return;
+  const quote = candidate.verdict?.quote;
+  if (!quote) return;
+  const row = await db
+    .query("shownQuote")
+    .withIndex("by_candidateId", (q) => q.eq("candidateId", candidate._id))
+    .unique();
+  if (row !== null) {
+    if (row.status !== candidate.status)
+      await db.patch("shownQuote", row._id, { status: candidate.status });
+    return;
+  }
+  const fingerprint = quoteFingerprint(quote);
+  await db.insert("shownQuote", {
+    regionId: candidate.regionId,
+    candidateId: candidate._id,
+    status: candidate.status,
+    fingerprint,
+    grams: quoteGrams(fingerprint).size,
+  });
 }
 
 /** Rules for the story finder's candidates and the posts it links. */
@@ -46,6 +75,11 @@ export function registerStoryFinderRules(triggers: Triggers<DataModel>) {
     if (before?.status === after?.status && before?.platform === after?.platform) return;
     if (before) await bump(ctx.innerDb, before.status, before.platform, -1);
     if (after) await bump(ctx.innerDb, after.status, after.platform, 1);
+  });
+
+  triggers.register("mentionCandidate", async (ctx, change) => {
+    if (change.newDoc !== null && change.oldDoc?.status !== change.newDoc.status)
+      await syncShownQuote(ctx.innerDb, change.newDoc);
   });
 
   triggers.register("mentionCandidate", async (_ctx, change) => {

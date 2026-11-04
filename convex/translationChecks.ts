@@ -1,4 +1,5 @@
 import { v, type Infer } from "convex/values";
+import { translationFits } from "../src/lib/story-finder/mention";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { writeAudit } from "./lib/audit";
@@ -9,6 +10,7 @@ import {
   checkFor,
   checkSetting,
   consentCoversCheck,
+  excerptIsCheckable,
   scheduleCheckRun,
 } from "./lib/translationChecks";
 
@@ -29,6 +31,8 @@ const itemValidator = v.object({
   originalLang: v.string(),
   placeId: v.id("place"),
   retranslated: v.boolean(),
+  /** How the translator frames the words when it translates them again. */
+  inputKind: v.union(v.literal("claim"), v.literal("public_post_quote")),
 });
 export type CheckItem = Infer<typeof itemValidator>;
 
@@ -57,10 +61,22 @@ const stepValidator = v.union(
 );
 export type CheckStep = Infer<typeof stepValidator>;
 
-/** The check, its translation and claim, while the check still describes the translation. */
-async function current(ctx: MutationCtx, checkId: Id<"translationCheck">, text: string) {
-  const check = await ctx.db.get("translationCheck", checkId);
-  if (check === null || check.text !== text || check.status !== "pending") return null;
+type ClaimCheck = Extract<Doc<"translationCheck">, { claimId: Id<"claim"> }>;
+type ExcerptCheck = Extract<Doc<"translationCheck">, { subject: "excerpt" }>;
+
+/** What a pending check compares, and how to replace its translation with a second attempt. */
+type Subject = {
+  check: Doc<"translationCheck">;
+  original: string;
+  originalLang: string;
+  placeId: Id<"place">;
+  inputKind: CheckItem["inputKind"];
+  /** Saves a re-translation; false when it may not replace the checked one. */
+  replace(text: string, modelVersion: string): Promise<boolean>;
+};
+
+/** An interview statement: checked only while the owner's consent covers sending it to Modal. */
+async function claimSubject(ctx: MutationCtx, check: ClaimCheck): Promise<Subject | null> {
   const translation = await ctx.db.get("claimTranslation", check.translationId);
   const claim = translation === null ? null : await ctx.db.get("claim", translation.claimId);
   if (
@@ -70,29 +86,98 @@ async function current(ctx: MutationCtx, checkId: Id<"translationCheck">, text: 
     claim === null ||
     !CHECKABLE.some((status) => status === claim.status) ||
     !(await consentCoversCheck(ctx, claim))
-  ) {
-    // The words were edited, withdrawn or translated by a person, or the owner's consent no longer
-    // covers sending them to Modal: nothing is left to check, and nothing is sent.
+  )
+    return null;
+  return {
+    check,
+    original: claim.textOriginal,
+    originalLang: claim.langOriginal,
+    placeId: claim.placeId,
+    inputKind: "claim",
+    replace: async (text, modelVersion) => {
+      await ctx.db.patch("claimTranslation", translation._id, { text, modelVersion });
+      await writeAudit(ctx, {
+        actorKind: "ai",
+        modelVersion,
+        action: "claim.translate_machine",
+        targetType: "claim",
+        targetId: claim._id,
+        diff: { lang: translation.lang, retranslated: true },
+      });
+      return true;
+    },
+  };
+}
+
+/**
+ * A found post's quote: public words, so no consent applies (excerptIsCheckable), while the quote
+ * is still shown and the translation is still of the quote as it stands.
+ */
+async function excerptSubject(ctx: MutationCtx, check: ExcerptCheck): Promise<Subject | null> {
+  const translation = await ctx.db.get("sourceExcerptTranslation", check.translationId);
+  const source = await ctx.db.get("source", check.sourceId);
+  if (
+    translation === null ||
+    translation.text !== check.text ||
+    !excerptIsCheckable(source) ||
+    translation.sourceText !== source.excerpt
+  )
+    return null;
+  return {
+    check,
+    original: source.excerpt,
+    originalLang: source.excerptLang,
+    placeId: source.placeId,
+    inputKind: "public_post_quote",
+    replace: async (text, modelVersion) => {
+      // The same bounds as the first translation: about as long as the quote, no added address.
+      if (!translationFits(source.excerpt, text)) return false;
+      await ctx.db.patch("sourceExcerptTranslation", translation._id, { text, modelVersion });
+      await writeAudit(ctx, {
+        actorKind: "ai",
+        modelVersion,
+        action: "source.translate_machine",
+        targetType: "source",
+        targetId: source._id,
+        diff: { lang: translation.lang, retranslated: true },
+      });
+      return true;
+    },
+  };
+}
+
+/** The check and what it is about, while the check still describes its translation. */
+async function current(
+  ctx: MutationCtx,
+  checkId: Id<"translationCheck">,
+  text: string,
+): Promise<Subject | null> {
+  const check = await ctx.db.get("translationCheck", checkId);
+  if (check === null || check.text !== text || check.status !== "pending") return null;
+  const subject =
+    check.subject === "excerpt" ? await excerptSubject(ctx, check) : await claimSubject(ctx, check);
+  if (subject === null) {
+    // The words were edited, withdrawn, taken down or translated by a person, or the owner's
+    // consent no longer covers sending them to Modal: nothing is left to check, and nothing is sent.
     await ctx.db.delete("translationCheck", check._id);
     return null;
   }
-  return { check, translation, claim };
+  return subject;
 }
 
 async function audit(
   ctx: MutationCtx,
   check: Doc<"translationCheck">,
   setting: string,
-  action: string,
   diff: Record<string, unknown>,
 ) {
   await writeAudit(ctx, {
     ...(setting
       ? { actorKind: "ai" as const, modelVersion: setting }
       : { actorKind: "system" as const }),
-    action,
-    targetType: "claim",
-    targetId: check.claimId,
+    ...(check.subject === "excerpt"
+      ? { action: "source.translation_check", targetType: "source", targetId: check.sourceId }
+      : { action: "claim.translation_check", targetType: "claim", targetId: check.claimId }),
     diff: { lang: check.lang, ...diff },
   });
 }
@@ -123,10 +208,11 @@ export const startBatch = internalMutation({
         checkId: row._id,
         text: row.text,
         lang: row.lang,
-        original: found.claim.textOriginal,
-        originalLang: found.claim.langOriginal,
-        placeId: found.claim.placeId,
+        original: found.original,
+        originalLang: found.originalLang,
+        placeId: found.placeId,
         retranslated: row.retranslated,
+        inputKind: found.inputKind,
       });
     }
     return items;
@@ -166,7 +252,7 @@ export const recordOutcome = internalMutation({
           attempts,
           error: `gave up after ${Math.round((now - check.firstAttemptAt!) / 1000)} s: ${outcome.error ?? "endpoint not ready"}`,
         });
-        await audit(ctx, check, modelSetting, "claim.translation_check", {
+        await audit(ctx, check, modelSetting, {
           result: "unavailable",
           attempts,
         });
@@ -188,7 +274,7 @@ export const recordOutcome = internalMutation({
         attempts,
         error: outcome.error,
       });
-      await audit(ctx, check, modelSetting, "claim.translation_check", {
+      await audit(ctx, check, modelSetting, {
         result: "unavailable",
         attempts,
       });
@@ -201,7 +287,7 @@ export const recordOutcome = internalMutation({
         status: "held",
         error: outcome.error,
       });
-      await audit(ctx, check, modelSetting, "claim.translation_check", {
+      await audit(ctx, check, modelSetting, {
         result: "held",
         attempts: check.attempts,
         added: check.added.length,
@@ -225,7 +311,7 @@ export const recordOutcome = internalMutation({
     }
     const status = outcome.faithful ? "passed" : "held";
     await ctx.db.patch("translationCheck", checkId, { ...base, ...verdict, status });
-    await audit(ctx, check, modelSetting, "claim.translation_check", {
+    await audit(ctx, check, modelSetting, {
       result: status,
       attempts,
       added: outcome.added.length,
@@ -249,16 +335,23 @@ export const saveRetranslation = internalMutation({
     const found = await current(ctx, checkId, text);
     const trimmed = newText.trim();
     if (found === null || !trimmed || trimmed.length > 1000) return false;
+    if (!(await found.replace(trimmed, modelVersion))) {
+      // A second attempt that may not be shown either: hold the first, with its check's lists.
+      await ctx.db.patch("translationCheck", checkId, {
+        status: "held",
+        leaseUntil: undefined,
+        error: "the re-translation did not fit the words it translates",
+      });
+      await audit(ctx, found.check, found.check.modelSetting, {
+        result: "held",
+        attempts: found.check.attempts,
+        added: found.check.added.length,
+        missing: found.check.missing.length,
+        retranslated: false,
+      });
+      return false;
+    }
     await ctx.db.patch("translationCheck", checkId, { text: trimmed, retranslated: true });
-    await ctx.db.patch("claimTranslation", found.translation._id, { text: trimmed, modelVersion });
-    await writeAudit(ctx, {
-      actorKind: "ai",
-      modelVersion,
-      action: "claim.translate_machine",
-      targetType: "claim",
-      targetId: found.claim._id,
-      diff: { lang: found.translation.lang, retranslated: true },
-    });
     return true;
   },
 });

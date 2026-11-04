@@ -8,12 +8,14 @@ import {
   authorKey,
   contactIn,
   DUPLICATE_QUOTE_SIMILARITY,
+  gramSimilarity,
   guessLang,
+  mayBeCopies,
   MENTION_KINDS,
   mentionCanonicalUrl,
   namesPlace,
-  quoteKeys,
-  quoteSimilarity,
+  quoteFingerprint,
+  quoteGrams,
   TEXT_MAX,
   translationFits,
   type RejectReason,
@@ -26,6 +28,7 @@ import { writeAudit } from "./lib/audit";
 import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
+import { queueExcerptCheck } from "./lib/translationChecks";
 import { readMapNames, readMapPin } from "./lib/mapCopies";
 import { withMock } from "./lib/mock";
 import { regionConfig } from "./lib/region";
@@ -48,8 +51,16 @@ const MAX_FOUND_PER_PLACE = 12;
 /** At most this many posts by one author are attached from one collection, so no one can flood it. */
 const AUTHOR_LIMIT = 3;
 const INGEST_MAX = 100;
+/**
+ * The most shown quotes one region's copy check reads. At most MAX_FOUND_PER_PLACE (12) found posts
+ * are live per place, so a region reaches this only with hundreds of places each holding a full set.
+ * A row is a fingerprint of at most QUOTE_MAX characters, about 1 KB, so reading all of them stays
+ * near 4 MB, well inside one mutation's read limit. Past it the check could not see every quote, so
+ * it holds the post (attachError copy_check_full) rather than guess.
+ */
+export const MAX_SHOWN_QUOTES = 4000;
 /** Attach failures that stay true until something else changes; a batch passes over them. */
-const STUCK = new Set(["place_full", "already_linked", "author_limit"]);
+const STUCK = new Set(["place_full", "already_linked", "author_limit", "copy_check_full"]);
 
 /** The steward a script names must be a real (not demo) steward: found posts go public in their name. */
 async function finderSteward(ctx: QueryCtx, personId: Id<"person">): Promise<Doc<"person">> {
@@ -253,7 +264,7 @@ export const ingest = internalMutation({
         url: candidate.url.trim(),
         canonicalUrl,
         ...author,
-        authorKey: authorKey(candidate.platform, author),
+        authorKey: authorKey({ platform: candidate.platform, canonicalUrl, ...author }),
         title: cap(candidate.title, 300),
         locationName: cap(candidate.locationName, 200),
         postedAt:
@@ -425,28 +436,51 @@ async function placeNameValues(ctx: QueryCtx, placeId: Id<"place">): Promise<str
   return (place.mapNames ?? (await readMapNames(ctx, place._id))).map(({ value }) => value);
 }
 
+type ShownQuotes = {
+  /** False when the region holds more than MAX_SHOWN_QUOTES, so some were not read. */
+  complete: boolean;
+  rows: { candidateId: Id<"mentionCandidate">; fingerprint: string; grams: number }[];
+};
+
 /**
- * Whether the quote is a copy of one already shown (or shown and hidden) for another post: the
- * same text posted again, perhaps with a few words changed, is spam, not another person's story.
+ * Every quote shown, or shown and then hidden, in a region: read once per mutation through the
+ * region and status index, then kept in `cache` for the other candidates the mutation attaches.
  */
-async function copiesShownQuote(ctx: QueryCtx, candidate: Doc<"mentionCandidate">, quote: string) {
-  const { quoteHead, quoteTail } = quoteKeys(quote);
-  const near = [
-    ...(await ctx.db
-      .query("mentionCandidate")
-      .withIndex("by_quoteHead", (q) => q.eq("quoteHead", quoteHead))
-      .take(20)),
-    ...(await ctx.db
-      .query("mentionCandidate")
-      .withIndex("by_quoteTail", (q) => q.eq("quoteTail", quoteTail))
-      .take(20)),
-  ];
-  return near.some(
-    (other) =>
-      other._id !== candidate._id &&
-      (other.status === "attached" || other.status === "hidden") &&
-      other.verdict !== undefined &&
-      quoteSimilarity(other.verdict.quote, quote) >= DUPLICATE_QUOTE_SIMILARITY,
+async function shownQuotesIn(
+  ctx: QueryCtx,
+  regionId: string,
+  cache: Map<string, ShownQuotes>,
+): Promise<ShownQuotes> {
+  const cached = cache.get(regionId);
+  if (cached !== undefined) return cached;
+  const rows: Doc<"shownQuote">[] = [];
+  for (const status of ["attached", "hidden"] as const)
+    rows.push(
+      ...(await ctx.db
+        .query("shownQuote")
+        .withIndex("by_regionId_and_status", (q) => q.eq("regionId", regionId).eq("status", status))
+        .take(MAX_SHOWN_QUOTES + 1 - rows.length)),
+    );
+  const shown = {
+    complete: rows.length <= MAX_SHOWN_QUOTES,
+    rows: rows.map(({ candidateId, fingerprint, grams }) => ({ candidateId, fingerprint, grams })),
+  };
+  cache.set(regionId, shown);
+  return shown;
+}
+
+/**
+ * Whether the quote is a copy of one shown (or shown and hidden) anywhere in the region: the same
+ * words posted again, perhaps with a few changed, are spam, not another person's story. Compared by
+ * the trigrams of their fingerprints; a quote whose length rules out a match is skipped unread.
+ */
+function copiesShownQuote(shown: ShownQuotes, candidate: Doc<"mentionCandidate">, quote: string) {
+  const grams = quoteGrams(quoteFingerprint(quote));
+  return shown.rows.some(
+    (row) =>
+      row.candidateId !== candidate._id &&
+      mayBeCopies(grams.size, row.grams) &&
+      gramSimilarity(grams, quoteGrams(row.fingerprint)) >= DUPLICATE_QUOTE_SIMILARITY,
   );
 }
 
@@ -481,6 +515,7 @@ async function attachCandidate(
   candidate: Doc<"mentionCandidate">,
   steward: Doc<"person">,
   now: number,
+  shownCache: Map<string, ShownQuotes> = new Map(),
 ): Promise<AttachResult> {
   const fail = async (error: string): Promise<AttachResult> => {
     await ctx.db.patch("mentionCandidate", candidate._id, { attachError: error });
@@ -513,7 +548,9 @@ async function attachCandidate(
   if (!namesPlace(postContext(candidate), await placeNameValues(ctx, place._id)))
     return await reject("place_not_named");
   if (contactIn(quote) !== null) return await reject("quote_has_contact");
-  if (await copiesShownQuote(ctx, candidate, quote)) return await reject("duplicate_quote");
+  const shown = await shownQuotesIn(ctx, place.regionId, shownCache);
+  if (!shown.complete) return await fail("copy_check_full");
+  if (copiesShownQuote(shown, candidate, quote)) return await reject("duplicate_quote");
   if ((await shownFromAuthor(ctx, candidate)) >= AUTHOR_LIMIT) return await fail("author_limit");
   const region = regionConfig(place.regionId);
   const described = describeSource(candidate.url, region.enabledSourceAdapters);
@@ -564,6 +601,9 @@ async function attachCandidate(
     attachedAt: now,
     attachError: undefined,
   });
+  // The trigger has stored the quote; the next candidate in this mutation must see it too.
+  const fingerprint = quoteFingerprint(quote);
+  shown.rows.push({ candidateId: candidate._id, fingerprint, grams: quoteGrams(fingerprint).size });
   await writeAudit(ctx, {
     actorKind: "person",
     actorPersonId: steward._id,
@@ -624,7 +664,6 @@ export const recordCheck = internalMutation({
       status: decision.status,
       reason: decision.status === "rejected" ? decision.reason : undefined,
       verdict: decision.verdict,
-      ...(decision.status === "accepted" ? quoteKeys(decision.quote) : {}),
       modelSetting: args.modelSetting,
       latencyMs: Math.max(0, Math.round(args.latencyMs)),
       checkedAt: now,
@@ -675,11 +714,13 @@ async function attachAccepted(ctx: MutationCtx, steward: Doc<"person">, limit: n
   let attached = 0;
   let considered = 0;
   const max = Math.max(0, Math.min(100, Math.floor(limit)));
+  // The region's shown quotes are read once for the whole batch.
+  const shownCache = new Map<string, ShownQuotes>();
   for (const candidate of accepted) {
     if (considered >= max) break;
     if (candidate.attachError !== undefined && STUCK.has(candidate.attachError)) continue;
     considered++;
-    const result = await attachCandidate(ctx, candidate, steward, Date.now());
+    const result = await attachCandidate(ctx, candidate, steward, Date.now(), shownCache);
     if (!result.ok) continue;
     attached++;
     if (result.excerpt) places.push(candidate.placeId);
@@ -796,8 +837,12 @@ export const saveExcerptTranslation = internalMutation({
       origin: "machine" as const,
       modelVersion,
     };
-    if (existing === null) await ctx.db.insert("sourceExcerptTranslation", row);
-    else await ctx.db.patch("sourceExcerptTranslation", existing._id, row);
+    let translationId: Id<"sourceExcerptTranslation">;
+    if (existing === null) translationId = await ctx.db.insert("sourceExcerptTranslation", row);
+    else {
+      translationId = existing._id;
+      await ctx.db.patch("sourceExcerptTranslation", translationId, row);
+    }
     await writeAudit(ctx, {
       actorKind: "ai",
       modelVersion,
@@ -806,6 +851,9 @@ export const saveExcerptTranslation = internalMutation({
       targetId: sourceId,
       diff: { lang },
     });
+    // The translation check (Glimmer), as for statements; held, the card shows the quote alone.
+    const saved = await ctx.db.get("sourceExcerptTranslation", translationId);
+    if (saved !== null) await queueExcerptCheck(ctx, saved);
     return null;
   },
 });

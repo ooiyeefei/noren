@@ -239,6 +239,11 @@ export type TranslationCheckItem = {
   originalLang: string;
   placeId: string;
   retranslated: boolean;
+  /**
+   * How the translator frames the words when it translates them again: a statement ("claim", the
+   * default) or a found post's quote, a stranger's untrusted words ("public_post_quote").
+   */
+  inputKind?: TranslatorInputKind;
 };
 export type TranslationCheckOutcome =
   | ({ kind: "report" } & CheckReport)
@@ -343,7 +348,7 @@ export async function checkTranslationsJob(
           from: item.originalLang,
           to: item.lang,
           glossary: placeGlossary(names, item.originalLang, item.lang),
-          inputKind: "claim",
+          inputKind: item.inputKind ?? "claim",
           feedback: { added: report.added, missing: report.missing },
         });
       if (!result.ok) throw new Error(result.reason);

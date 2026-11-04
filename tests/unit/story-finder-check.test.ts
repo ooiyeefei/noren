@@ -15,13 +15,15 @@ import {
   authorKey,
   capQuote,
   contactIn,
+  DUPLICATE_QUOTE_SIMILARITY,
   guessLang,
   hasAdMarker,
   isVerbatim,
+  mayBeCopies,
   namesPlace,
   normaliseWhitespace,
-  quoteKeys,
   quoteSimilarity,
+  registrableHost,
   textWeight,
   translationFits,
 } from "@/lib/story-finder/mention";
@@ -174,6 +176,23 @@ describe("decideMention: checks that need no model", () => {
   it.each([
     ["予約は https://mock.example/booking から。", "url"],
     ["詳しくは mock-cafe.jp を見てね。", "url"],
+    // Any top-level label, not a list of known ones: new ones appear all the time.
+    ["詳しくはmock-cafe.nagasakiまで。", "url"],
+    ["Book at mock-cafe.example or mock.shop", "url"],
+    ["Find it at mock-cafe.coffee", "url"],
+    ["予約は長崎カフェ.jpで", "url"],
+    ["See mock.xn--p1ai today", "url"],
+    ["ｍｏｃｋ－ｃａｆｅ．ｊｐで予約", "url"],
+    // Dots spelled out to get past a filter.
+    ["mock-cafe dot com で予約", "url"],
+    ["mock-cafe (dot) com で予約", "url"],
+    ["mock-cafe[.]com で予約", "url"],
+    ["mock-cafe [dot] jp で予約", "url"],
+    ["mock-cafe{dot}jp で予約", "url"],
+    ["mock-cafe . jp で予約", "url"],
+    ["mock-cafeドットcomで予約", "url"],
+    ["mock-cafe（ドット）comで予約", "url"],
+    ["hxxps://mock-cafe/booking", "url"],
     ["問い合わせは mock@example.com まで。", "email"],
     ["電話は 095-000-0000 です。", "phone"],
     ["電話は０９５（０００）００００です。", "phone"],
@@ -195,27 +214,103 @@ describe("decideMention: checks that need no model", () => {
       "コーヒーは500円、ケーキは1,200円。",
       "朝9:00から夜21:30まで。",
       "e.g. the roaster is old.",
+      // Numbers with a decimal point, abbreviations and ordinary sentence ends are not domains.
+      "駅から1.5km、徒歩20分。No.1のナポリタン。",
+      "Ver.2 of the menu came out at 9.30am, i.e. early.",
+      "The roaster is old. It still works. U.S. visitors love it.",
+      "店主の話では、焙煎機は1962年製。今も毎朝動いている。",
     ])
       expect(contactIn(quote), quote).toBeNull();
   });
 
-  it("near copies of a quote look alike; different stories do not", () => {
-    const a = "祖父の代から続く焙煎所で、毎朝豆を焼いています。港が見える窓際の席が人気です。";
-    const b = "祖父の代から続く焙煎所で、毎朝豆を焼いています！港が見える窓際の席が人気です";
-    const c = "昭和の喫茶店らしいナポリタンと、店主が描いた港の絵が迎えてくれます。";
-    expect(quoteSimilarity(a, b)).toBeGreaterThan(0.6);
-    expect(quoteSimilarity(a, c)).toBeLessThan(0.2);
-    expect(quoteKeys(a)).toEqual(quoteKeys(b));
+  it("errs towards refusing: text that only looks like an address costs the quote", () => {
+    // Accepted false positives: a missing space after a full stop, a "dot com" in prose.
+    expect(contactIn("The coffee was great.Will come back.")).toBe("url");
+    expect(contactIn("It opened in the dot com years.")).toBe("url");
   });
 
-  it("one author is one key per platform, however their name is written", () => {
-    expect(authorKey("instagram", { authorHandle: "Mock_Author" })).toBe(
-      authorKey("instagram", { authorHandle: "mock_author" }),
-    );
-    expect(authorKey("instagram", { authorHandle: "x" })).not.toBe(
-      authorKey("tiktok", { authorHandle: "x" }),
-    );
-    expect(authorKey("web", {})).toBe("web:unknown");
+  it("an edited copy of a quote is still a copy; a different story is not", () => {
+    const a = "祖父の代から続く焙煎所で、毎朝豆を焼いています。港が見える窓際の席が人気です。";
+    // Other punctuation, spacing and width, and one word changed.
+    const edited = "祖父の代から続く焙煎所で 毎朝豆を焼いています!! 港が見える窓辺の席が人気です";
+    const c = "昭和の喫茶店らしいナポリタンと、店主が描いた港の絵が迎えてくれます。";
+    expect(quoteSimilarity(a, edited)).toBeGreaterThanOrEqual(DUPLICATE_QUOTE_SIMILARITY);
+    expect(quoteSimilarity(a, c)).toBeLessThan(0.2);
+    const en = "Test Shop roasts its beans by hand every morning before the harbour ferries leave.";
+    const enEdited =
+      "Test Shop roasts its beans by hand each morning, before the harbour ferries leave!";
+    expect(quoteSimilarity(en, enEdited)).toBeGreaterThanOrEqual(DUPLICATE_QUOTE_SIMILARITY);
+    expect(
+      quoteSimilarity(en, "At Test Shop the owner keeps her grandfather's tin coffee scoop."),
+    ).toBeLessThan(0.3);
+  });
+
+  it("skips comparing quotes whose lengths rule out a copy", () => {
+    expect(mayBeCopies(100, 85)).toBe(true);
+    expect(mayBeCopies(85, 100)).toBe(true);
+    expect(mayBeCopies(100, 70)).toBe(false);
+    expect(mayBeCopies(0, 0)).toBe(false);
+  });
+
+  describe("authorKey: only identifiers the platform vouches for", () => {
+    const post = (overrides: Partial<Parameters<typeof authorKey>[0]>) =>
+      authorKey({
+        platform: "instagram",
+        canonicalUrl: "https://www.instagram.com/p/MOCK",
+        ...overrides,
+      });
+
+    it("a profile address or handle, however it is written", () => {
+      expect(post({ authorUrl: "https://www.instagram.com/Mock_Author/" })).toBe(
+        post({ authorUrl: "https://instagram.com/mock_author" }),
+      );
+      expect(post({ authorHandle: "Mock_Author" })).toBe(post({ authorHandle: "mock_author" }));
+      expect(post({ platform: "tiktok", authorHandle: "x" })).not.toBe(post({ authorHandle: "x" }));
+      expect(
+        post({ platform: "facebook", authorUrl: "https://www.facebook.com/profile.php?id=100001" }),
+      ).not.toBe(
+        post({ platform: "facebook", authorUrl: "https://www.facebook.com/profile.php?id=100002" }),
+      );
+    });
+
+    it("never a display name: posts without a verified identity share one key", () => {
+      const named = (authorName: string) =>
+        authorKey({
+          platform: "facebook",
+          canonicalUrl: "https://www.facebook.com/mockpage/posts/1",
+          ...({ authorName } as object),
+        });
+      expect(named("Mock Page A")).toBe("facebook:unknown");
+      expect(named("Mock Page B")).toBe("facebook:unknown");
+    });
+
+    it("a web page: the registrable host it was served from, never its author tags", () => {
+      const page = (canonicalUrl: string) => authorKey({ platform: "web", canonicalUrl });
+      expect(page("https://blog.example.co.jp/entry/1")).toBe("web:example.co.jp");
+      expect(page("https://www.example.co.jp/other")).toBe("web:example.co.jp");
+      expect(page("https://mock-a.hatenablog.com/entry/1")).toBe(
+        page("https://mock-b.hatenablog.com/entry/2"),
+      );
+      expect(page("https://mock.nagasaki.jp/x")).toBe("web:mock.nagasaki.jp");
+      expect(page("https://example.org/a")).not.toBe(page("https://example.net/a"));
+      // Whatever name or og: tag a page sets, the key is where it was served from.
+      expect(
+        authorKey({
+          platform: "web",
+          canonicalUrl: "https://mock.example.com/a",
+          authorHandle: "Somebody Else",
+          authorUrl: "https://elsewhere.example.org/",
+        }),
+      ).toBe("web:example.com");
+    });
+
+    it("registrableHost folds subdomains and knows public second-level names", () => {
+      expect(registrableHost("a.b.example.com")).toBe("example.com");
+      expect(registrableHost("shop.example.co.uk")).toBe("example.co.uk");
+      expect(registrableHost("www.city.example.lg.jp")).toBe("example.lg.jp");
+      expect(registrableHost("example.com.")).toBe("example.com");
+      expect(registrableHost("example.com")).toBe("example.com");
+    });
   });
 
   it("parses the model's report strictly", () => {
