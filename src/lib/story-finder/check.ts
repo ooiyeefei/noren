@@ -15,6 +15,7 @@ Choose kind strictly, because a post shown on the place's page must give a reade
 A story is about the place itself: its history, its people, how it came to be, how things are done there (for example "the shop was started by the owner's grandfather as a street stall in the 1950s").
 A tip is a concrete detail a visitor can act on: how to order or pay, when to go, queues, seating, whether shoes come off, how to get there, what is sold only there (for example "order at the ticket machine by the door before you sit").
 Praise, taste, what someone ate or that they were satisfied or full is rating_only, however warm or long, unless it also contains such a detail or story. "The cake was lovely and we left happy" and "I had the curry and a lassi" are rating_only.
+A bare address, opening hours or price list is rating_only too: the map already holds them, and they go stale.
 The quote must be the sentence that carries the story or the detail itself; do not quote a sentence of praise next to it. When no sentence does, use rating_only and an empty quote.`;
 
 /** A fence line the post cannot contain or guess, so it cannot end the data early. */

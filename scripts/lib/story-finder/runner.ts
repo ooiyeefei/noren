@@ -12,6 +12,7 @@ import {
   type FinderPlace,
   type ListingTally,
   type PlannedRun,
+  searchName,
 } from "./types";
 import type { PageReader } from "./web-page";
 
@@ -99,6 +100,16 @@ export async function loadPlaces(
   },
 ): Promise<FinderPlace[]> {
   const places: FinderPlace[] = [];
+  // Branches sharing a name would run the same search and pay for the same posts twice; the first
+  // one found speaks for them. Counted before `keep`, so a branch searched earlier counts too.
+  const names = new Set<string>();
+  const firstOfItsName = (place: FinderPlace) => {
+    const name = searchName(place);
+    if (name === undefined) return true;
+    if (names.has(name)) return false;
+    names.add(name);
+    return true;
+  };
   let cursor: string | null = null;
   do {
     const page = (await convex("storyFinder:placesToSearch", {
@@ -107,7 +118,9 @@ export async function loadPlaces(
       ...(options.categories?.length ? { categories: options.categories } : {}),
       ...(options.bbox ? { bbox: options.bbox } : {}),
     })) as PlacePage;
-    places.push(...(options.keep ? page.page.filter(options.keep) : page.page));
+    places.push(
+      ...page.page.filter((place) => firstOfItsName(place) && (options.keep?.(place) ?? true)),
+    );
     cursor = page.isDone ? null : page.continueCursor;
   } while (cursor !== null && places.length < options.limit);
   return places.slice(0, options.limit);
