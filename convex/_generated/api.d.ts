@@ -41,6 +41,7 @@ import type * as lib_slug from "../lib/slug.js";
 import type * as lib_translationChecks from "../lib/translationChecks.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_visibility from "../lib/visibility.js";
+import type * as linkRead from "../linkRead.js";
 import type * as links from "../links.js";
 import type * as mapCopies from "../mapCopies.js";
 import type * as missions from "../missions.js";
@@ -107,6 +108,7 @@ declare const fullApi: ApiFromModules<{
   "lib/translationChecks": typeof lib_translationChecks;
   "lib/validators": typeof lib_validators;
   "lib/visibility": typeof lib_visibility;
+  linkRead: typeof linkRead;
   links: typeof links;
   mapCopies: typeof mapCopies;
   missions: typeof missions;

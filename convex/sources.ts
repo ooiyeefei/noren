@@ -16,6 +16,7 @@ import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
 import { limitContribution } from "./lib/rateLimit";
+import { readMapNames } from "./lib/mapCopies";
 import { isRegionLocale, regionConfig } from "./lib/region";
 import { eraseFoundPost, excerptTranslations, hasNoCard } from "./lib/foundPosts";
 import { literals, sourceStatusValidator } from "./lib/validators";
@@ -236,6 +237,31 @@ export const add = mutation({
       }),
     );
     return { sourceId, adapter: source.adapter, platform: source.platform };
+  },
+});
+
+/**
+ * Before a pasted link is read: the caller must be a signed-in member who can read the place, and it
+ * counts against their daily limit, so reading links cannot be used as a free fetcher or model.
+ */
+export const beginLinkRead = internalMutation({
+  args: { placeId: v.id("place"), kind: v.union(v.literal("preview"), v.literal("draft")) },
+  returns: v.object({
+    adapters: v.array(literals(SOURCE_ADAPTER_IDS)),
+    locales: v.array(v.string()),
+    placeNames: v.array(v.object({ lang: v.string(), value: v.string() })),
+  }),
+  handler: async (ctx, { placeId, kind }) => {
+    const person = await requirePerson(ctx);
+    const place = await loadReadablePlace(ctx, person, placeId);
+    await limitContribution(ctx, person, kind);
+    const region = regionConfig(place.regionId);
+    const names = place.mapNames ?? (await readMapNames(ctx, place._id));
+    return {
+      adapters: [...region.enabledSourceAdapters],
+      locales: [...region.locales],
+      placeNames: names.map(({ lang, value }) => ({ lang, value })),
+    };
   },
 });
 

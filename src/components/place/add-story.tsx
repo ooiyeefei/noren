@@ -19,9 +19,10 @@ import {
   type StoryRegion,
   type WrittenStoryArgs,
 } from "./add-story-form";
+import { LinkPreview, useLinkRead, type LinkReadActions } from "./link-read";
 
 /** What the page can do with a story; the container wires these to Convex. */
-export type AddStoryActions = {
+export type AddStoryActions = LinkReadActions & {
   /** Undefined while sign-in is still loading. */
   signedIn: boolean | undefined;
   /** Links a post the member made, or found, elsewhere. */
@@ -59,6 +60,7 @@ export function AddStory({
   const [added, setAdded] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const busy = useRef(false);
+  const reader = useLinkRead({ locale, region, actions, draft, setDraft });
   if (actions?.signedIn === undefined) return null;
   if (!actions.signedIn)
     return (
@@ -73,6 +75,7 @@ export function AddStory({
       </p>
     );
   const link = describeStoryLink(draft.url, region);
+  const draftedShown = reader.noteState.status === "drafted" && !!draft.note.trim();
   function prepare(current: Mode, send: AddStoryActions) {
     if (current === "write") {
       const result = toWrittenArgs(draft, region);
@@ -177,21 +180,19 @@ export function AddStory({
                     maxLength={2048}
                     value={draft.url}
                     {...described("url")}
-                    onChange={(event) => {
-                      const url = event.target.value;
-                      const suggested = describeStoryLink(url, region)?.suggestedAuthor ?? "";
-                      const previous = describeStoryLink(draft.url, region)?.suggestedAuthor ?? "";
-                      // Follow the link's own credit until the member types a different one.
-                      setDraft({
-                        ...draft,
-                        url,
-                        author: draft.author === previous ? suggested : draft.author,
-                      });
-                    }}
+                    onChange={(event) => reader.linkChanged(event.target.value)}
                     className={FIELD}
                   />
                   {problemText("url", m.urlProblem)}
                 </label>
+                {reader.shown && (
+                  <LinkPreview
+                    locale={locale}
+                    region={region}
+                    link={reader.shown.url}
+                    read={reader.shown.read}
+                  />
+                )}
                 {link?.linkCard && (
                   <label className="block space-y-1">
                     <span className="font-bold">{m.title}</span>
@@ -205,21 +206,64 @@ export function AddStory({
                     {problemText("title", m.titleProblem)}
                   </label>
                 )}
+                {reader.canDraft && (
+                  <div className="space-y-1">
+                    <label className="flex min-h-11 items-center gap-2 font-bold">
+                      <input
+                        type="checkbox"
+                        data-testid="own-post"
+                        checked={reader.own}
+                        aria-describedby={`${id}-own-hint`}
+                        onChange={(event) => void reader.tick(event.target.checked)}
+                        className="size-5"
+                      />
+                      {m.ownPost}
+                    </label>
+                    <p id={`${id}-own-hint`} className="text-[15px] text-muted-foreground">
+                      {m.ownPostHint}
+                    </p>
+                  </div>
+                )}
                 <label className="block space-y-1">
                   <span className="font-bold">{m.note}</span>
                   <span id={`${id}-note-hint`} className="block text-[15px] text-muted-foreground">
                     {m.noteHint}
                   </span>
+                  {draftedShown && (
+                    <span
+                      id={`${id}-note-drafted`}
+                      data-testid="note-drafted"
+                      className="block text-[15px] font-bold text-ai"
+                    >
+                      {m.drafted}
+                    </span>
+                  )}
                   <textarea
                     value={draft.note}
                     maxLength={NOTE_LIMIT}
                     rows={3}
-                    {...described("note", `${id}-note-hint`)}
-                    onChange={(event) => setDraft({ ...draft, note: event.target.value })}
+                    {...described(
+                      "note",
+                      draftedShown ? `${id}-note-hint ${id}-note-drafted` : `${id}-note-hint`,
+                    )}
+                    onChange={(event) => {
+                      reader.noteTyped();
+                      setDraft({ ...draft, note: event.target.value });
+                    }}
                     className={FIELD}
                   />
                   {problemText("note", m.noteProblem)}
                 </label>
+                <p
+                  role="status"
+                  data-testid="note-draft-status"
+                  className="text-[15px] empty:hidden"
+                >
+                  {reader.noteState.status === "drafting" && m.drafting}
+                  {reader.noteState.status === "kept" && m.draftKept}
+                  {reader.noteState.status === "failed" &&
+                    `${m.draftFailed} (${reader.noteState.failure})`}
+                </p>
                 <label className="block space-y-1">
                   <span>{m.author}</span>
                   <input
