@@ -5,6 +5,7 @@ import { checkDate } from "@/components/place/check-state";
 import { PageContainer } from "@/components/layout/page-container";
 import { Button } from "@/components/ui/button";
 import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
+import { stewardMessages } from "@/lib/i18n/messages/steward";
 import { storyFinderMessages } from "@/lib/i18n/messages/story-finder";
 import {
   MENTION_PLATFORMS,
@@ -14,7 +15,20 @@ import {
   type MentionStatus,
   type RejectReason,
 } from "@/lib/story-finder/mention";
+import { CheckFindings } from "./place-admin-view";
 import { StewardFeedback, StewardNav, type ActionState } from "./steward-home-view";
+
+/** A found post's quote whose translation the check held back. */
+export type HeldQuoteRow = {
+  id: string;
+  placeSlug: string;
+  placeName: string;
+  url: string;
+  quote: string;
+  translation: string;
+  added: readonly string[];
+  missing: readonly string[];
+};
 
 export type FoundRow = {
   id: string;
@@ -45,6 +59,8 @@ export type StoryFinderProps = ActionState & {
   onCheck: (attach: boolean) => void;
   onAttach: () => void;
   onHide: (id: string) => void;
+  held: readonly HeldQuoteRow[];
+  onRelease: (id: string) => void;
 };
 
 type Messages = (typeof storyFinderMessages)[Locale];
@@ -215,10 +231,75 @@ function Row({
   );
 }
 
+function HeldQuote({
+  locale,
+  m,
+  row,
+  pending,
+  onRelease,
+}: {
+  locale: Locale;
+  m: Messages;
+  row: HeldQuoteRow;
+  pending?: string;
+  onRelease: (id: string) => void;
+}) {
+  return (
+    <article
+      data-steward-card="held-quote"
+      className="min-w-0 space-y-2 rounded-[10px] border border-line p-4"
+    >
+      <h3 className="text-[18px] font-bold">
+        <a
+          className="text-ai underline"
+          href={localePath(locale, `/places/${encodeURIComponent(row.placeSlug)}`)}
+        >
+          {row.placeName}
+        </a>
+      </h3>
+      <blockquote className="border-l-2 border-line pl-3 whitespace-pre-wrap">
+        {quoted(row.quote, locale)}
+      </blockquote>
+      <p className="font-bold">{m.heldTranslation}</p>
+      <p>{row.translation}</p>
+      <CheckFindings locale={locale} added={row.added} missing={row.missing} />
+      <div className="flex flex-wrap items-center gap-3">
+        <a
+          className="inline-flex min-h-11 items-center text-ai underline"
+          href={row.url}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+        >
+          {m.original}
+        </a>
+        <Button
+          variant="outline"
+          className="min-h-11 h-auto rounded-[10px] px-5 py-2 whitespace-normal"
+          disabled={!!pending}
+          onClick={() => onRelease(row.id)}
+        >
+          {messagesFor(stewardMessages, locale).checkRelease}
+        </Button>
+      </div>
+    </article>
+  );
+}
+
 /** Steward-only: what the story finder found, what it showed, and why it left the rest out. */
 export function StoryFinderView(props: StoryFinderProps) {
-  const { locale, counts, attached, accepted, rejected, pending, onCheck, onAttach, onHide } =
-    props;
+  const {
+    locale,
+    counts,
+    attached,
+    accepted,
+    rejected,
+    held,
+    pending,
+    onCheck,
+    onAttach,
+    onHide,
+    onRelease,
+  } = props;
   const m = messagesFor(storyFinderMessages, locale);
   const button = "min-h-11 h-auto w-full rounded-[10px] px-5 py-2 whitespace-normal sm:w-auto";
   const section = (title: string, rows: readonly FoundRow[], hide: boolean, intro?: string) => (
@@ -264,6 +345,22 @@ export function StoryFinderView(props: StoryFinderProps) {
             </Button>
           </div>
         </section>
+        {held.length > 0 && (
+          <section className="min-w-0 space-y-3">
+            <h2 className="text-[22px] font-bold">{m.heldTitle}</h2>
+            <p className="max-w-prose">{m.heldIntro}</p>
+            {held.map((row) => (
+              <HeldQuote
+                key={row.id}
+                locale={locale}
+                m={m}
+                row={row}
+                pending={pending}
+                onRelease={onRelease}
+              />
+            ))}
+          </section>
+        )}
         {section(m.linkedTitle, attached, true, m.linkedIntro)}
         {section(m.acceptedTitle, accepted, true)}
         {section(m.rejectedTitle, rejected, false, m.rejectedIntro)}

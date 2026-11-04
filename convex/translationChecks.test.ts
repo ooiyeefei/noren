@@ -686,6 +686,52 @@ describe("the check action", () => {
       expect(await s.checks()).toEqual([]);
     });
 
+    it("held: a steward reads why and may show the translation; nobody else may", async () => {
+      const s = await setup();
+      models(
+        toolModel([() => ({ faithful: false, added: ADDED, missing: MISSING })]),
+        translatorModel(STILL_UNFAITHFUL),
+      );
+      const sourceId = await s.foundQuote();
+      await s.saveQuote(sourceId, UNFAITHFUL);
+      await runScheduled(s.b);
+      const quoteOnPage = async () =>
+        (await s.b.t.query(api.sources.listForPlace, { placeId: s.placeId }))[0]!;
+      expect((await quoteOnPage()).excerptTranslations).toEqual([]);
+      expect(await errorCode(s.b.t.query(api.translationChecks.heldExcerpts, {}))).toBe(
+        "unauthenticated",
+      );
+      const [row] = await s.asSteward.query(api.translationChecks.heldExcerpts, {});
+      expect(row).toMatchObject({
+        quote: ORIGINAL,
+        lang: "en",
+        translation: STILL_UNFAITHFUL,
+        added: ADDED,
+        missing: MISSING,
+      });
+      const release = { checkId: row!.checkId };
+      expect(await errorCode(s.b.t.mutation(api.translationChecks.releaseExcerpt, release))).toBe(
+        "unauthenticated",
+      );
+      // This file's steward is a demo account: it may read the list but not change a real post.
+      expect(
+        await errorCode(s.asSteward.mutation(api.translationChecks.releaseExcerpt, release)),
+      ).toBe("forbidden");
+      await addPerson(s.b, "realsteward", "steward");
+      const realSteward = s.b.as("realsteward");
+      await realSteward.mutation(api.translationChecks.releaseExcerpt, release);
+      expect((await quoteOnPage()).excerptTranslations).toEqual([
+        { lang: "en", text: STILL_UNFAITHFUL },
+      ]);
+      expect(await s.asSteward.query(api.translationChecks.heldExcerpts, {})).toEqual([]);
+      expect(await s.audit("source.translation_released")).toEqual([
+        expect.objectContaining({ targetType: "source", targetId: sourceId, actorKind: "person" }),
+      ]);
+      expect(
+        await errorCode(realSteward.mutation(api.translationChecks.releaseExcerpt, release)),
+      ).toBe("conflict");
+    });
+
     it("unfaithful: translated again once as a stranger's quote with the lists, then held, and the card shows the quote alone", async () => {
       const s = await setup();
       const checker = toolModel([() => ({ faithful: false, added: ADDED, missing: MISSING })]);
