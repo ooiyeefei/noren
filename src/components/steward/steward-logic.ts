@@ -5,6 +5,7 @@ import {
   type ClaimStatus,
   type PlaceKind,
   type Role,
+  type TranslationCheckStatus,
   type Visibility,
 } from "@/lib/domain/constants";
 import type { Locale } from "@/lib/i18n";
@@ -74,12 +75,13 @@ export function disputeArgs(
   if (selected.some((claim) => claim.status !== "published")) return { error: "not_published" };
   return { claimIdA: selected[0]!._id, claimIdB: selected[1]!._id };
 }
+/** Languages a steward may translate by hand: none yet, or the translation check held it back. */
 export function missingTranslations(
   claim: {
     origin: ClaimOrigin;
     status: ClaimStatus;
     langOriginal: string;
-    translations: readonly { lang: string }[];
+    translations: readonly { lang: string; check?: { status: TranslationCheckStatus } }[];
   },
   locales: readonly string[],
 ): string[] {
@@ -91,7 +93,9 @@ export function missingTranslations(
   return [...new Set(locales)].filter(
     (lang) =>
       lang !== claim.langOriginal &&
-      !claim.translations.some((translation) => translation.lang === lang),
+      !claim.translations.some(
+        (translation) => translation.lang === lang && translation.check?.status !== "held",
+      ),
   );
 }
 export type Excerpt = { start: number; end: number; kind: "story" | "fact" };

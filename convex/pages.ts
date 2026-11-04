@@ -15,6 +15,7 @@ import { transitionClaim } from "./lib/claimEffects";
 import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
 import { regionConfig } from "./lib/region";
+import { isHeld } from "./lib/translationChecks";
 import {
   claimKindValidator,
   claimOriginValidator,
@@ -30,6 +31,8 @@ const sentenceView = v.object({
   textLang: v.string(),
   translation: v.union(v.literal("original"), translationOriginValidator),
   claimIds: v.array(v.id("claim")),
+  /** The translation into `lang` is held for a person's review, so the original is shown. */
+  underReview: v.optional(v.boolean()),
 });
 const claimView = v.object({
   _id: v.id("claim"),
@@ -78,6 +81,10 @@ function isCitable(claim: Doc<"claim"> | null): claim is CitableClaim {
   return claim !== null && (claim.status === "published" || claim.status === "disputed");
 }
 
+/**
+ * The translations that may be shown, and the languages whose translation is held back because
+ * the translation check still found differences after a re-translation; a person decides those.
+ */
 async function translationsFor(ctx: QueryCtx, claimId: Id<"claim">) {
   const rows = await ctx.db
     .query("claimTranslation")
@@ -87,7 +94,13 @@ async function translationsFor(ctx: QueryCtx, claimId: Id<"claim">) {
   for (const row of rows) {
     if (!preferred.has(row.lang) || row.origin === "human") preferred.set(row.lang, row);
   }
-  return [...preferred.values()];
+  const shown: Doc<"claimTranslation">[] = [];
+  const underReview: string[] = [];
+  for (const row of preferred.values()) {
+    if (await isHeld(ctx, row)) underReview.push(row.lang);
+    else shown.push(row);
+  }
+  return { shown, underReview };
 }
 
 export const compose = mutation({
@@ -133,7 +146,9 @@ export const compose = mutation({
         status: claim.status,
         textOriginal: claim.textOriginal,
         langOriginal: claim.langOriginal,
-        translations: Object.fromEntries(translated[index]!.map((row) => [row.lang, row.text])),
+        translations: Object.fromEntries(
+          translated[index]!.shown.map((row) => [row.lang, row.text]),
+        ),
       })),
       regionConfig(place.regionId).locales,
     );
@@ -142,7 +157,7 @@ export const compose = mutation({
     const textsByClaim = new Map(
       claims.map((claim, index) => [
         claim._id,
-        [claim.textOriginal, ...translated[index]!.map((row) => row.text)],
+        [claim.textOriginal, ...translated[index]!.shown.map((row) => row.text)],
       ]),
     );
     const verdicts = await createGroundingChecker({
@@ -259,8 +274,10 @@ export const getPublished = query({
         claims.set(claim._id, claim);
     }
     const views: PageClaimView[] = [];
+    const underReview = new Map<Id<"claim">, string[]>();
     for (const claim of claims.values()) {
-      const translations = await translationsFor(ctx, claim._id);
+      const { shown: translations, underReview: held } = await translationsFor(ctx, claim._id);
+      underReview.set(claim._id, held);
       const snippet =
         claim.origin === "open_text" && claim.sourceOpenTextId !== undefined
           ? await ctx.db.get("openTextSnippet", claim.sourceOpenTextId)
@@ -299,6 +316,17 @@ export const getPublished = query({
     const sentences: PageSentenceView[] = visible
       .map<PageSentenceView>(({ lang, ordinal, text, claimIds }) => {
         const first = byId.get(claimIds[0]!)!;
+        if (lang !== first.langOriginal && underReview.get(first._id)?.includes(lang))
+          // Composed before the check held it: show the person's own words, not the translation.
+          return {
+            lang,
+            ordinal,
+            text: first.textOriginal,
+            claimIds,
+            translation: "original",
+            textLang: first.langOriginal,
+            underReview: true,
+          };
         const translated =
           lang === first.langOriginal
             ? undefined

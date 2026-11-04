@@ -35,6 +35,7 @@ import type * as lib_rules_pages from "../lib/rules/pages.js";
 import type * as lib_rules_places from "../lib/rules/places.js";
 import type * as lib_rules_shared from "../lib/rules/shared.js";
 import type * as lib_slug from "../lib/slug.js";
+import type * as lib_translationChecks from "../lib/translationChecks.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_visibility from "../lib/visibility.js";
 import type * as links from "../links.js";
@@ -54,6 +55,7 @@ import type * as tables_community from "../tables/community.js";
 import type * as tables_interviews from "../tables/interviews.js";
 import type * as tables_places from "../tables/places.js";
 import type * as takedown from "../takedown.js";
+import type * as translationChecks from "../translationChecks.js";
 
 import type {
   ApiFromModules,
@@ -89,6 +91,7 @@ declare const fullApi: ApiFromModules<{
   "lib/rules/places": typeof lib_rules_places;
   "lib/rules/shared": typeof lib_rules_shared;
   "lib/slug": typeof lib_slug;
+  "lib/translationChecks": typeof lib_translationChecks;
   "lib/validators": typeof lib_validators;
   "lib/visibility": typeof lib_visibility;
   links: typeof links;
@@ -108,6 +111,7 @@ declare const fullApi: ApiFromModules<{
   "tables/interviews": typeof tables_interviews;
   "tables/places": typeof tables_places;
   takedown: typeof takedown;
+  translationChecks: typeof translationChecks;
 }>;
 
 /**

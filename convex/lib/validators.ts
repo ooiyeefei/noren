@@ -19,6 +19,7 @@ import {
   TAKEDOWN_STATUSES,
   TAKEDOWN_TARGET_TYPES,
   TRANSCRIPT_ORIGINS,
+  TRANSLATION_CHECK_STATUSES,
   TRANSLATION_ORIGINS,
   VISIBILITIES,
 } from "../../src/lib/domain/constants";
@@ -44,6 +45,7 @@ export const claimKindValidator = literals(CLAIM_KINDS);
 export const claimOriginValidator = literals(CLAIM_ORIGINS);
 export const claimStatusValidator = literals(CLAIM_STATUSES);
 export const translationOriginValidator = literals(TRANSLATION_ORIGINS);
+export const translationCheckStatusValidator = literals(TRANSLATION_CHECK_STATUSES);
 export const interviewStatusValidator = literals(INTERVIEW_STATUSES);
 export const transcriptOriginValidator = literals(TRANSCRIPT_ORIGINS);
 export const licenceValidator = literals(LICENCES);

@@ -5,6 +5,7 @@ import {
   DemoBadge,
   MachineTranslationBadge,
   TranslationPendingBadge,
+  TranslationReviewBadge,
   UnreviewedBadge,
 } from "@/components/badges";
 import { SUPPORTED_LOCALES } from "@/lib/i18n";
@@ -54,6 +55,17 @@ const badges = [
     labels: ["翻訳待ち", "Translation pending"],
     hints: ["まだ翻訳がないため、原文を表示しています", "No translation yet; showing the original"],
   },
+  {
+    Component: TranslationReviewBadge,
+    id: "translation-under-review",
+    key: "translationUnderReview",
+    hint: "translationUnderReviewHint",
+    labels: ["翻訳を確認中", "Translation under review"],
+    hints: [
+      "翻訳を人が確かめているあいだ、原文を表示しています",
+      "A person is checking the translation; showing the original",
+    ],
+  },
 ] as const;
 
 describe("each badge renders its text and hint in ja and en", () => {
@@ -84,7 +96,7 @@ it("no badge renders an empty label", () => {
 
 it("badge messages have the same keys in both locales", () => {
   expect(Object.keys(badgeMessages.ja).sort()).toEqual(Object.keys(badgeMessages.en).sort());
-  expect(Object.keys(badgeMessages.ja)).toHaveLength(12);
+  expect(Object.keys(badgeMessages.ja)).toHaveLength(14);
   for (const { key, hint } of badges) {
     for (const locale of SUPPORTED_LOCALES) {
       expect(badgeMessages[locale][key].trim()).not.toBe("");

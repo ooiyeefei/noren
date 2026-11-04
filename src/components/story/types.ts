@@ -30,6 +30,8 @@ export type StorySentenceView = {
   textLang: string;
   translation: "original" | "machine" | "human";
   claimIds: string[];
+  /** The translation is held for a person's review, so the original is shown. */
+  underReview?: boolean;
 };
 export type StoryViewModel = {
   locale: Locale;

@@ -6,15 +6,19 @@ import type { ClaimExtractor, ExtractedClaim } from "../ports/index";
 import type { RegionConfig } from "../region/schema";
 import type { AiModelConfig } from "./config";
 import { createMeta } from "./meta";
+import { createModal } from "./modal";
 
 export function createLanguageModel(
   config: AiModelConfig,
   factories: Record<
     AiModelConfig["provider"],
-    (options: { apiKey: string }) => (modelId: string) => LanguageModel
-  > = { anthropic: createAnthropic, gateway: createGateway, meta: createMeta },
+    (options: { apiKey: string; baseURL?: string }) => (modelId: string) => LanguageModel
+  > = { anthropic: createAnthropic, gateway: createGateway, meta: createMeta, modal: createModal },
 ): LanguageModel {
-  return factories[config.provider]({ apiKey: config.apiKey })(config.modelId);
+  return factories[config.provider]({
+    apiKey: config.apiKey,
+    ...(config.baseURL === undefined ? {} : { baseURL: config.baseURL }),
+  })(config.modelId);
 }
 
 export type RawExtractedClaim = {
