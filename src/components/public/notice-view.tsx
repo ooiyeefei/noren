@@ -112,6 +112,7 @@ export function NoticeView({
         <p>{m.clickToLoad}</p>
         <p>{m.privacy}</p>
         <p>{m.originals}</p>
+        <p>{m.foundPosts}</p>
         <p>
           <a className="underline" href={formHref}>
             {messagesFor(takedownMessages, locale).useForm}

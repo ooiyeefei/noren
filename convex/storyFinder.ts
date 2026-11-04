@@ -27,7 +27,7 @@ import { writeAudit } from "./lib/audit";
 import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
-import { queueExcerptCheck } from "./lib/translationChecks";
+import { eraseFoundQuote, queueExcerptCheck } from "./lib/translationChecks";
 import { readMapNames, readMapPin } from "./lib/mapCopies";
 import { withMock } from "./lib/mock";
 import { regionConfig } from "./lib/region";
@@ -1145,7 +1145,8 @@ export const repairFoundPosts = internalMutation({
       const quote = row.verdict?.quote;
       if (row.status !== "attached" || row.sourceId === undefined || !quote) continue;
       const source = await ctx.db.get("source", row.sourceId);
-      if (source === null || (source.foundKind !== undefined && source.excerpt)) continue;
+      if (source === null || source.status !== "live") continue;
+      if (source.foundKind !== undefined && source.excerpt) continue;
       await ctx.db.patch("source", source._id, {
         foundKind: foundKindOf(row),
         ...(source.excerpt ? {} : { excerpt: quote, excerptLang: quoteLang(row, quote) }),
@@ -1160,7 +1161,8 @@ export const repairFoundPosts = internalMutation({
 
 /**
  * Takes a found post down: its source is hidden through the same change `sources.remove` makes, and
- * the candidate is never linked again.
+ * the candidate is never linked again. Its quote, translations and stored text are erased. What stays
+ * is steward-only: the check's verdict, and the fingerprint that keeps a copy of the post out.
  */
 async function hideCandidate(
   ctx: MutationCtx,
@@ -1182,9 +1184,11 @@ async function hideCandidate(
         targetId: source._id,
       });
     }
+    if (source !== null) await eraseFoundQuote(ctx, source);
   }
   await ctx.db.patch("mentionCandidate", candidateId, {
     status: "hidden",
+    text: "",
     hiddenAt: Date.now(),
     hiddenBy: steward._id,
     checkStartedAt: undefined,
