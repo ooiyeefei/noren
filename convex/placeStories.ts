@@ -333,8 +333,9 @@ export const failRun = internalMutation({
 });
 
 /**
- * Publishes what survived. A post erased while the agent was working takes its sentences with it, and
- * a run that ends with nothing leaves any earlier story as it was.
+ * Publishes what survived. A post erased while the agent was working takes its sentences with it. A run
+ * that ends with nothing takes any earlier story off the page, since the agent no longer stands behind
+ * it, and keeps the place off the ready list.
  */
 export const saveStory = internalMutation({
   args: {
@@ -364,29 +365,29 @@ export const saveStory = internalMutation({
       if (cited.length === citations.length && cited.length > 0)
         kept.push({ en, ja, citations: cited });
     }
-    if (kept.length === 0) {
-      await ctx.db.patch("placeStoryRun", runId, { status: "nothing", finishedAt: Date.now() });
-      return null;
-    }
     const existing = await ctx.db
       .query("placeStory")
       .withIndex("by_placeId", (q) => q.eq("placeId", run.placeId))
       .first();
+    const now = Date.now();
     const story = {
       placeId: run.placeId,
       sentences: kept,
       postsRead,
       writer: run.writer ?? "",
       checker: run.checker ?? "",
-      publishedAt: Date.now(),
+      publishedAt: now,
+      ...(kept.length === 0 ? { withdrawnAt: now } : {}),
     };
     if (existing === null) await ctx.db.insert("placeStory", story);
     else await ctx.db.replace("placeStory", existing._id, story);
-    await ctx.db.patch("placeStoryRun", runId, {
-      status: "published",
-      published: kept.length,
-      finishedAt: Date.now(),
-    });
+    await ctx.db.patch(
+      "placeStoryRun",
+      runId,
+      kept.length === 0
+        ? { status: "nothing", finishedAt: now }
+        : { status: "published", published: kept.length, finishedAt: now },
+    );
     return null;
   },
 });

@@ -62,7 +62,7 @@ Lead with the thing itself and say whose word it is lightly, at the end if that 
 Each sentence must make sense alone, because any one of them may be removed later. Never lean on another sentence: no "the same writer", "another post", "that account", and no "they" or "it" for something only another sentence names.
 Call the place what it is, such as "the shop", "the stone" or "the bridge": never spell out its name, because a wrong reading is worse than none. The English is all in English, so any other Japanese word goes in Latin letters or gets translated.
 Choose what you would actually retell to a friend and leave the rest out, even when it is true. Never list things to cover every post: a free escalator or a sold-out cake is not a story, and neither is how to order, where to sit, who operates the building or where an ingredient is bought.
-Plain spoken English, with the attribution worded differently each time. No "renowned", "hidden gem", "boasts", "nestled" or "must-visit".
+Plain spoken English, with the attribution worded differently each time. No dashes, and no "renowned", "hidden gem", "boasts", "nestled" or "must-visit".
 Give every sentence in English and in natural Japanese.
 
 Citations:
@@ -209,6 +209,13 @@ export function verifyStory(posts: readonly StoryPost[], reported: ReportedStory
       bad.push({ sentence: en, post: 0, words: "", problem: "cites nothing" });
     if (JAPANESE_SCRIPT.test(en))
       bad.push({ sentence: en, post: 0, words: "", problem: "the English has Japanese in it" });
+    if (/[—–]/.test(en))
+      bad.push({
+        sentence: en,
+        post: 0,
+        words: "",
+        problem: "it has a dash, so write it without one",
+      });
     if (LEANS_ON_ANOTHER.test(en))
       bad.push({
         sentence: en,
