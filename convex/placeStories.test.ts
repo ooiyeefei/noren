@@ -326,23 +326,59 @@ describe("placeStories runs", () => {
     expect(runs.map(({ placeId }) => placeId)).toEqual([other]);
   });
 
-  it("takes a story off the page when a steward withdraws it, and records why", async () => {
+  it("takes a withdrawn story off the page and the place off the ready list, and records why", async () => {
     const b = await setup();
-    const sourceId = await b.post("google_reviews");
+    const sourceId = await b.post("google_reviews", { n: 1 });
+    await b.post("web", { n: 2 });
     const runId = await b.startRun();
     await b.begin(runId);
     await b.save(runId, [String(sourceId)]);
-    const withdraw = () =>
+    const withdraw = (offerAgain?: boolean) =>
       b.t.mutation(internal.placeStories.withdraw, {
         stewardPersonId: b.steward,
         placeId: b.placeId,
         reason: "nothing to retell",
+        offerAgain,
       });
-    expect(await withdraw()).toEqual({ withdrawn: true });
+    const started = () =>
+      b.t.mutation(internal.placeStories.enqueue, { stewardPersonId: b.steward, limit: 5 });
+    await withdraw();
     expect(await b.t.query(api.placeStories.forPlace, { placeId: b.placeId })).toBeNull();
-    expect(await withdraw()).toEqual({ withdrawn: false });
+    expect(await started()).toEqual({ started: 0 });
     const audit = await b.run_((ctx) => ctx.db.query("auditLog").collect());
     expect(audit.filter(({ action }) => action === "story_agent.withdrawn")).toHaveLength(1);
+
+    await withdraw(true);
+    expect(await started()).toEqual({ started: 1 });
+  });
+
+  it("keeps a place off the ready list before any story was written", async () => {
+    const b = await setup();
+    await b.post("google_reviews", { n: 1 });
+    await b.post("web", { n: 2 });
+    await b.t.mutation(internal.placeStories.withdraw, {
+      stewardPersonId: b.steward,
+      placeId: b.placeId,
+      reason: "not for this agent",
+    });
+    expect(await b.t.query(api.placeStories.forPlace, { placeId: b.placeId })).toBeNull();
+    expect(
+      await b.t.mutation(internal.placeStories.enqueue, { stewardPersonId: b.steward, limit: 5 }),
+    ).toEqual({ started: 0 });
+  });
+
+  it("publishes again when a later run writes a withdrawn place's story", async () => {
+    const b = await setup();
+    const sourceId = await b.post("google_reviews");
+    await b.t.mutation(internal.placeStories.withdraw, {
+      stewardPersonId: b.steward,
+      placeId: b.placeId,
+      reason: "not for this agent",
+    });
+    const runId = await b.startRun();
+    await b.begin(runId);
+    await b.save(runId, [String(sourceId)]);
+    expect(await b.t.query(api.placeStories.forPlace, { placeId: b.placeId })).not.toBeNull();
   });
 
   it("refuses a mock steward's batch and an oversized one", async () => {
