@@ -54,6 +54,10 @@ export const REJECT_REASONS = [
   "duplicate_quote",
   "quote_too_long",
   "check_failed",
+  // Set by the repair replay on a row whose Google listing is not this place, or is permanently
+  // closed (the collector leaves such reviews out, so new ones never get this far):
+  "wrong_listing",
+  "closed_listing",
 ] as const;
 export type RejectReason = (typeof REJECT_REASONS)[number];
 
@@ -100,9 +104,17 @@ export type MentionCandidate = {
   runId: string;
 };
 
-/** Collapses every run of whitespace (including full-width and no-break spaces) to one space. */
+/**
+ * Collapses every run of whitespace (including full-width and no-break spaces) to one space. A
+ * line-break tag (<br>, <br/>, <br />) counts as whitespace: Google's review text carries them, and
+ * a quote must pass the verbatim check against the text without showing them.
+ */
 export function normaliseWhitespace(text: string): string {
-  return text.normalize("NFC").replace(/\s+/gu, " ").trim();
+  return text
+    .normalize("NFC")
+    .replace(/<br\s*\/?>/giu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
 }
 
 /** Whether `fragment` appears in `text` character for character, apart from whitespace. */
@@ -240,27 +252,200 @@ export function postHasAdMarker(post: {
   );
 }
 
-/** Whether a text names the place by one of its names, in any language or script (ignoring width,
- * case and spaces). Names shorter than two characters are too ambiguous to count. */
-export function namesPlace(text: string, names: readonly string[]): boolean {
-  const haystack = foldForNames(text);
-  return names.some((name) => {
-    const needle = foldForNames(name);
-    return needle.length >= 2 && haystack.includes(needle);
-  });
-}
+/**
+ * Old-form kanji and the forms used now, folded together when names are compared (四海樓 is 四海楼).
+ * A small list on purpose: each pair is one the map's names are known to mix.
+ */
+const OLD_KANJI: Readonly<Record<string, string>> = {
+  樓: "楼",
+  國: "国",
+  澤: "沢",
+  濱: "浜",
+  廣: "広",
+  齋: "斎",
+  眞: "真",
+};
+const OLD_KANJI_PATTERN = /[樓國澤濱廣齋眞]/gu;
 
-/** Text as namesPlace compares it: NFKC, no spaces, lower case. */
+/** Text as names are compared: NFKC, no spaces, lower case, old kanji in their current form. */
 function foldForNames(value: string): string {
-  return value.normalize("NFKC").replace(/\s+/gu, "").toLowerCase();
+  return value
+    .normalize("NFKC")
+    .replace(/\s+/gu, "")
+    .toLowerCase()
+    .replace(OLD_KANJI_PATTERN, (kanji) => OLD_KANJI[kanji] ?? kanji);
 }
 
 /**
- * Where the place is first named in `text`, matched as namesPlace matches (width, case and spaces
- * ignored, each character folded on its own); -1 when no name of two or more characters is found.
+ * Words a name part may not be, because they say what kind of place it is and not which one
+ * (compared folded, whole): a part like these would match any post about any restaurant. A small
+ * list; names that are only such words still match as a whole name.
+ */
+const GENERIC_NAME_WORDS = new Set(
+  [
+    // Japanese
+    "専門店",
+    "専門",
+    "本店",
+    "支店",
+    "総本店",
+    "本館",
+    "別館",
+    "長崎",
+    "長崎市",
+    "ラーメン",
+    "中華料理",
+    "中華",
+    "食堂",
+    "喫茶",
+    "喫茶店",
+    "カフェ",
+    "レストラン",
+    "ホテル",
+    "居酒屋",
+    "割烹",
+    "料理",
+    "ダイニング",
+    "ダイニングバー",
+    "ベーカリー",
+    "ショップ",
+    "ちゃんぽん",
+    "皿うどん",
+    // English
+    "the",
+    "and",
+    "for",
+    "new",
+    "old",
+    "bar",
+    "inn",
+    "cafe",
+    "coffee",
+    "ramen",
+    "sushi",
+    "bakery",
+    "bistro",
+    "hotel",
+    "shop",
+    "store",
+    "house",
+    "kitchen",
+    "dining",
+    "restaurant",
+    "nagasaki",
+    "japan",
+  ].map(foldForNames),
+);
+
+/** A name part is at least this long, and a katakana run inside a part at least NAME_RUN_MIN. */
+const NAME_PART_MIN = 3;
+const NAME_RUN_MIN = 4;
+const KATAKANA_RUN = new RegExp(String.raw`[\p{Script=Katakana}ー]{${NAME_RUN_MIN},}`, "gu");
+/** Where a name splits into parts: spaces, brackets and middle dots (NFKC has made brackets plain). */
+const NAME_SEPARATORS = /[\s()[\]{}<>「」『』【】〈〉《》〔〕・·/|,、:;]+/u;
+
+/**
+ * The parts of a place's name that may stand for it in a post: the pieces between brackets, middle
+ * dots and spaces, the pieces either side of a change between Latin and Japanese script, and katakana
+ * runs of four or more characters. 「一口餃子専門店 トラの門 Toranomon」 gives 一口餃子専門店,
+ * トラの門 and toranomon; 「レモンラメン・麺やオールウェイズ」 gives レモンラメン, 麺やオールウェイズ and
+ * オールウェイズ. A part has at least three characters and is not a generic word. Folded.
+ */
+export function namePartsOf(name: string): string[] {
+  const parts = new Set<string>();
+  for (const piece of name.normalize("NFKC").split(NAME_SEPARATORS)) {
+    const tokens = piece.match(/[\p{Script=Latin}\p{N}]+|[^\p{Script=Latin}\p{N}]+/gu) ?? [];
+    const candidates = [...tokens];
+    for (const token of tokens) candidates.push(...(token.match(KATAKANA_RUN) ?? []));
+    for (const candidate of candidates) {
+      const folded = foldForNames(candidate);
+      if (folded.length >= NAME_PART_MIN && !GENERIC_NAME_WORDS.has(folded)) parts.add(folded);
+    }
+  }
+  return [...parts];
+}
+
+/** What a post may name the place by: each whole name of two or more characters, and its parts. */
+function nameTerms(names: readonly string[]): string[] {
+  const terms = new Set<string>();
+  for (const name of names) {
+    const whole = foldForNames(name);
+    if (whole.length >= 2) terms.add(whole);
+    for (const part of namePartsOf(name)) terms.add(part);
+  }
+  return [...terms];
+}
+
+/**
+ * Whether a text names the place, in any language or script (ignoring width, case, spaces and
+ * old-form kanji): by one of its whole names, or by a part of one (namePartsOf), so a post that says
+ * 朝日屋 matches the place 朝日屋（屋台）. Names shorter than two characters are too ambiguous to
+ * count. This is a sanity check: the model still has to say the post is about the place.
+ */
+export function namesPlace(text: string, names: readonly string[]): boolean {
+  const haystack = foldForNames(text);
+  return nameTerms(names).some((term) => haystack.includes(term));
+}
+
+/** Whether a map listing's name fits a place's names: namesPlace, or a name too short to compare. */
+export function listingNamesPlace(listing: string, names: readonly string[]): boolean {
+  // A one-character name (椿) cannot be found in a listing, so the listing's position decides.
+  return namesPlace(listing, names) || names.some((name) => foldForNames(name).length === 1);
+}
+
+const SEPARATOR_CHAR = /[\s()[\]{}<>「」『』【】〈〉《》〔〕・·/|,、:;-]/u;
+const KATAKANA_CHAR = /[\p{Script=Katakana}ー]/u;
+const LATIN_CHAR = /[\p{Script=Latin}\p{N}]/u;
+
+/** Two neighbouring characters that belong to one katakana or Latin word. */
+function sameWord(a: string | undefined, b: string | undefined): boolean {
+  if (a === undefined || b === undefined) return false;
+  return (
+    (KATAKANA_CHAR.test(a) && KATAKANA_CHAR.test(b)) || (LATIN_CHAR.test(a) && LATIN_CHAR.test(b))
+  );
+}
+
+/**
+ * Whether a map listing's name holds one of the place's whole names (three characters or more) as
+ * a word of its own: 福砂屋 is in 「カステラ本家 福砂屋 長崎本店」, but トレビ is not in
+ * 「ネオ·プレイス長崎駅前トレビオス壱番館」, where it is the start of a longer katakana word. Kanji
+ * names join compounds freely (中華料理四海樓), so only katakana and Latin edges are checked.
+ */
+export function listingHoldsWholeName(listing: string, names: readonly string[]): boolean {
+  let folded = "";
+  const gapBefore: boolean[] = [];
+  let gap = true;
+  for (const char of listing.normalize("NFKC")) {
+    if (SEPARATOR_CHAR.test(char)) {
+      gap = true;
+      continue;
+    }
+    const part = foldForNames(char);
+    folded += part;
+    for (let i = 0; i < part.length; i++) gapBefore.push(i === 0 && gap);
+    gap = false;
+  }
+  return names.some((name) => {
+    const needle = foldForNames(name.replace(new RegExp(SEPARATOR_CHAR, "gu"), ""));
+    if (needle.length < NAME_PART_MIN) return false;
+    for (let at = folded.indexOf(needle); at !== -1; at = folded.indexOf(needle, at + 1)) {
+      const end = at + needle.length;
+      const leftOpen = gapBefore[at] || !sameWord(folded[at - 1], folded[at]);
+      const rightOpen =
+        end === folded.length || gapBefore[end] || !sameWord(folded[end - 1], folded[end]);
+      if (leftOpen && rightOpen) return true;
+    }
+    return false;
+  });
+}
+
+/**
+ * Where the place is first named in `text`, matched as namesPlace matches (width, case, spaces and
+ * old-form kanji ignored, each character folded on its own, whole names and their parts); -1 when
+ * nothing of two or more characters is found.
  */
 export function firstMention(text: string, names: readonly string[]): number {
-  const needles = names.map(foldForNames).filter((needle) => needle.length >= 2);
+  const needles = nameTerms(names);
   if (!needles.length) return -1;
   let folded = "";
   const origin: number[] = [];
