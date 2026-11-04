@@ -300,6 +300,27 @@ describe("placeStories runs", () => {
     ).toEqual({ started: 1 });
   });
 
+  it("writes the ready places each night with nobody pressing anything", async () => {
+    const b = await setup();
+    await b.post("google_reviews", { n: 1 });
+    const night = () => b.t.mutation(internal.placeStories.writeReadyStories, {});
+    expect(await night()).toEqual({ started: 0 });
+    await b.post("web", { n: 2 });
+    expect(await night()).toEqual({ started: 1 });
+    const runs = await b.run_((ctx) => ctx.db.query("placeStoryRun").collect());
+    expect(runs).toMatchObject([{ requestedBy: b.steward, status: "queued" }]);
+  });
+
+  it("does not write a place again the night after it found nothing to tell", async () => {
+    const b = await setup();
+    await b.post("google_reviews", { n: 1 });
+    await b.post("web", { n: 2 });
+    const runId = await b.startRun();
+    await b.begin(runId);
+    await b.t.mutation(internal.placeStories.saveStory, { runId, sentences: [], postsRead: 2 });
+    expect(await b.t.mutation(internal.placeStories.writeReadyStories, {})).toEqual({ started: 0 });
+  });
+
   it("leaves out a place whose posts are all tips", async () => {
     const b = await setup();
     await b.post("google_reviews", { n: 1, kind: "tip" });

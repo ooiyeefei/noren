@@ -1190,12 +1190,29 @@ describe("attach order and the per-place cap", () => {
     "テスト店の裏口から入ると、先に番号札をもらえます。",
     "テスト店は、雨の日だけ傘の置き場を軒下に出します。",
     "テスト店の会計は現金のみで、お釣りは小銭に両替してくれます。",
+    "テスト店の二階は、土曜の午後だけ開いています。",
+    "テスト店の椅子は、先代が港の船から譲り受けたものです。",
+    "テスト店のお茶は、冬だけ急須で出てきます。",
+    "テスト店の看板は、毎年春に塗り直されます。",
   ];
-  const kinds = ["story", "tip", "story", "tip", "tip", "tip", "story", "tip"] as const;
+  const kinds = [
+    "story",
+    "tip",
+    "story",
+    "tip",
+    "tip",
+    "tip",
+    "story",
+    "tip",
+    "tip",
+    "tip",
+    "tip",
+    "tip",
+  ] as const;
   // Posted in this order, the first being the oldest.
   const day = (n: number) => Date.UTC(2026, 9, n + 1);
 
-  it("links stories before tips and the newest first within each kind, up to six", async () => {
+  it("links stories before tips and the newest first within each kind, up to ten", async () => {
     const w = await world();
     await w.ingest(
       quotes.map((quote, i) =>
@@ -1221,10 +1238,12 @@ describe("attach order and the per-place cap", () => {
         stewardPersonId: w.steward,
         limit: 100,
       }),
-    ).toEqual({ attached: 6, considered: 8 });
+    ).toEqual({ attached: 10, considered: 12 });
     const status = new Map((await w.rows()).map((row) => [row.verdict?.quote, row.status]));
-    // Three stories (0, 2, 6) first, then the three newest tips (7, 5, 4); tips 3 and 1 wait.
-    expect([0, 2, 6, 7, 5, 4].map((i) => status.get(quotes[i]))).toEqual(Array(6).fill("attached"));
+    // Three stories (0, 2, 6) first, then the seven newest tips; tips 3 and 1 wait.
+    expect([0, 2, 6, 11, 10, 9, 8, 7, 5, 4].map((i) => status.get(quotes[i]))).toEqual(
+      Array(10).fill("attached"),
+    );
     expect([1, 3].map((i) => status.get(quotes[i]))).toEqual(["accepted", "accepted"]);
   });
 
@@ -1490,6 +1509,57 @@ describe("repairListings", () => {
   });
 });
 
+describe("forgetFoundPosts", () => {
+  const post = (n: number) => ({
+    platform: "google_reviews" as const,
+    url: `https://www.google.com/maps/reviews/data=mock${n}`,
+  });
+
+  it("forgets a place's posts, so replaying the collection reads and links them again", async () => {
+    const w = await world();
+    await w.ingest([w.candidate(post(1))]);
+    const [row] = await w.rows();
+    expect(await w.record(row!._id, {})).toMatchObject({ status: "attached" });
+    expect(
+      await w.b.t.mutation(internal.storyFinder.forgetFoundPosts, {
+        stewardPersonId: w.steward,
+        placeId: w.placeId,
+      }),
+    ).toEqual({ forgotten: 1 });
+    expect(await w.rows()).toEqual([]);
+    const left = await w.b.t.run(async (ctx) => [
+      ...(await ctx.db.query("source").collect()),
+      ...(await ctx.db.query("shownQuote").collect()),
+    ]);
+    expect(left).toEqual([]);
+    await w.ingest([w.candidate(post(1))]);
+    const [again] = await w.rows();
+    expect(await w.record(again!._id, {})).toMatchObject({ status: "attached" });
+  });
+
+  it("refuses a place with a story, whose sentences cite those posts", async () => {
+    const w = await world();
+    await w.b.t.run((ctx) =>
+      ctx.db.insert("placeStory", {
+        placeId: w.placeId,
+        sentences: [],
+        postsRead: 0,
+        writer: "mock/writer",
+        checker: "mock/checker",
+        publishedAt: 1000,
+      }),
+    );
+    expect(
+      await errorCode(
+        w.b.t.mutation(internal.storyFinder.forgetFoundPosts, {
+          stewardPersonId: w.steward,
+          placeId: w.placeId,
+        }),
+      ),
+    ).toBe("conflict");
+  });
+});
+
 describe("requeue", () => {
   const verdict = (aboutThisPlace: "yes" | "no" | "unsure") => ({
     aboutThisPlace,
@@ -1547,6 +1617,22 @@ describe("requeue", () => {
       });
     return { w, ids, statusOf, requeue };
   }
+
+  it("with ratings also sends back what the check called only a rating", async () => {
+    const { w, statusOf } = await seeded();
+    expect(
+      await w.b.t.mutation(internal.storyFinder.requeue, {
+        stewardPersonId: w.steward,
+        status: "rejected",
+        paginationOpts: { numItems: 100, cursor: null },
+        ratings: true,
+      }),
+    ).toMatchObject({ requeued: 3, isDone: true });
+    const rows = await statusOf();
+    expect(rows.rating).toMatchObject({ status: "pending" });
+    expect(rows.wrongListing).toMatchObject({ status: "rejected" });
+    expect(rows.notNamedNo).toMatchObject({ status: "rejected" });
+  });
 
   it("sets back to pending the accepted posts and those rejected as place_not_named that were not about another place", async () => {
     const { statusOf, requeue } = await seeded();

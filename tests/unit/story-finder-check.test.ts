@@ -15,6 +15,7 @@ import {
 import {
   authorKey,
   capQuote,
+  aboutHealth,
   contactIn,
   isBareFact,
   CONTAINMENT_MIN_GRAMS,
@@ -233,6 +234,27 @@ describe("decideMention: checks that need no model", () => {
       status: "rejected",
       reason: "quote_has_contact",
     });
+  });
+
+  it.each([
+    "店内のartを手掛けるマスターは、現在体調不良で不在でした。",
+    "去年、先代が亡くなったそうです。",
+    "The owner passed away last year.",
+  ])("a quote about someone's health or death is never shown: %s", (quote) => {
+    expect(aboutHealth(quote)).toBe(true);
+    expect(decide(`架空珈琲 試験堂。${quote}`, report({ quote }))).toMatchObject({
+      status: "rejected",
+      reason: "quote_about_health",
+    });
+  });
+
+  it("the words around such a sentence are still a quote", () => {
+    for (const quote of [
+      "店内にあるartを手掛けられてるマスター",
+      "The bill comes on a tray.",
+      "A skilled potter made every cup.",
+    ])
+      expect(aboutHealth(quote), quote).toBe(false);
   });
 
   it("ordinary dates, years, prices and times are not contact details", () => {

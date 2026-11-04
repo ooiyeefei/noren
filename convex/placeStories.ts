@@ -34,6 +34,9 @@ const MAX_STEPS = 60;
 /** The most runs one batch starts, so a typo can't start thousands of paid calls. */
 const MAX_BATCH = 150;
 const READY_SCAN = 800;
+/** The most places one night starts, so a big collection spreads over several nights. */
+const NIGHTLY_LIMIT = 20;
+const BATCH_SPACING_MS = 10_000;
 
 async function batchSteward(ctx: QueryCtx, personId: Id<"person">) {
   const person = await ctx.db.get("person", personId);
@@ -103,6 +106,28 @@ async function startRun(
   return runId;
 }
 
+async function startBatch(
+  ctx: MutationCtx,
+  steward: Doc<"person">,
+  places: readonly Doc<"place">[],
+  platforms: MentionPlatform[],
+  spacingMs = BATCH_SPACING_MS,
+) {
+  let delay = 0;
+  for (const place of places) {
+    await startRun(ctx, place._id, steward._id, platforms, delay);
+    delay += spacingMs;
+  }
+  await writeAudit(ctx, {
+    actorKind: "person",
+    actorPersonId: steward._id,
+    action: "story_agent.batch",
+    targetType: "place",
+    diff: { started: places.length, platforms },
+  });
+  return { started: places.length };
+}
+
 /** A steward asks the agent to write (or write again) one place's story, from the steward's page. */
 export const request = mutation({
   args: { placeId: v.id("place") },
@@ -152,19 +177,39 @@ export const enqueue = internalMutation({
           .slice(0, limit)
           .map((place) => ({ place: place! }))
       : await readyPlaces(ctx, reading, limit, minPosts);
-    let delay = 0;
-    for (const { place } of ready) {
-      await startRun(ctx, place._id, steward._id, reading, delay);
-      delay += spacingMs ?? 10_000;
-    }
-    await writeAudit(ctx, {
-      actorKind: "person",
-      actorPersonId: steward._id,
-      action: "story_agent.batch",
-      targetType: "place",
-      diff: { started: ready.length, platforms: reading },
-    });
-    return { started: ready.length };
+    return await startBatch(
+      ctx,
+      steward,
+      ready.map(({ place }) => place),
+      reading,
+      spacingMs,
+    );
+  },
+});
+
+/**
+ * Each night the agent writes the places that became ready, so nobody has to press anything. A place
+ * it found nothing for keeps its empty row and isn't read again; a run that failed is tried the next
+ * night. The audit names the first real steward, and with none there is nothing to run under.
+ */
+export const writeReadyStories = internalMutation({
+  args: {},
+  returns: v.object({ started: v.number() }),
+  handler: async (ctx) => {
+    const stewards = await ctx.db
+      .query("person")
+      .withIndex("by_role", (q) => q.eq("role", "steward"))
+      .take(50);
+    const steward = stewards.find(({ isMock }) => !isMock);
+    if (steward === undefined) return { started: 0 };
+    const ready = await readyPlaces(ctx, DEFAULT_PLATFORMS, NIGHTLY_LIMIT);
+    if (ready.length === 0) return { started: 0 };
+    return await startBatch(
+      ctx,
+      steward,
+      ready.map(({ place }) => place),
+      DEFAULT_PLATFORMS,
+    );
   },
 });
 

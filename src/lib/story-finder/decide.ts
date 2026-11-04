@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   ABOUT_ANSWERS,
   capQuote,
+  aboutHealth,
   contactIn,
   EVIDENCE_MAX,
   isVerbatim,
@@ -150,6 +151,7 @@ export function decideMention(
   const capped = capQuote(quote);
   if (capped === null) return reject("quote_too_long");
   if (contactIn(capped) !== null) return reject("quote_has_contact");
+  if (aboutHealth(capped)) return reject("quote_about_health");
   if (isBareFact(capped)) return reject("bare_fact");
   return { status: "accepted", verdict: { ...verdict, quote: capped }, quote: capped };
 }
