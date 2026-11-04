@@ -807,6 +807,24 @@ describe("ad labels on the whole post, not only the stored window", () => {
       expect(hasAdMarker(text), text).toBe(true);
   });
 
+  it("reads a hostile page in linear time (a 2 MB page of '-' lines, spaces or brackets)", () => {
+    // The line-label pattern once let its leading run cross line breaks, so every line start
+    // scanned to the end of the page: this took minutes.
+    for (const unit of ["-\n", " \n", "※\n", "・\n", "(\n", "【 \n", "PRx\n"]) {
+      const text = unit.repeat(1_000_000);
+      const started = performance.now();
+      expect(hasAdMarker(text), JSON.stringify(unit)).toBe(false);
+      expect(performance.now() - started, JSON.stringify(unit)).toBeLessThan(2_000);
+    }
+  });
+
+  it("the line label stays on its own line", () => {
+    expect(hasAdMarker("- \n- \nPR")).toBe(true);
+    expect(hasAdMarker("  ※  広告  ")).toBe(true);
+    // A line break between the markers and the label does not make a label of the first line.
+    expect(hasAdMarker("※\n\n広告を探す")).toBe(false);
+  });
+
   it("does not flag ordinary words that contain the same letters", () => {
     for (const text of [
       "提供する料理は日替わりです",
