@@ -5,7 +5,7 @@ export const storyFinderMessages = defineMessages({
   ja: {
     agentTitle: "ストーリーエージェント",
     agentIntro:
-      "確認済みの投稿をすべて読んで場所の話を書きます。文ごとに引用した言葉をプログラムが投稿と照合し、別のモデルが文と引用を読み比べます。通らなかった文は載りません。",
+      "確認済みのレビューとウェブページを読んで場所の話を書きます。文ごとに引用した言葉をプログラムが投稿と照合し、別のモデルが文と引用を読み比べます。通らなかった文は載りません。",
     agentModels: "書き手 {writer}、もう一人の読み手 {checker}",
     agentReady: "話がまだない場所",
     agentPosts: "投稿 {count} 件",
@@ -104,7 +104,7 @@ export const storyFinderMessages = defineMessages({
   en: {
     agentTitle: "Story agent",
     agentIntro:
-      "It reads every checked post about a place and writes the place's story. Code looks for each sentence's cited words in the post, then a different model reads the sentence against those words. A sentence that fails doesn't go on the page.",
+      "It reads the checked reviews and web pages about a place and writes the place's story. Code looks for each sentence's cited words in the post, then a different model reads the sentence against those words. A sentence that fails doesn't go on the page.",
     agentModels: "Writer {writer}. Second reader {checker}.",
     agentReady: "Places with no story yet",
     agentPosts: "{count} posts",
