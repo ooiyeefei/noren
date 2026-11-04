@@ -343,6 +343,21 @@ describe("recordCheck", () => {
     );
   });
 
+  it("keeps an email address in the author field off the card", async () => {
+    const w = await world();
+    await w.ingest([
+      w.candidate(posts.google, {
+        authorHandle: undefined,
+        authorName: "mock-writer@example.invalid",
+      }),
+    ]);
+    const [row] = await w.rows();
+    const result = await w.record(row!._id, {});
+    expect(result.status).toBe("attached");
+    const source = await w.b.t.run((ctx) => ctx.db.get("source", result.sourceId!));
+    expect(source?.authorHandle).toBeUndefined();
+  });
+
   it("an accepted Google review is a Maps link card with its quote", async () => {
     const w = await world();
     await w.ingest([w.candidate(posts.google)]);
