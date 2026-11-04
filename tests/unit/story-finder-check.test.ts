@@ -451,8 +451,16 @@ describe("decideMention: checks that need no model", () => {
       const page = (canonicalUrl: string) => authorKey({ platform: "web", canonicalUrl });
       expect(page("https://blog.example.co.jp/entry/1")).toBe("web:example.co.jp");
       expect(page("https://www.example.co.jp/other")).toBe("web:example.co.jp");
-      expect(page("https://mock-a.hatenablog.com/entry/1")).toBe(
-        page("https://mock-b.hatenablog.com/entry/2"),
+      // On a free blog host, the blogger's account: two bloggers are two authors.
+      expect(page("https://mock-a.hatenablog.com/entry/1")).toBe("web:mock-a.hatenablog.com");
+      expect(page("https://mock-a.hatenablog.com/entry/2")).toBe("web:mock-a.hatenablog.com");
+      expect(page("https://ameblo.jp/Mock-A/entry-1.html")).toBe("web:ameblo.jp/mock-a");
+      expect(page("https://ameblo.jp/mock-a/entry-2.html")).toBe("web:ameblo.jp/mock-a");
+      expect(page("https://ameblo.jp/mock-b/entry-1.html")).toBe("web:ameblo.jp/mock-b");
+      expect(page("https://ameblo.jp/")).toBe("web:ameblo.jp");
+      expect(page("https://mock-a.blog.fc2.com/blog-entry-1.html")).toBe("web:mock-a.blog.fc2.com");
+      expect(page("https://blog.livedoor.jp/mock-a/archives/1.html")).toBe(
+        "web:blog.livedoor.jp/mock-a",
       );
       expect(page("https://mock.nagasaki.jp/x")).toBe("web:mock.nagasaki.jp");
       expect(page("https://example.org/a")).not.toBe(page("https://example.net/a"));

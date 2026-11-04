@@ -751,9 +751,7 @@ const JP_PREFECTURES = new Set(
 
 /**
  * The registrable part of a host name: the name a site's owner registered, with every subdomain
- * folded in (blog.example.co.jp and www.example.co.jp are both example.co.jp). Free blog hosts fold
- * too (anyone.hatenablog.com is hatenablog.com): a new subdomain there costs nothing, so it must not
- * count as a new author.
+ * folded in (blog.example.co.jp and www.example.co.jp are both example.co.jp).
  */
 export function registrableHost(hostname: string): string {
   const labels = hostname.toLowerCase().replace(/\.$/, "").split(".").filter(Boolean);
@@ -764,6 +762,51 @@ export function registrableHost(hostname: string): string {
     top.length === 2 &&
     (PUBLIC_SECOND_LEVEL.has(second) || (top === "jp" && JP_PREFECTURES.has(second)));
   return labels.slice(publicSecond ? -3 : -2).join(".");
+}
+
+/** Free blog hosts where the first path segment is the blogger's account (ameblo.jp/someone/...). */
+const BLOGS_BY_PATH = new Set([
+  "ameblo.jp",
+  "note.com",
+  "blog.goo.ne.jp",
+  "blog.livedoor.jp",
+  "plaza.rakuten.co.jp",
+]);
+/** Free blog hosts where the subdomain is the blogger's account (someone.hatenablog.com). */
+const BLOGS_BY_SUBDOMAIN = new Set([
+  "hatenablog.com",
+  "hatenablog.jp",
+  "hateblo.jp",
+  "hatenadiary.jp",
+  "hatenadiary.com",
+  "seesaa.net",
+  "fc2.com",
+  "exblog.jp",
+  "jugem.jp",
+  "livedoor.blog",
+  "blog.jp",
+  "blogspot.com",
+  "wordpress.com",
+  "cocolog-nifty.com",
+]);
+
+/**
+ * Who wrote a web page: the site, or on a free blog host the blogger's account. Folding a host's
+ * bloggers into one author left all of ameblo.jp, a third of the first run's blogs, three posts a
+ * run. A new account there costs nothing, so one person could pose as several; the per-place cap,
+ * the copy check and a steward's read still stand in the way of a flood.
+ */
+function webAuthor(url: URL): string {
+  const host = url.hostname
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .replace(/^www\./, "");
+  if (BLOGS_BY_PATH.has(host)) {
+    const account = url.pathname.split("/").filter(Boolean)[0]?.toLowerCase();
+    return account ? `${host}/${account}` : host;
+  }
+  const site = registrableHost(host);
+  return BLOGS_BY_SUBDOMAIN.has(site) ? host : site;
 }
 
 /** A profile address as one string: no scheme, www. or m., trailing slash or fragment; lower case. */
@@ -779,7 +822,7 @@ function profileKey(url: string): string {
 
 /**
  * Who wrote a post, as one key per platform, for the per-run author limit. Only identifiers the
- * platform itself vouches for count: for a web page, the registrable host it was served from (a page
+ * platform itself vouches for count: for a web page, where it was served from (webAuthor; a page
  * cannot claim another site's name); elsewhere the profile address or handle the platform reports.
  * Never a free-text display name or a page's author or og: tags, which a post can set to anything:
  * a post with no verified identity shares the platform's one "unknown" key.
@@ -792,7 +835,7 @@ export function authorKey(candidate: {
 }): string {
   if (candidate.platform === "web") {
     const parsed = parseHttpUrl(candidate.canonicalUrl);
-    return `web:${parsed.ok ? registrableHost(parsed.url.hostname) : "unknown"}`.slice(0, 300);
+    return `web:${parsed.ok ? webAuthor(parsed.url) : "unknown"}`.slice(0, 300);
   }
   const who = candidate.authorUrl?.trim()
     ? profileKey(candidate.authorUrl)

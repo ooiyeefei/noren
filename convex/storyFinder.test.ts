@@ -315,14 +315,14 @@ describe("recordCheck", () => {
     });
   });
 
-  it("an accepted Instagram post is linked through the official embed, with no quote stored", async () => {
+  it("an accepted Instagram post is linked through the official embed, with its quote", async () => {
     const w = await world();
     expect((await w.place())!.hasPeopleStories).not.toBe(true);
     await w.ingest([w.candidate(posts.instagram)]);
     const [row] = await w.rows();
     const result = await w.record(row!._id, {});
     expect(result).toMatchObject({ status: "attached", sourceId: expect.any(String) });
-    expect(result.excerptPlaceId).toBeUndefined();
+    expect(result.excerptPlaceId).toBe(w.placeId);
     const source = await w.b.t.run((ctx) => ctx.db.get("source", result.sourceId!));
     expect(source).toMatchObject({
       adapter: "meta_embed",
@@ -335,7 +335,7 @@ describe("recordCheck", () => {
       sharedAt: expect.any(Number),
       isMock: false,
     });
-    expect(source!.excerpt).toBeUndefined();
+    expect(source).toMatchObject({ foundKind: "story", excerpt: QUOTE, excerptLang: "ja" });
     expect((await w.place())!.hasPeopleStories).toBe(true);
     expect((await w.rows())[0]).toMatchObject({ status: "attached", sourceId: result.sourceId });
     expect((await w.audits()).map((a) => a.action)).toEqual(
@@ -1113,6 +1113,54 @@ describe("attach order and the per-place cap", () => {
       ["tip", 9],
       ["tip", day(2)],
     ]);
+  });
+});
+
+describe("repairFoundPosts", () => {
+  const repair = (w: Awaited<ReturnType<typeof world>>) =>
+    w.b.t.mutation(internal.storyFinder.repairFoundPosts, {
+      paginationOpts: { numItems: 100, cursor: null },
+    });
+
+  it("gives an old linked post its quote and kind, and leaves it alone the second time", async () => {
+    const w = await world();
+    await w.ingest([w.candidate(posts.instagram)]);
+    const [row] = await w.rows();
+    const { sourceId } = await w.record(row!._id, {});
+    await w.b.t.run((ctx) =>
+      ctx.db.patch("source", sourceId!, {
+        foundKind: undefined,
+        excerpt: undefined,
+        excerptLang: undefined,
+      }),
+    );
+    expect(await repair(w)).toMatchObject({ sources: 1, isDone: true });
+    expect(await w.b.t.run((ctx) => ctx.db.get("source", sourceId!))).toMatchObject({
+      foundKind: "story",
+      excerpt: QUOTE,
+      excerptLang: "ja",
+    });
+    expect(await repair(w)).toMatchObject({ sources: 0 });
+  });
+
+  it("gives a blog post its blogger's key, and frees a post the old key held back", async () => {
+    const w = await world();
+    const id = await w.b.t.run((ctx) =>
+      ctx.db.insert("mentionCandidate", {
+        ...stub(w, "blogger"),
+        url: "https://ameblo.jp/mock-a/entry-1.html",
+        canonicalUrl: "https://ameblo.jp/mock-a/entry-1.html",
+        authorKey: "web:ameblo.jp",
+        status: "accepted",
+        reason: undefined,
+        attachError: "author_limit",
+      } as never),
+    );
+    expect(await repair(w)).toMatchObject({ authors: 1 });
+    const row = await w.b.t.run((ctx) => ctx.db.get("mentionCandidate", id));
+    expect(row).toMatchObject({ authorKey: "web:ameblo.jp/mock-a" });
+    expect(row!.attachError).toBeUndefined();
+    expect(await repair(w)).toMatchObject({ authors: 0 });
   });
 });
 
