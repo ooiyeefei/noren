@@ -224,6 +224,20 @@ describe("createPageReader: the ad screen sees the whole page", () => {
     }
   });
 
+  it("does not flag an ordinary blog for the labels on its ad slots", async () => {
+    const net = fakeInternet({
+      "https://blog.example.com/slots": html(
+        wrap(
+          "<div>スポンサードリンク</div>",
+          "<aside><p>広告</p><p>PR</p><p>【PR】架空の航空券</p></aside><footer><p>スポンサードリンク</p></footer>",
+        ),
+      ),
+    });
+    const page = await net.read("https://blog.example.com/slots", NAMES);
+    expect(page).toMatchObject({ ok: true });
+    expect(page).not.toHaveProperty("adMarker");
+  });
+
   it("flags a disclosure that inline tags split into pieces", async () => {
     const net = fakeInternet({
       "https://blog.example.com/inline": html(
