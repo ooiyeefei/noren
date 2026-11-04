@@ -5,6 +5,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { findRepeatedFragments, type RepeatedFragment } from "@/lib/claims/repeated-fragments";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { interviewUiMessages } from "@/lib/i18n/messages/interview-ui";
 import { selectionToSpan } from "./span";
@@ -20,6 +21,23 @@ export function formatTime(seconds: number): string {
   return minutes < 60
     ? `${minutes}:${s}`
     : `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${s}`;
+}
+
+/** The text with each repeated fragment in a mark; the text itself is never changed. */
+function withMarks(text: string, repeats: readonly RepeatedFragment[]): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let at = 0;
+  for (const { start, end } of repeats) {
+    parts.push(
+      text.slice(at, start),
+      <mark key={start} className="rounded-sm bg-kasutera/50 text-foreground">
+        {text.slice(start, end)}
+      </mark>,
+    );
+    at = end;
+  }
+  parts.push(text.slice(at));
+  return parts;
 }
 
 export function TranscriptEditor(props: {
@@ -48,6 +66,8 @@ export function TranscriptEditor(props: {
   const dirty = JSON.stringify(draft) !== sourceKey;
   const busy = props.saving || pending;
   const locked = props.readOnly || busy;
+  // A hint for the person correcting, who decides: people do repeat themselves, so nothing is removed.
+  const repeats = draft.map(({ text }) => (props.readOnly ? [] : findRepeatedFragments(text)));
   function update(index: number, change: Partial<EditableSegment>) {
     setSelection(null);
     setDraft((current) =>
@@ -85,6 +105,7 @@ export function TranscriptEditor(props: {
             id={`${id}-text-${index}`}
             lang={props.lang}
             value={segment.text}
+            aria-describedby={repeats[index]!.length ? `${id}-repeats-${index}` : undefined}
             readOnly={props.readOnly}
             disabled={busy}
             onChange={(event) => update(index, { text: event.target.value })}
@@ -99,6 +120,18 @@ export function TranscriptEditor(props: {
               );
             }}
           />
+          {repeats[index]!.length > 0 && (
+            <div
+              id={`${id}-repeats-${index}`}
+              role="note"
+              className="space-y-1 rounded-md bg-kamenozoki p-2 text-sm"
+            >
+              <p>{m.repeatedHint}</p>
+              <p lang={props.lang} className="whitespace-pre-wrap">
+                {withMarks(segment.text, repeats[index]!)}
+              </p>
+            </div>
+          )}
           {!props.readOnly && (
             <Button
               type="button"

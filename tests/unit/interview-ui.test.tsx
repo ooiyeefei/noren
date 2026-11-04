@@ -234,6 +234,39 @@ describe("components", () => {
       renderToStaticMarkup(<TranscriptEditor {...props} onProposeSpan={() => {}} />),
     ).toContain(interviewUiMessages.en.proposeSelection);
   });
+  it("marks a repeated fragment for the corrector with a hint, and leaves the text as it is", () => {
+    const repeated = [{ start: 0, end: 3, text: "今も今も、架空のお店です" }, segments[0]!];
+    for (const locale of ["en", "ja"] as const) {
+      const html = renderToStaticMarkup(
+        <TranscriptEditor locale={locale} segments={repeated} lang="ja" onSave={noop} />,
+      );
+      expect(html).toContain(interviewUiMessages[locale].repeatedHint);
+      expect(html).toContain("<mark");
+      expect(html).toContain("今も今も</mark>");
+      // One note, for the one segment that repeats, tied to its textarea.
+      expect(html.match(/role="note"/g)).toHaveLength(1);
+      expect(html).toMatch(/<textarea[^>]*aria-describedby="[^"]*-repeats-0"/);
+      // The textarea still holds the speaker's words untouched.
+      expect(html).toMatch(/<textarea[^>]*>今も今も、架空のお店です<\/textarea>/);
+    }
+  });
+  it("shows no hint where nothing repeats or when the transcript is read only", () => {
+    const clean = renderToStaticMarkup(
+      <TranscriptEditor locale="en" segments={segments} lang="ja" onSave={noop} />,
+    );
+    expect(clean).not.toContain(interviewUiMessages.en.repeatedHint);
+    expect(clean).not.toContain("<mark");
+    const locked = renderToStaticMarkup(
+      <TranscriptEditor
+        locale="en"
+        segments={[{ start: 0, end: 3, text: "今も今も" }]}
+        lang="ja"
+        readOnly
+        onSave={noop}
+      />,
+    );
+    expect(locked).not.toContain(interviewUiMessages.en.repeatedHint);
+  });
   it("allows saving an unchanged transcript as corrected", () => {
     const html = renderToStaticMarkup(
       <TranscriptEditor locale="en" segments={segments} lang="ja" onSave={noop} />,
