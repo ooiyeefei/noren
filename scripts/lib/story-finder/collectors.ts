@@ -2,6 +2,7 @@ import {
   guessLang,
   listingHoldsWholeName,
   listingNamesPlace,
+  listingSharesName,
   mentionCanonicalUrl,
   postHasAdMarker,
   storedPostText,
@@ -140,6 +141,12 @@ function placesWithName(places: readonly FinderPlace[], lang = "ja") {
 /** A listing this close to our pin is the place if its name fits (listingNamesPlace). */
 export const SAME_PLACE_M = 300;
 /**
+ * A listing this close is also the place if it only shares a shorter name with ours
+ * (listingSharesName): OSM's 「中華菜館 架空」 is Google's 「架空」 at the same door. Further off, the same
+ * short word is more likely another shop.
+ */
+export const SHARED_NAME_M = 100;
+/**
  * A listing further than that, up to here, is still taken for the place when its name holds the
  * place's whole name as a word (listingHoldsWholeName): a pin on a shop's side street can be a few
  * hundred metres from the point Google gives its main store, but a different shop that merely
@@ -168,7 +175,8 @@ export function judgeListing(
     const metres = distanceM(planned.pin, { lat, lng });
     isPlace =
       metres <= SAME_PLACE_M
-        ? listingNamesPlace(name, planned.names)
+        ? listingNamesPlace(name, planned.names) ||
+          (metres <= SHARED_NAME_M && listingSharesName(name, planned.names))
         : metres <= NAMED_PLACE_M && listingHoldsWholeName(name, planned.names);
   }
   if (!isPlace) return "wrong_listing";

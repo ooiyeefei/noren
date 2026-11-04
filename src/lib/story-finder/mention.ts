@@ -307,11 +307,11 @@ const OLD_KANJI: Readonly<Record<string, string>> = {
 };
 const OLD_KANJI_PATTERN = /[樓國澤濱廣齋眞]/gu;
 
-/** Text as names are compared: NFKC, no spaces, lower case, old kanji in their current form. */
+/** Text as names are compared: NFKC, no spaces or middle dots, lower case, current-form kanji. */
 function foldForNames(value: string): string {
   return value
     .normalize("NFKC")
-    .replace(/\s+/gu, "")
+    .replace(/[\s・·]+/gu, "")
     .toLowerCase()
     .replace(OLD_KANJI_PATTERN, (kanji) => OLD_KANJI[kanji] ?? kanji);
 }
@@ -336,6 +336,7 @@ const GENERIC_NAME_WORDS = new Set(
     "ラーメン",
     "中華料理",
     "中華",
+    "中華街",
     "食堂",
     "喫茶",
     "喫茶店",
@@ -431,6 +432,30 @@ export function namesPlace(text: string, names: readonly string[]): boolean {
 export function listingNamesPlace(listing: string, names: readonly string[]): boolean {
   // A one-character name (椿) cannot be found in a listing, so the listing's position decides.
   return namesPlace(listing, names) || names.some((name) => foldForNames(name).length === 1);
+}
+
+/**
+ * Whether a listing's name and a place's name share what makes them that name, when neither holds
+ * the other's whole name: the listing's whole name is inside ours (ばんくう in 居酒屋ばんくう), or both
+ * have the same word (架空 in 「中華菜館 架空」 and 「架空 本店」). Two characters count here, and do not in
+ * namesPlace, because this is read only against a listing's own name, never a post's running text.
+ * Generic words never count.
+ */
+export function listingSharesName(listing: string, names: readonly string[]): boolean {
+  const words = (name: string) =>
+    name
+      .normalize("NFKC")
+      .split(NAME_SEPARATORS)
+      .map(foldForNames)
+      .filter((word) => word.length >= 2 && !GENERIC_NAME_WORDS.has(word));
+  const whole = foldForNames(listing);
+  const wholeCounts = whole.length >= 2 && !GENERIC_NAME_WORDS.has(whole);
+  const listingWords = new Set(words(listing));
+  return names.some(
+    (name) =>
+      (wholeCounts && foldForNames(name).includes(whole)) ||
+      words(name).some((word) => listingWords.has(word)),
+  );
 }
 
 const SEPARATOR_CHAR = /[\s()[\]{}<>「」『』【】〈〉《》〔〕・·/|,、:;-]/u;

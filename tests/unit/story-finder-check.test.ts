@@ -7,6 +7,7 @@ import {
 } from "@/lib/story-finder/check";
 import {
   decideMention,
+  postNamesPlace,
   reportMentionSchema,
   type CheckedPost,
   type ReportedMention,
@@ -24,6 +25,7 @@ import {
   isVerbatim,
   listingHoldsWholeName,
   listingNamesPlace,
+  listingSharesName,
   namePartsOf,
   namesPlace,
   normaliseWhitespace,
@@ -932,6 +934,33 @@ describe("namesPlace: names with several parts, and old-form kanji", () => {
     expect(listingNamesPlace("ダイニングバー架", ["Kakuu", "架"])).toBe(true);
     expect(listingNamesPlace("ダイニングバー架", ["Kakuu", "架空"])).toBe(false);
     expect(listingNamesPlace("架空屋 本店", ["架空屋（屋台）"])).toBe(true);
+  });
+
+  it("listingSharesName reads a whole listing inside our name, or a word both have", () => {
+    expect(listingSharesName("架空", ["中華菜館 架空"])).toBe(true);
+    expect(listingSharesName("ばんくう", ["居酒屋ばんくう"])).toBe(true);
+    expect(listingSharesName("老架 中華街 総本店", ["台湾料理 老架 中華街店"])).toBe(true);
+    expect(listingSharesName("架空樓", ["中華菜館 架空楼"])).toBe(true);
+    // Generic words, single characters and other names do not count.
+    expect(listingSharesName("中華街", ["台湾料理 老架 中華街店"])).toBe(false);
+    expect(listingSharesName("ホテル", ["ビジネスカクウホテル"])).toBe(false);
+    expect(listingSharesName("架", ["中華菜館 架空"])).toBe(false);
+    expect(listingSharesName("別の店", ["中華菜館 架空"])).toBe(false);
+    expect(listingSharesName("架空屋", ["架空"])).toBe(false);
+  });
+
+  it("namesPlace ignores a middle dot", () => {
+    expect(namesPlace("カクウ・イン長崎に泊まった", ["カクウイン長崎"])).toBe(true);
+    expect(namesPlace("カクウイン長崎に泊まった", ["カクウ･イン長崎"])).toBe(true);
+  });
+
+  it("a review tagged with a listing that shares the place's name names the place", () => {
+    const post = { text: "おすすめは夜の席で、予約すると窓際に案内してくれる。" };
+    expect(postNamesPlace(post, ["中華菜館 架空"])).toBe(false);
+    expect(postNamesPlace({ ...post, locationName: "架空" }, ["中華菜館 架空"])).toBe(true);
+    expect(postNamesPlace({ ...post, locationName: "別の店" }, ["中華菜館 架空"])).toBe(false);
+    // In a post's own words, two characters are still too few.
+    expect(postNamesPlace({ text: "架空の話をした。" }, ["中華菜館 架空"])).toBe(false);
   });
 
   it("listingHoldsWholeName wants the name as a word of its own", () => {
