@@ -5,7 +5,12 @@ import { writeAudit } from "./lib/audit";
 import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
-import { checkFor, checkSetting, scheduleCheckRun } from "./lib/translationChecks";
+import {
+  checkFor,
+  checkSetting,
+  consentCoversCheck,
+  scheduleCheckRun,
+} from "./lib/translationChecks";
 
 /** A sleeping endpoint answers 503 at once and is ready about 3.5 minutes later. */
 export const RETRY_AFTER_MS = 30_000;
@@ -63,10 +68,11 @@ async function current(ctx: MutationCtx, checkId: Id<"translationCheck">, text: 
     translation.origin !== "machine" ||
     translation.text !== check.text ||
     claim === null ||
-    claim.origin !== "interview" ||
-    !CHECKABLE.some((status) => status === claim.status)
+    !CHECKABLE.some((status) => status === claim.status) ||
+    !(await consentCoversCheck(ctx, claim))
   ) {
-    // The words were edited, withdrawn or translated by a person: nothing is left to check.
+    // The words were edited, withdrawn or translated by a person, or the owner's consent no longer
+    // covers sending them to Modal: nothing is left to check, and nothing is sent.
     await ctx.db.delete("translationCheck", check._id);
     return null;
   }
@@ -325,6 +331,9 @@ export const checkAgain = mutation({
       throw appError("conflict", "only a check that could not run is queued again");
     const setting = checkSetting();
     if (setting === undefined) throw appError("conflict", "the translation check is switched off");
+    const claim = await ctx.db.get("claim", claimId);
+    if (claim === null || !(await consentCoversCheck(ctx, claim)))
+      throw appError("conflict", "the owner's consent does not cover the translation check");
     await ctx.db.patch("translationCheck", check._id, {
       status: "pending",
       modelSetting: setting,

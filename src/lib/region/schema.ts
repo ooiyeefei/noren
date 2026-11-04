@@ -72,6 +72,11 @@ export const regionSchema = z
       textVersion: z.string().min(1),
       text: localised,
       requiredScopes: z.array(z.enum(CONSENT_SCOPES)),
+      /**
+       * The consent text versions that name Modal. The translation check sends a person's words to
+       * Modal, so it runs only on interviews whose recorded consent has one of these versions.
+       */
+      versionsNamingModal: z.array(z.string().min(1)),
     }),
     minimumAge: z.number().int().min(0).max(30),
     retention: z.strictObject({
@@ -151,6 +156,20 @@ export const regionSchema = z
     const keys = region.cautionVocabulary.map((c) => c.key);
     if (new Set(keys).size !== keys.length) {
       fail(["cautionVocabulary"], "caution keys must be unique");
+    }
+
+    // A processor reaches people's words only when the text they agreed to names it. Older texts
+    // are gone, but the current one is here: if it is listed as naming Modal, it must.
+    const { consent } = region;
+    if (consent.versionsNamingModal.includes(consent.textVersion)) {
+      for (const [l, text] of Object.entries(consent.text)) {
+        if (!text.includes("Modal")) {
+          fail(
+            ["consent", "text", l],
+            `must name Modal: "${consent.textVersion}" is listed in versionsNamingModal`,
+          );
+        }
+      }
     }
 
     // Constitution: consent must cover all four scopes before an interview is uploaded.

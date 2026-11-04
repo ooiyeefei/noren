@@ -38,6 +38,7 @@ const base: WorkspaceViewProps = {
       textVersion: "v1",
       requiredScopes: ["publish", "aiProcessing", "transferAbroad", "voiceRetention"],
       text: { ja: "日本語の同意文", en: "English consent text" },
+      versionsNamingModal: [],
     },
     cautionVocabulary: [
       { key: "access", labels: { ja: "入店", en: "Access" }, labelsReviewedBy: null },
