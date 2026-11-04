@@ -37,6 +37,11 @@ export function EmbedView(props: {
   outboundHref?: string;
   scriptOrigins: readonly string[];
   frameOrigins: readonly string[];
+  /**
+   * The member's own paste in the add form: the embed loads without the click, because they asked
+   * for this post themselves, and what the link said is shown with it.
+   */
+  preview?: { caption?: string; siteName?: string };
   /** Shown at the foot of the post, such as who shared it. */
   children?: React.ReactNode;
 }): React.JSX.Element {
@@ -50,10 +55,11 @@ function Post({
   outboundHref,
   scriptOrigins,
   frameOrigins,
+  preview,
   children,
 }: Parameters<typeof EmbedView>[0]): React.JSX.Element {
   const messages = messagesFor(placeUiMessages, locale);
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(preview !== undefined);
   const [failed, setFailed] = useState(false);
   const plan = embedPlan(source.embed, loaded);
   const scriptUrl = plan.kind === "blockquote" ? plan.scriptUrl : null;
@@ -74,11 +80,13 @@ function Post({
   const toOriginal = outboundHref ? { target: "_blank", rel: "noopener" } : external;
   const frameAllowed = plan.kind !== "iframe" || isAllowedOrigin(plan.src, frameOrigins);
   // A found post names the platform properly and credits its author as the platform shows them.
-  const platform = source.found
-    ? (platformName(source.platform) ?? messages.webPage)
-    : source.platform;
+  const platform = preview
+    ? (platformName(source.platform) ?? preview.siteName ?? messages.webPage)
+    : source.found
+      ? (platformName(source.platform) ?? messages.webPage)
+      : source.platform;
   const author = source.authorHandle
-    ? format(source.found ? messages.postedBy : messages.byAuthor, {
+    ? format(source.found || preview ? messages.postedBy : messages.byAuthor, {
         author: source.authorHandle,
       })
     : undefined;
@@ -141,6 +149,11 @@ function Post({
           {source.title || new URL(plan.url).hostname}
         </a>
       )}
+      {preview?.caption && (
+        <p data-testid="link-preview-caption" className="line-clamp-4 whitespace-pre-wrap">
+          {preview.caption}
+        </p>
+      )}
       {plan.kind === "facade" && (
         <div className="space-y-2 rounded border bg-muted p-4">
           <button
@@ -185,6 +198,14 @@ function Post({
           </a>
         </blockquote>
       ) : null}
+      {preview && source.embed.kind !== "link" && (
+        <p className="text-sm">
+          {format(messages.cookieLine, { platform })}{" "}
+          <a className="underline" href={localePath(locale, "/notice")}>
+            {messages.noticeLink}
+          </a>
+        </p>
+      )}
       {source.creatorNote && (
         <p lang={source.noteLang} className="whitespace-pre-wrap">
           {source.creatorNote}

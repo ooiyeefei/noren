@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { PageContainer } from "@/components/layout/page-container";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -62,6 +62,8 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
   const removeSource = useMutation(api.sources.remove);
   const writeStory = useMutation(api.stories.add);
   const removeStory = useMutation(api.stories.remove);
+  const previewLink = useAction(api.linkRead.previewLink);
+  const draftNote = useAction(api.linkRead.draftNote);
   if (place === undefined)
     return (
       <PageContainer locale={locale}>
@@ -80,6 +82,8 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
         signedIn: isLoading ? undefined : isAuthenticated,
         add: (args) => pressing("story", () => addSource({ ...args, placeId: place._id })),
         write: (args) => pressing("story", () => writeStory({ ...args, placeId: place._id })),
+        preview: (url) => previewLink({ placeId: place._id, url }),
+        draftNote: (args) => draftNote({ ...args, placeId: place._id, mine: true }),
         remove: ({ kind, id }) =>
           kind === "written"
             ? removeStory({ storyId: id as Id<"story"> })

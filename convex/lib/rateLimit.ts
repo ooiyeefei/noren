@@ -24,7 +24,8 @@ export async function consumeRateLimit(
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const CONTRIBUTIONS_PER_DAY = { place: 20, post: 50, story: 50 } as const;
+// A preview runs on each pasted link; a draft is one model call.
+const CONTRIBUTIONS_PER_DAY = { place: 20, post: 50, story: 50, preview: 200, draft: 30 } as const;
 
 /** Any signed-in member may add places and posts; a daily cap stops one account flooding the map. */
 export async function limitContribution(

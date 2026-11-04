@@ -1,9 +1,11 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup as render } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddStory, type AddStoryActions } from "@/components/place/add-story";
+import { READ_DELAY_MS } from "@/components/place/link-read";
 import {
   describeStoryLink,
+  failureName,
   noteLanguage,
   toStoryArgs,
   toWrittenArgs,
@@ -17,6 +19,7 @@ import {
 } from "@/components/public/mapping";
 import { PlaceView } from "@/components/public/place-view";
 import { format } from "@/lib/i18n";
+import type { LinkRead } from "@/lib/link-read/types";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
@@ -313,7 +316,18 @@ function harness<T>(view: () => T) {
       (all().filter((item) => item.props.children === text)[nth]!.props.onClick as () => void)(),
     type: (tag: "input" | "textarea", index: number, value: string) =>
       (byType(tag)[index]!.props.onChange as (event: unknown) => void)({ target: { value } }),
-    inputs: () => byType("input").map((item) => item.props.value),
+    inputs: () =>
+      byType("input")
+        .filter((item) => item.props.type !== "checkbox")
+        .map((item) => item.props.value),
+    checkbox: () => byType("input").find((item) => item.props.type === "checkbox"),
+    tick: (checked: boolean) =>
+      (
+        byType("input").find((item) => item.props.type === "checkbox")!.props.onChange as (
+          event: unknown,
+        ) => void
+      )({ target: { checked } }),
+    note: () => byType("textarea")[0]!.props.value as string,
     submit: () =>
       (byType("form")[0]!.props.onSubmit as (event: unknown) => void)({
         preventDefault: () => {},
@@ -413,6 +427,360 @@ describe("sharing a story", () => {
     await vi.waitFor(() => expect(form.html()).toContain(shellMessages.en.rate_limited));
     expect(form.html()).toContain(">A story</textarea>");
     expect(form.html()).not.toContain(m.added);
+  });
+});
+
+describe("reading a pasted link", () => {
+  const m = addStoryMessages.en;
+  const youtube = "https://www.youtube.com/watch?v=abcdefghijk";
+  const instagram = "https://www.instagram.com/p/FICTIONAL1/";
+  const video: LinkRead = {
+    outcome: "read",
+    caption: "Cats on the slope at dusk",
+    author: "Fictional Walker",
+    authorUrl: "https://www.youtube.com/@fictional",
+  };
+  const page: LinkRead = {
+    outcome: "read",
+    title: "Cats and bread",
+    caption: "A baker feeds the cats at closing time.",
+    author: "Fictional Walks",
+    siteName: "Fictional Walks",
+  };
+  const actions = (fields: Partial<AddStoryActions> = {}): AddStoryActions => ({
+    signedIn: true,
+    add: vi.fn(async () => null),
+    write: vi.fn(async () => null),
+    preview: vi.fn(async () => video),
+    draftNote: vi.fn(async () => ({ note: "The baker feeds the cats at closing time." })),
+    ...fields,
+  });
+  const settle = () => vi.advanceTimersByTimeAsync(READ_DELAY_MS);
+  const flush = () => vi.advanceTimersByTimeAsync(0);
+  beforeEach(() => void vi.useFakeTimers());
+  afterEach(() => void vi.useRealTimers());
+
+  async function pasted(url: string, given: AddStoryActions) {
+    const form = mount(given);
+    form.click(m.link);
+    form.type("input", 0, url);
+    await settle();
+    return form;
+  }
+
+  it("waits for a pause, then shows platform, author, words and the embed without a click", async () => {
+    const preview = vi.fn(async () => video);
+    const form = mount(actions({ preview }));
+    form.click(m.link);
+    form.type("input", 0, "https://www.youtube.com/watch?v=abcdefghij");
+    await vi.advanceTimersByTimeAsync(READ_DELAY_MS - 1);
+    form.type("input", 0, youtube);
+    await vi.advanceTimersByTimeAsync(READ_DELAY_MS - 1);
+    expect(preview).not.toHaveBeenCalled();
+    expect(form.html()).not.toContain('data-testid="link-preview"');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(preview).toHaveBeenCalledTimes(1);
+    expect(preview).toHaveBeenCalledWith(youtube);
+    const html = form.html();
+    expect(html).toContain('data-testid="link-preview"');
+    expect(html).toContain(">YouTube</span>");
+    expect(html).toContain("Posted by Fictional Walker");
+    expect(html).toContain('href="https://www.youtube.com/@fictional"');
+    expect(html).toContain("Cats on the slope at dusk");
+    expect(html).toContain('src="https://www.youtube-nocookie.com/embed/abcdefghijk"');
+    expect(html).not.toContain("Load this post");
+    expect(html).toContain(placeUiMessages.en.viewOriginal);
+    // A video has no title field: its title is shown and goes nowhere.
+    expect(form.inputs()).toEqual([youtube, "Fictional Walker"]);
+  });
+
+  it("says it is reading while it waits", async () => {
+    let answer!: (read: LinkRead) => void;
+    const form = await pasted(
+      youtube,
+      actions({ preview: () => new Promise((resolve) => (answer = resolve)) }),
+    );
+    expect(form.html()).toContain(m.previewReading);
+    answer(video);
+    await flush();
+    expect(form.html()).not.toContain(m.previewReading);
+  });
+
+  it("fills a plain link's title and author, and keeps what the member typed", async () => {
+    const empty = await pasted(blog, actions({ preview: async () => page }));
+    expect(empty.inputs()).toEqual([blog, "Cats and bread", "Fictional Walks"]);
+    expect(empty.html()).toContain("Fictional Walks</span>");
+    const typed = mount(actions({ preview: async () => page }));
+    typed.click(m.link);
+    typed.type("input", 0, blog);
+    typed.type("input", 1, "My title");
+    typed.type("input", 2, "My name");
+    await settle();
+    expect(typed.inputs()).toEqual([blog, "My title", "My name"]);
+  });
+
+  it("replaces what it filled in when the link changes, even if the new read fails", async () => {
+    const preview = vi
+      .fn<(url: string) => Promise<LinkRead>>()
+      .mockResolvedValueOnce(page)
+      .mockRejectedValueOnce(new Error("down"));
+    const form = await pasted(blog, actions({ preview }));
+    expect(form.inputs()[1]).toBe("Cats and bread");
+    form.type("input", 0, `${blog}-two`);
+    await settle();
+    expect(form.inputs()).toEqual([`${blog}-two`, "", ""]);
+  });
+
+  it("gives Instagram its embed and an honest line, with no server call or tick", async () => {
+    const preview = vi.fn(async () => video);
+    const form = await pasted(instagram, actions({ preview }));
+    expect(preview).not.toHaveBeenCalled();
+    const html = form.html();
+    expect(html).toContain(">Instagram</span>");
+    expect(html).toContain('class="instagram-media"');
+    expect(html).toContain(format(m.previewEmbedOnly, { platform: "Instagram" }));
+    expect(form.checkbox()).toBeUndefined();
+  });
+
+  it("gives Facebook its embed in the same way", async () => {
+    const form = await pasted("https://www.facebook.com/fictional/posts/123", actions());
+    const html = form.html();
+    expect(html).toContain(">Facebook</span>");
+    expect(html).toContain("https://www.facebook.com/plugins/post.php");
+    expect(form.checkbox()).toBeUndefined();
+  });
+
+  it("offers no tick when the post gave no words", async () => {
+    const form = await pasted(
+      tiktok,
+      actions({ preview: async () => ({ outcome: "embed_only" }) }),
+    );
+    expect(form.html()).toContain(format(m.previewEmbedOnly, { platform: "TikTok" }));
+    expect(form.html()).toContain('src="https://www.tiktok.com/player/v1/7300000000000000000"');
+    expect(form.checkbox()).toBeUndefined();
+    expect(form.inputs()[1]).toMatch(/fictional_walker/);
+  });
+
+  it("sends nothing to a model until the member ticks, then drafts in their language", async () => {
+    const draftNote = vi.fn(async () => ({ note: "The baker feeds the cats at closing time." }));
+    const form = await pasted(youtube, actions({ draftNote }));
+    expect(form.checkbox()?.props.checked).toBe(false);
+    expect(form.html()).toContain(m.ownPost);
+    expect(form.html()).not.toContain(m.drafted);
+    form.type("textarea", 0, "");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(draftNote).not.toHaveBeenCalled();
+    form.tick(true);
+    expect(form.html()).toContain(m.drafting);
+    await flush();
+    expect(draftNote).toHaveBeenCalledTimes(1);
+    expect(draftNote).toHaveBeenCalledWith({ url: youtube, lang: "en" });
+    expect(form.note()).toBe("The baker feeds the cats at closing time.");
+    expect(form.html()).toContain(m.drafted);
+  });
+
+  it("shares the member's edited line, never the caption, only when they press Share", async () => {
+    const add = vi.fn(async () => null);
+    const form = await pasted(youtube, actions({ add }));
+    form.tick(true);
+    await flush();
+    expect(add).not.toHaveBeenCalled();
+    form.type("textarea", 0, "The baker feeds the cats. I saw it myself.");
+    form.submit();
+    await flush();
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenCalledWith({
+      url: youtube,
+      note: "The baker feeds the cats. I saw it myself.",
+      noteLang: "en",
+      authorHandle: "Fictional Walker",
+    });
+    expect(form.html()).toContain(m.added);
+    expect(form.html()).not.toContain('data-testid="link-preview"');
+    form.click(m.link);
+    expect(form.inputs()).toEqual(["", ""]);
+  });
+
+  it("keeps a line the member already typed and spends no model call on it", async () => {
+    const draftNote = vi.fn(async () => ({ note: "Not this" }));
+    const form = await pasted(youtube, actions({ draftNote }));
+    form.type("textarea", 0, "My own line");
+    form.tick(true);
+    await flush();
+    expect(draftNote).not.toHaveBeenCalled();
+    expect(form.note()).toBe("My own line");
+    expect(form.html()).toContain(m.draftKept);
+  });
+
+  it("drops the model's answer when the member starts typing first", async () => {
+    let answer!: (draft: { note: string }) => void;
+    const form = await pasted(
+      youtube,
+      actions({ draftNote: () => new Promise((resolve) => (answer = resolve)) }),
+    );
+    form.tick(true);
+    form.type("textarea", 0, "My own line");
+    answer({ note: "Not this" });
+    await flush();
+    expect(form.note()).toBe("My own line");
+    expect(form.html()).toContain(m.draftKept);
+    expect(form.html()).not.toContain(m.drafted);
+  });
+
+  it("takes the tick and an untouched draft away when the link changes or the tick goes", async () => {
+    const draftNote = vi.fn(async () => ({ note: "A draft" }));
+    const form = await pasted(youtube, actions({ draftNote }));
+    form.tick(true);
+    await flush();
+    form.tick(false);
+    expect(form.note()).toBe("");
+    expect(form.html()).not.toContain(m.drafted);
+    form.tick(true);
+    await flush();
+    expect(form.note()).toBe("A draft");
+    form.type("input", 0, "https://www.youtube.com/watch?v=bbbbbbbbbbb");
+    expect(form.note()).toBe("");
+    await settle();
+    expect(form.checkbox()?.props.checked).toBe(false);
+    expect(draftNote).toHaveBeenCalledTimes(2);
+    expect(form.html()).not.toContain(m.drafted);
+  });
+
+  it("keeps a draft the member changed when the link changes", async () => {
+    const form = await pasted(youtube, actions({ draftNote: async () => ({ note: "A draft" }) }));
+    form.tick(true);
+    await flush();
+    form.type("textarea", 0, "A draft, and more");
+    form.type("input", 0, tiktok);
+    expect(form.note()).toBe("A draft, and more");
+  });
+
+  it("ignores a late answer about the link before", async () => {
+    const answers: ((read: LinkRead) => void)[] = [];
+    const form = await pasted(
+      youtube,
+      actions({ preview: () => new Promise((resolve) => answers.push(resolve)) }),
+    );
+    form.type("input", 0, blog);
+    await settle();
+    answers[1]!(page);
+    await flush();
+    answers[0]!({ ...video, caption: "From the old link", author: "Old author" });
+    await flush();
+    expect(form.html()).not.toContain("From the old link");
+    expect(form.inputs()).toEqual([blog, "Cats and bread", "Fictional Walks"]);
+  });
+
+  it("falls back to today's form when the preview fails, naming the error", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const add = vi.fn(async () => null);
+    const form = await pasted(
+      blog,
+      actions({
+        add,
+        preview: async () => {
+          throw new TypeError("network down");
+        },
+      }),
+    );
+    expect(form.html()).toContain(`${m.previewFailed} (TypeError)`);
+    expect(log).toHaveBeenCalledWith("link preview failed: TypeError");
+    expect(form.checkbox()).toBeUndefined();
+    form.type("input", 1, "Typed title");
+    form.type("textarea", 0, "Cats on the slope");
+    form.submit();
+    await flush();
+    expect(add).toHaveBeenCalledWith({
+      url: blog,
+      note: "Cats on the slope",
+      noteLang: "en",
+      title: "Typed title",
+    });
+    log.mockRestore();
+  });
+
+  it("works exactly as before when nothing can read links", async () => {
+    const form = mount({ signedIn: true, add: vi.fn(async () => null), write: vi.fn() });
+    form.click(m.link);
+    form.type("input", 0, youtube);
+    await settle();
+    expect(form.html()).not.toContain('data-testid="link-preview"');
+  });
+
+  it("shows a read that came back unread with its reason", async () => {
+    const form = await pasted(
+      blog,
+      actions({ preview: async () => ({ outcome: "unread", failure: "RefusedLink" }) }),
+    );
+    expect(form.html()).toContain(`${m.previewFailed} (RefusedLink)`);
+    expect(form.inputs()).toEqual([blog, "", ""]);
+  });
+
+  it("names a draft that failed, and leaves the note for the member", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const empty = await pasted(
+      youtube,
+      actions({ draftNote: async () => ({ note: null, failure: "TimeoutError" }) }),
+    );
+    empty.tick(true);
+    await flush();
+    expect(empty.html()).toContain(`${m.draftFailed} (TimeoutError)`);
+    expect(empty.note()).toBe("");
+    const thrown = await pasted(
+      youtube,
+      actions({
+        draftNote: () =>
+          Promise.reject(
+            Object.assign(new Error("[CONVEX] redacted"), {
+              name: "ConvexError",
+              data: { code: "rate_limited" },
+            }),
+          ),
+      }),
+    );
+    thrown.tick(true);
+    await flush();
+    expect(thrown.html()).toContain(`${m.draftFailed} (ConvexError: rate_limited)`);
+    log.mockRestore();
+  });
+
+  it("names a throw that is not an Error", () => {
+    expect(failureName("gone")).toBe("NonError: string");
+    expect(failureName(undefined)).toBe("NonError: undefined");
+    expect(failureName(new RangeError("x"))).toBe("RangeError");
+  });
+
+  it("speaks the member's language and drafts in it", async () => {
+    const ja = addStoryMessages.ja;
+    const draftNote = vi.fn(async () => ({ note: "閉店時に店主が猫にパンの耳をあげています。" }));
+    const form = harness(() => AddStory({ locale: "ja", region, actions: actions({ draftNote }) }));
+    form.click(ja.link);
+    form.type("input", 0, youtube);
+    await settle();
+    expect(form.html()).toContain(ja.ownPost);
+    form.tick(true);
+    await flush();
+    expect(draftNote).toHaveBeenCalledWith({ url: youtube, lang: "ja" });
+    expect(form.html()).toContain(ja.drafted);
+  });
+
+  it("has every new string in both languages, without an em dash", () => {
+    for (const key of [
+      "previewLabel",
+      "previewReading",
+      "previewEmbedOnly",
+      "previewFailed",
+      "ownPost",
+      "ownPostHint",
+      "drafting",
+      "drafted",
+      "draftKept",
+      "draftFailed",
+    ] as const) {
+      expect(addStoryMessages.ja[key]).toBeTruthy();
+      expect(addStoryMessages.en[key]).not.toContain("\u2014");
+      expect(addStoryMessages.ja[key]).not.toContain("\u2014");
+    }
   });
 });
 

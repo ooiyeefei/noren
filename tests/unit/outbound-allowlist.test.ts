@@ -116,6 +116,7 @@ describe("server fetch allowlist", () => {
       "src/lib/adapters/url.ts",
       "src/lib/geo/maps-link.ts",
       "src/lib/geo/nominatim.ts",
+      "src/lib/link-read/read.ts",
     ]);
   });
 });
