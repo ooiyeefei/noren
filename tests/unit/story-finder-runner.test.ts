@@ -935,9 +935,11 @@ describe("story-finder CLI", () => {
     mkdirSync(scratch, { recursive: true });
     const cwd = mkdtempSync(join(scratch, "places-test-"));
     try {
+      // The twin comes first in the list and shares its name, and is not the one named.
+      const twin = { ...places[1]!, placeId: "mockplace9", slug: "fictional-place-9" };
       writeFileSync(join(cwd, "places.txt"), `# chosen by hand\n${places[1]!.slug}  # second\n`);
       const logs: unknown[] = [];
-      const { convex } = fakeConvex();
+      const { convex } = fakeConvex([twin, ...places]);
       const result = await runStoryFinder(
         [
           "collect",
