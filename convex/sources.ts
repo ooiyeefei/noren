@@ -46,6 +46,13 @@ const sourceViewValidator = v.object({
   addedByMe: v.boolean(),
   /** The name of the member who linked it, once they agreed to show it (FR-033). */
   sharedBy: v.optional(v.string()),
+  /** The story finder found it in a public post; no member shared it. */
+  foundInPublicPost: v.optional(v.literal(true)),
+  /** A found post's verbatim quote, for a platform with no official embed. */
+  excerpt: v.optional(v.string()),
+  excerptLang: v.optional(v.string()),
+  /** Machine translations of the quote into the region's other languages. */
+  excerptTranslations: v.optional(v.array(v.object({ lang: v.string(), text: v.string() }))),
   addedAt: v.number(),
   /** Whether a visit to the original goes through /out and is counted (FR-024). */
   countsVisits: v.boolean(),
@@ -60,6 +67,7 @@ async function sourceView(
 ): Promise<SourceView> {
   const adapter = SOURCE_ADAPTER_IDS.find((id) => id === source.adapter);
   if (adapter === undefined) throw appError("invalid_input", "unknown source adapter");
+  const found = source.origin === "story_finder";
   return {
     _id: source._id,
     placeId: source.placeId,
@@ -78,13 +86,33 @@ async function sourceView(
     hasDemoConsent: source.demoConsentAt !== undefined,
     isMock: source.isMock,
     addedByMe: viewer?._id === source.addedBy,
+    // A found post is credited to its author, never to the steward who ran the finder.
     sharedBy:
-      source.sharedAt === undefined
+      source.sharedAt === undefined || found
         ? undefined
         : (await ctx.db.get("person", source.addedBy))?.displayName,
+    ...(found
+      ? {
+          foundInPublicPost: true as const,
+          excerpt: source.excerpt,
+          excerptLang: source.excerptLang,
+          excerptTranslations: source.excerpt ? await excerptTranslations(ctx, source) : [],
+        }
+      : {}),
     addedAt: source._creationTime,
     countsVisits: countsVisits(place, source),
   };
+}
+
+/** Translations made from the quote as it stands now; one made from an earlier quote is left out. */
+async function excerptTranslations(ctx: QueryCtx, source: Doc<"source">) {
+  const rows = await ctx.db
+    .query("sourceExcerptTranslation")
+    .withIndex("by_sourceId_and_lang", (q) => q.eq("sourceId", source._id))
+    .take(8);
+  return rows
+    .filter((row) => row.sourceText === source.excerpt)
+    .map(({ lang, text }) => ({ lang, text }));
 }
 
 async function loadSource(ctx: QueryCtx, sourceId: Id<"source">) {

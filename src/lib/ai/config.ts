@@ -6,6 +6,8 @@ export const AI_CAPABILITIES = [
   "entail",
   "followup",
   "check_translation",
+  // The story finder's check of a public post (AI_MODEL_CHECK_MENTION); it needs tool calling.
+  "check_mention",
 ] as const;
 export type AiCapability = (typeof AI_CAPABILITIES)[number];
 // Each capability names its model in AI_MODEL_<CAPABILITY>, so switching provider is a settings
