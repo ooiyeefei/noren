@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, open, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getRegionConfig } from "../src/lib/region/registry";
 import { MENTION_PLATFORMS, type MentionPlatform } from "../src/lib/story-finder/mention";
@@ -191,7 +191,8 @@ async function readSaved(folder: string): Promise<SavedRun[]> {
     const saved = JSON.parse(
       await readFile(resolve(existsSync(raw) ? raw : folder, name), "utf8"),
     ) as SavedRun;
-    if (saved?.version === 1 && saved.run && Array.isArray(saved.items)) runs.push(saved);
+    if (saved?.version === 1 && saved.run && Array.isArray(saved.items))
+      runs.push({ ...saved, collectionId: saved.collectionId || basename(folder) });
   }
   if (!runs.length) throw new Error(`No saved runs in ${folder}`);
   return runs;
@@ -277,6 +278,7 @@ export async function runStoryFinder(
     batchSize: flags.batchSize,
     timeoutSecs: flags.timeoutSecs,
     dryRun: flags.dryRun,
+    collectionId: stamp,
   };
   options.log({ target, dryRun: flags.dryRun });
   if (flags.dryRun)

@@ -20,9 +20,11 @@ import {
   type CollectOptions,
   type Collector,
   type FinderPlace,
+  type NormaliseContext,
   type PlannedQuery,
   type PlannedRun,
 } from "./types";
+import { isSkippedHost } from "./web-page";
 
 // Prices are the Apify Free-plan tier (the highest) from each actor's `pricingInfos`, read on
 // 2026-11-04 with GET https://api.apify.com/v2/acts/<user>~<actor>. All six actors are
@@ -42,7 +44,7 @@ const ALL_ADAPTERS: readonly SourceAdapterId[] = [
 function candidate(
   platform: MentionPlatform,
   run: PlannedRun,
-  runId: string,
+  context: NormaliseContext,
   planned: PlannedQuery,
   fields: Omit<
     MentionCandidate,
@@ -53,6 +55,7 @@ function candidate(
     | "query"
     | "actorId"
     | "runId"
+    | "collectionId"
     | "langGuess"
   > & {
     langGuess?: string;
@@ -70,12 +73,15 @@ function candidate(
     ...(fields.authorUrl ? { authorUrl: fields.authorUrl } : {}),
     ...(fields.postedAt !== undefined ? { postedAt: fields.postedAt } : {}),
     text,
+    ...(fields.title ? { title: fields.title } : {}),
+    ...(fields.locationName ? { locationName: fields.locationName } : {}),
     langGuess: fields.langGuess ?? guessLang(text),
     placeId: planned.placeId,
     searchedFor: planned.searchedFor,
     query: planned.query,
     actorId: run.actorId,
-    runId,
+    runId: context.runId,
+    collectionId: context.collectionId,
   };
 }
 
@@ -144,7 +150,7 @@ export const googleReviews: Collector = {
       };
     });
   },
-  normalise(items, run, { runId }) {
+  normalise(items, run, context) {
     const out: (MentionCandidate | null)[] = [];
     for (const raw of items) {
       const item = record(raw);
@@ -166,13 +172,15 @@ export const googleReviews: Collector = {
         const text = str(review?.text);
         if (!review || !url || !text) continue;
         out.push(
-          candidate("google_reviews", run, runId, planned, {
+          candidate("google_reviews", run, context, planned, {
             url,
             text,
             authorName: str(review.name),
             authorUrl: str(review.reviewerUrl),
             postedAt: time(review.publishedAtDate),
             langGuess: str(review.originalLanguage),
+            // Google's own name for the place these reviews are on (checked against our pin).
+            locationName: str(item.title),
           }),
         );
       }
@@ -238,7 +246,7 @@ export const instagram: Collector = {
       };
     });
   },
-  normalise(items, run, { runId }) {
+  normalise(items, run, context) {
     const out: (MentionCandidate | null)[] = [];
     for (const raw of items) {
       const item = record(raw);
@@ -250,12 +258,13 @@ export const instagram: Collector = {
       if (!item || !planned || !url || !text) continue;
       const username = str(item.ownerUsername);
       out.push(
-        candidate("instagram", run, runId, planned, {
+        candidate("instagram", run, context, planned, {
           url,
           text,
           authorHandle: username,
           authorUrl: username ? `https://www.instagram.com/${username}/` : undefined,
           postedAt: time(item.timestamp),
+          locationName: str(item.locationName),
         }),
       );
     }
@@ -291,7 +300,7 @@ export const facebook: Collector = {
       };
     });
   },
-  normalise(items, run, { runId }) {
+  normalise(items, run, context) {
     const planned = run.queries[0];
     if (!planned) return [];
     const out: (MentionCandidate | null)[] = [];
@@ -303,7 +312,7 @@ export const facebook: Collector = {
       const user = record(item.user);
       const page = record(item.pageName);
       out.push(
-        candidate("facebook", run, runId, planned, {
+        candidate("facebook", run, context, planned, {
           url,
           text,
           authorName: str(user?.name) ?? str(page?.name) ?? str(item.pageName),
@@ -350,7 +359,7 @@ export const tiktok: Collector = {
       };
     });
   },
-  normalise(items, run, { runId }) {
+  normalise(items, run, context) {
     const out: (MentionCandidate | null)[] = [];
     for (const raw of items) {
       const item = record(raw);
@@ -362,7 +371,7 @@ export const tiktok: Collector = {
       const author = record(item.authorMeta);
       const name = str(author?.name);
       out.push(
-        candidate("tiktok", run, runId, planned, {
+        candidate("tiktok", run, context, planned, {
           url,
           text,
           authorHandle: name ? `@${name}` : undefined,
@@ -424,7 +433,7 @@ export const reddit: Collector = {
       };
     });
   },
-  normalise(items, run, { runId }) {
+  normalise(items, run, context) {
     const out: (MentionCandidate | null)[] = [];
     for (const raw of items) {
       const item = record(raw);
@@ -439,7 +448,7 @@ export const reddit: Collector = {
       const author = str(item.authorName);
       if (!url || !text) continue;
       out.push(
-        candidate("reddit", run, runId, planned, {
+        candidate("reddit", run, context, planned, {
           url,
           text,
           authorHandle: author ? `u/${author}` : undefined,
@@ -447,6 +456,7 @@ export const reddit: Collector = {
             ? `https://www.reddit.com/user/${encodeURIComponent(author)}/`
             : undefined,
           postedAt: time(post ? item.createdAt : item.commentCreatedAt),
+          title: post ? str(item.title) : undefined,
         }),
       );
     }
@@ -462,10 +472,6 @@ export const reddit: Collector = {
 // searchQuery{term}, organicResults[]{url, title, description}. Price: search-page-scraped
 // $0.0045 (about 10 results), start $0.00005/GB; minimal cap $0.50.
 // ---------------------------------------------------------------------------------------------
-
-/** Sites that are covered by another collector, are listings or shops, or forbid reuse. */
-const SKIP_HOSTS =
-  /(^|\.)(google\.[a-z.]+|goo\.gl|instagram\.com|facebook\.com|tiktok\.com|reddit\.com|youtube\.com|youtu\.be|x\.com|twitter\.com|threads\.(net|com)|tabelog\.com|retty\.me|hotpepper\.jp|gnavi\.co\.jp|tripadvisor\.[a-z.]+|jalan\.net|travel\.rakuten\.co\.jp|rakuten\.co\.jp|booking\.com|agoda\.com|expedia\.[a-z.]+|ikyu\.com|yelp\.[a-z.]+|wikipedia\.org|amazon\.[a-z.]+|navitime\.co\.jp|mapion\.co\.jp|ekiten\.jp|hitosara\.com|line\.me|nagasaki-tabinet\.com)$/i;
 
 /** A search result to read, before its page text is fetched. */
 export type WebHit = { url: string; title?: string; planned: PlannedQuery };
@@ -521,7 +527,7 @@ export const web: Collector & {
         } catch {
           continue;
         }
-        if (SKIP_HOSTS.test(host)) continue;
+        if (isSkippedHost(host)) continue;
         hits.push({ url, title: str(result?.title), planned });
         kept++;
       }
@@ -533,17 +539,22 @@ export const web: Collector & {
   normalise: () => [],
 };
 
-/** A web page's text as a candidate, once web-page.ts has read it. */
+/**
+ * A web page's text as a candidate, once web-page.ts has read it. `page.url` is where the page was
+ * read after any redirects, so the link goes to what was read.
+ */
 export function webCandidate(
   hit: WebHit,
-  page: { text: string; author?: string; publishedAt?: number },
+  page: { url?: string; text: string; author?: string; publishedAt?: number },
   run: PlannedRun,
-  runId: string,
+  context: NormaliseContext,
 ): MentionCandidate | null {
-  return candidate("web", run, runId, hit.planned, {
-    url: hit.url,
+  const url = page.url ?? hit.url;
+  return candidate("web", run, context, hit.planned, {
+    url,
     text: page.text,
-    authorName: page.author ?? new URL(hit.url).hostname,
+    title: hit.title,
+    authorName: page.author ?? new URL(url).hostname,
     postedAt: page.publishedAt,
   });
 }
