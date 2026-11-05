@@ -117,6 +117,19 @@ export async function loadReadablePlace(
   return place;
 }
 
+/** Signed-in, and a demo account checks only demo places (principle II keeps the two apart). */
+export async function checkablePlace(ctx: QueryCtx, placeId: Id<"place">) {
+  const person = await requirePerson(ctx);
+  const place = await loadReadablePlace(ctx, person, placeId);
+  if (person.isMock !== place.isMock) {
+    throw appError(
+      "forbidden",
+      "a demo account checks only demo places, and a real one only real places",
+    );
+  }
+  return { person, place };
+}
+
 export async function requireEditablePlace(
   ctx: QueryCtx,
   placeId: Id<"place">,

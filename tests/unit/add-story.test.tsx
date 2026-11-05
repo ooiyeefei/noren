@@ -26,6 +26,9 @@ import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { shellMessages } from "@/lib/i18n/messages/shell";
 import { landmark, place, region, sources } from "../fixtures/public-ui";
 
+// As it reaches the page, where React escapes the apostrophe.
+const drafted = addStoryMessages.en.drafted.replaceAll("'", "&#x27;");
+
 // The form runs without a DOM; this harness keeps its state between calls and drives its handlers.
 const hooks = vi.hoisted(() => ({
   current: undefined as { values: unknown[]; cursor: number } | undefined,
@@ -566,7 +569,7 @@ describe("reading a pasted link", () => {
     const form = await pasted(youtube, actions({ draftNote }));
     expect(form.checkbox()?.props.checked).toBe(false);
     expect(form.html()).toContain(m.ownPost);
-    expect(form.html()).not.toContain(m.drafted);
+    expect(form.html()).not.toContain(drafted);
     form.type("textarea", 0, "");
     await vi.advanceTimersByTimeAsync(60_000);
     expect(draftNote).not.toHaveBeenCalled();
@@ -576,7 +579,7 @@ describe("reading a pasted link", () => {
     expect(draftNote).toHaveBeenCalledTimes(1);
     expect(draftNote).toHaveBeenCalledWith({ url: youtube, lang: "en" });
     expect(form.note()).toBe("The baker feeds the cats at closing time.");
-    expect(form.html()).toContain(m.drafted);
+    expect(form.html()).toContain(drafted);
   });
 
   it("shares the member's edited line, never the caption, only when they press Share", async () => {
@@ -624,7 +627,7 @@ describe("reading a pasted link", () => {
     await flush();
     expect(form.note()).toBe("My own line");
     expect(form.html()).toContain(m.draftKept);
-    expect(form.html()).not.toContain(m.drafted);
+    expect(form.html()).not.toContain(drafted);
   });
 
   it("takes the tick and an untouched draft away when the link changes or the tick goes", async () => {
@@ -634,7 +637,7 @@ describe("reading a pasted link", () => {
     await flush();
     form.tick(false);
     expect(form.note()).toBe("");
-    expect(form.html()).not.toContain(m.drafted);
+    expect(form.html()).not.toContain(drafted);
     form.tick(true);
     await flush();
     expect(form.note()).toBe("A draft");
@@ -643,7 +646,7 @@ describe("reading a pasted link", () => {
     await settle();
     expect(form.checkbox()?.props.checked).toBe(false);
     expect(draftNote).toHaveBeenCalledTimes(2);
-    expect(form.html()).not.toContain(m.drafted);
+    expect(form.html()).not.toContain(drafted);
   });
 
   it("keeps a draft the member changed when the link changes", async () => {

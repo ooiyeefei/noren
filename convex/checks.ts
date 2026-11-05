@@ -1,10 +1,9 @@
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { query, type QueryCtx } from "./_generated/server";
-import { isOpenListing, loadReadablePlace } from "./lib/access";
+import { query } from "./_generated/server";
+import { checkablePlace, isOpenListing } from "./lib/access";
 import { writeAudit } from "./lib/audit";
-import { requirePerson, requireRole } from "./lib/auth";
+import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { readMapNames } from "./lib/mapCopies";
@@ -15,19 +14,6 @@ import { checkOutcomeValidator, checkProblemValidator, scriptValidator } from ".
 // confirmations, so nothing can become a score (principle I).
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** Signed-in, and a demo account checks only demo places (principle II keeps the two apart). */
-async function checkablePlace(ctx: QueryCtx, placeId: Doc<"place">["_id"]) {
-  const person = await requirePerson(ctx);
-  const place = await loadReadablePlace(ctx, person, placeId);
-  if (person.isMock !== place.isMock) {
-    throw appError(
-      "forbidden",
-      "a demo account checks only demo places, and a real one only real places",
-    );
-  }
-  return { person, place };
-}
 
 export const confirm = mutation({
   args: { placeId: v.id("place") },

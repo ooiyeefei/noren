@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import type { UserIdentity } from "convex/server";
 import { ASSIGNABLE_ROLES } from "../src/lib/domain/constants";
-import { query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { query, type MutationCtx } from "./_generated/server";
 import { writeAudit } from "./lib/audit";
 import { currentPerson, findPerson, requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
@@ -41,6 +42,18 @@ export const current = query({
 });
 
 /**
+ * A person's collection row is made before they ever check in, because Convex stamps every row with
+ * the moment it was made and a check-in must leave no time of day behind (FR-105).
+ */
+async function ensureCollectionRow(ctx: MutationCtx, personId: Id<"person">) {
+  const row = await ctx.db
+    .query("personCollection")
+    .withIndex("by_personId", (q) => q.eq("personId", personId))
+    .unique();
+  if (row === null) await ctx.db.insert("personCollection", { personId, visits: [], badges: [] });
+}
+
+/**
  * Creates the caller's `person` row on their first sign-in, as a plain `user`, and returns it on
  * every later call without changing it. Nothing comes from the client: not the role, not the mock
  * flag, not the identity. Two tabs can call this at once on a first sign-in; Convex reruns the
@@ -53,14 +66,19 @@ export const ensureCurrent = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (identity === null) throw appError("unauthenticated", "sign in to continue");
     const existing = await findPerson(ctx, identity.tokenIdentifier);
-    if (existing !== null) return existing._id;
-    return await ctx.db.insert("person", {
+    if (existing !== null) {
+      await ensureCollectionRow(ctx, existing._id);
+      return existing._id;
+    }
+    const personId = await ctx.db.insert("person", {
       tokenIdentifier: identity.tokenIdentifier,
       clerkUserId: identity.subject,
       role: "user",
       displayName: displayNameFrom(identity),
       isMock: false,
     });
+    await ensureCollectionRow(ctx, personId);
+    return personId;
   },
 });
 
@@ -137,7 +155,10 @@ export const setDisplayName = internalMutation({
   handler: async (ctx, { personId, displayName: input }) => {
     const displayName = input.trim();
     if (!displayName || displayName.length > 80 || displayName.includes("@")) {
-      throw appError("invalid_input", "a display name is 1 to 80 characters and not an email address");
+      throw appError(
+        "invalid_input",
+        "a display name is 1 to 80 characters and not an email address",
+      );
     }
     const person = await ctx.db.get("person", personId);
     if (person === null) throw appError("not_found", "no such person");

@@ -11,6 +11,7 @@ export const stampMessages = defineMessages({
     goToMap: "地図で場所を探す",
     inBook: "この場所があなたのスタンプ帳に入りました。",
     openBook: "スタンプ帳を開く",
+    collection: "地区ののれんを集める",
   },
   en: {
     title: "Your stamp book",
@@ -21,6 +22,7 @@ export const stampMessages = defineMessages({
     goToMap: "Find a place on the map",
     inBook: "This place is in your stamp book.",
     openBook: "Open your stamp book",
+    collection: "Collect the noren of each neighbourhood",
   },
 });
 

@@ -23,7 +23,7 @@ export const addStoryMessages = defineMessages({
     ownPostHint:
       "Tick this and AI drafts your line from the post's words. With no tick, nothing goes to AI.",
     drafting: "Drafting your line…",
-    drafted: "Drafted by AI from your post. Change anything.",
+    drafted: "Noren's AI drafted this from your post. Change anything.",
     draftKept: "You started writing, so Noren kept your words.",
     draftFailed: "Noren could not draft a line, so write your own.",
     note: "What did you hear or see there?",
@@ -59,7 +59,7 @@ export const addStoryMessages = defineMessages({
     ownPostHint:
       "チェックすると、投稿の文章からAIが下書きを作ります。チェックしなければ、AIには何も送りません。",
     drafting: "下書きを作っています…",
-    drafted: "投稿をもとにAIが下書きしました。自由に直してください。",
+    drafted: "投稿をもとに Noren の AI が下書きしました。自由に直してください。",
     draftKept: "書き始めていたので、あなたの言葉をそのまま残しました。",
     draftFailed: "下書きを作れませんでした。自分の言葉で書いてください。",
     note: "そこで聞いたこと、見たことは？",
