@@ -200,11 +200,9 @@ describe("plain pages", () => {
         '<title>A walk</title><meta property="og:site_name" content="Fictional Walks">',
       ),
     });
-    expect(await read(blog, options)).toMatchObject({
-      outcome: "read",
-      title: "A walk",
-      author: "Fictional Walks",
-    });
+    const result = await read(blog, options);
+    expect(result).toMatchObject({ outcome: "read", title: "A walk", siteName: "Fictional Walks" });
+    expect(result.author).toBeUndefined();
   });
 
   it("does not take a profile link for a name", () => {
