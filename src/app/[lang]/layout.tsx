@@ -27,7 +27,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "Noren",
-  description: "Stories about real places, told by the people who run them.",
+  description: "A map of Nagasaki's local places and the stories people have told about them.",
   // FR-021: said in the page as well as in the X-Robots-Tag header.
   robots: { index: false, follow: false },
 };

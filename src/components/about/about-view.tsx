@@ -380,7 +380,7 @@ function NorenSketch({ m }: { m: AboutMessages }) {
       </div>
       <div className="space-y-1 border-t border-line pt-3 text-[13px] text-muted-foreground">
         <p>
-          <span className="font-bold text-ai">1</span> {m.sourceInterview}
+          <span className="font-bold text-ai">1</span> {m.sourceReview}
         </p>
         <p>
           <span className="font-bold text-ai">2</span> {m.sourcePost}

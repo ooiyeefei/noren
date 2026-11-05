@@ -23,6 +23,16 @@ for (const locale of ["ja", "en"] as const) {
       if (key !== "metaTitle") expect(html, key).toContain(m[key]);
   });
 
+  it(`says AI writes the stories, names the way to remove something and claims no owner's sign-off (${locale})`, () => {
+    expect(m.p2Body).toContain("AI");
+    expect(m.p3Body).toMatch(locale === "ja" ? /フォーム/ : /form at the bottom/);
+    expect(html).not.toMatch(
+      locale === "ja"
+        ? /最後に決めるのは店主|店主自身の言葉|店主へのインタビュー|店主の物語/
+        : /last word|owner's story|owners' stories|Owner interview/i,
+    );
+  });
+
   it(`answers how Noren differs, Noren last among the four apps (${locale})`, () => {
     const rows = Array.from(html.matchAll(/data-compare="([a-z]+)"/g), (match) => match[1]);
     expect(rows).toEqual(["maps", "reviews", "travel", "noren"]);
