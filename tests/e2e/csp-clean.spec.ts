@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/ja", "/en", "/ja/notice", "/en/takedown", "/en/sign-in"]) {
+for (const path of ["/ja/map", "/en/map", "/ja/notice", "/en/takedown", "/en/sign-in"]) {
   test(`${path} has no CSP violations or console errors`, async ({ page }) => {
     test.setTimeout(60_000);
     const offending: string[] = [];

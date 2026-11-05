@@ -31,7 +31,9 @@ describe("proxy", () => {
     expect(await location(visit("/", false, "en").response)).toBe("/en/welcome");
     expect(await location(visit("/", false, "ja").response)).toBe("/ja/welcome");
     expect(await location(visit("/", false).response)).toBe("/ja/welcome");
-    expect(await location(visit("/?from=card", false, "en").response)).toBe("/en/welcome?from=card");
+    expect(await location(visit("/?from=card", false, "en").response)).toBe(
+      "/en/welcome?from=card",
+    );
   });
 
   it("leaves the film and its captions to the static host, so they keep their path and range requests", () => {
@@ -41,19 +43,27 @@ describe("proxy", () => {
     expect(pages.test("/en/welcome")).toBe(true);
   });
 
-  it("keeps a signed-out visitor's shared links open: the welcome page only meets the bare domain", async () => {
+  it("keeps a signed-out visitor's shared links open: the welcome page only meets the front door", async () => {
     expect(await visit("/en/places/some-shop", false).response).toBeUndefined();
     expect(await visit("/en/about", false).response).toBeUndefined();
     expect(await visit("/en/welcome", false).response).toBeUndefined();
   });
 
-  it("sends a signed-in visitor from the bare domain to the map", async () => {
-    expect(await location(visit("/", true, "en").response)).toBe("/en");
-    expect(await location(visit("/", true, "ja").response)).toBe("/ja");
+  it("sends a signed-out visitor from a language's root to the welcome page too", async () => {
+    expect(await location(visit("/en", false).response)).toBe("/en/welcome");
+    expect(await location(visit("/ja", false).response)).toBe("/ja/welcome");
+    expect(await location(visit("/en?from=card", false).response)).toBe("/en/welcome?from=card");
   });
 
-  it("keeps the map open to signed-out visitors, and asks about sign-in only at the bare domain", async () => {
-    const map = visit("/en", false);
+  it("sends a signed-in visitor from the bare domain and a language's root to the map", async () => {
+    expect(await location(visit("/", true, "en").response)).toBe("/en/map");
+    expect(await location(visit("/", true, "ja").response)).toBe("/ja/map");
+    expect(await location(visit("/en", true).response)).toBe("/en/map");
+    expect(await location(visit("/ja", true).response)).toBe("/ja/map");
+  });
+
+  it("keeps the map open to signed-out visitors, and asks about sign-in only at the front door", async () => {
+    const map = visit("/en/map", false);
     expect(await map.response).toBeUndefined();
     const notice = visit("/notice", false, "en");
     expect(await location(notice.response)).toBe("/en/notice");

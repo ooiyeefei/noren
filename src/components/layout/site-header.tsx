@@ -24,7 +24,7 @@ export function SiteHeader({
       >
         {m.skipLink}
       </a>
-      <div className="mx-auto flex h-full flex-nowrap max-w-[1200px] items-center justify-between gap-2 px-4 sm:px-6">
+      <div className="mx-auto flex h-full flex-nowrap max-w-[1200px] items-center justify-between gap-2 px-4 sm:px-6 [header:has(~_main[data-full-bleed])_&]:max-w-none lg:[header:has(~_main[data-full-bleed])_&]:px-5">
         <div className="flex min-w-0 items-center gap-4">
           <Link
             className="flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap text-lg font-bold sm:gap-2"

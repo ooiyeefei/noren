@@ -25,12 +25,20 @@ function requestLocale(request: NextRequest): string {
 export default clerkMiddleware(
   async (auth, request) => {
     const { pathname } = request.nextUrl;
-    if (!UNPREFIXED.test(pathname) && localeFromPathname(pathname, region.locales) === null) {
-      // The bare domain is the front door: a signed-out visitor meets Noren on the welcome page. Its
-      // "Open the map" leads to /{locale}, which shows the map to everyone, signed in or not.
-      const rest = pathname !== "/" ? pathname : (await auth()).isAuthenticated ? "" : "/welcome";
+    // The bare domain and /{locale} are the front door: a signed-out visitor meets Noren on the welcome
+    // page, and its "Open the map" leads to /{locale}/map, which is open to everyone. Links to a place
+    // or any other page are left alone, so a shared link keeps working.
+    const home = async () => ((await auth()).isAuthenticated ? "/map" : "/welcome");
+    const locale = localeFromPathname(pathname, region.locales);
+    if (!UNPREFIXED.test(pathname) && locale === null) {
+      const rest = pathname === "/" ? await home() : pathname;
       const url = request.nextUrl.clone();
       url.pathname = `/${requestLocale(request)}${rest}`;
+      return NextResponse.redirect(url);
+    }
+    if (pathname === `/${locale}`) {
+      const url = request.nextUrl.clone();
+      url.pathname = `${pathname}${await home()}`;
       return NextResponse.redirect(url);
     }
     if (ROLE_PAGES.test(pathname)) {

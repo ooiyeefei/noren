@@ -14,7 +14,7 @@ export default async function NotFound(): Promise<React.JSX.Element> {
   return (
     <PageContainer locale={locale} title={m.notFoundTitle}>
       <p>{m.notFoundBody}</p>
-      <Link className="underline" href={localePath(locale)}>
+      <Link className="underline" href={localePath(locale, "/map")}>
         {m.backToStart}
       </Link>
     </PageContainer>

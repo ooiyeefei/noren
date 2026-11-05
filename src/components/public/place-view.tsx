@@ -75,7 +75,7 @@ export function PlaceView({
           <p>{shell.notFoundBody}</p>
           <a
             className="inline-flex min-h-11 items-center gap-1 text-ai underline"
-            href={localePath(locale)}
+            href={localePath(locale, "/map")}
           >
             <ChevronLeft aria-hidden="true" className="size-5" />
             {ui.backToMap}
@@ -112,7 +112,7 @@ export function PlaceView({
         <div className="space-y-6">
           <a
             className="inline-flex min-h-11 items-center gap-1 text-ai underline"
-            href={localePath(locale)}
+            href={localePath(locale, "/map")}
           >
             <ChevronLeft aria-hidden="true" className="size-5" />
             {ui.backToMap}

@@ -386,9 +386,18 @@ it("keeps the phone heading hidden, spaces it on desktop and wraps desktop chips
   const heading = html.match(/<h1 class="([^"]*)"/)![1];
   expect(heading).toContain("sr-only");
   expect(heading).toContain("lg:not-sr-only");
-  expect(heading).toContain("lg:mb-5");
+  expect(heading).toContain("lg:mb-2");
   const chips = html.match(/role="group" aria-label="Category" class="([^"]*)"/)![1];
   expect(chips).toContain("overflow-x-auto");
   expect(chips).toContain("lg:flex-wrap");
   expect(chips).toContain("lg:overflow-visible");
+});
+
+it("scrolls the desktop side panel as one piece, with search kept in reach", () => {
+  const html = render(
+    <HomeView locale="en" region={region} model={toHomeModel([], "en", region)} />,
+  );
+  const panel = html.match(/<section aria-label="[^"]*" class="([^"]*)"/)![1];
+  expect(panel).toContain("lg:overflow-y-auto");
+  expect(html).toMatch(/class="[^"]*lg:sticky lg:top-0[^"]*"><div class="relative/);
 });

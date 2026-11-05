@@ -21,6 +21,21 @@ for (const [language, expected] of [
   });
 }
 
+for (const locale of ["ja", "en"] as const) {
+  test(`/${locale} sends a signed-out visitor to the welcome page, which leads to the map`, async ({
+    page,
+  }) => {
+    await page.goto(`/${locale}`);
+    await expect(page).toHaveURL(new RegExp(`/${locale}/welcome$`));
+    await page
+      .getByRole("link", { name: locale === "en" ? "Open the map" : "地図をひらく" })
+      .first()
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/${locale}/map$`));
+    await expect(page.locator("[data-category]").first()).toBeVisible();
+  });
+}
+
 test("the welcome film is served as itself, with range requests, and its captions load", async ({
   request,
 }) => {
@@ -38,10 +53,10 @@ test("the welcome film is served as itself, with range requests, and its caption
 });
 
 for (const locale of ["ja", "en"] as const) {
-  test(`/${locale} has its language and shell; language switching preserves the page`, async ({
+  test(`/${locale}/map has its language and shell; language switching preserves the page`, async ({
     page,
   }) => {
-    await page.goto(`/${locale}`);
+    await page.goto(`/${locale}/map`);
     await expect(page.locator("html")).toHaveAttribute("lang", locale);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       locale === "en" ? "Nagasaki's local places" : "長崎の地元のお店",
@@ -69,7 +84,7 @@ for (const locale of ["ja", "en"] as const) {
   });
 }
 
-for (const path of ["/ja", "/en", "/ja/notice", "/en/takedown", "/en/e2e-does-not-exist"]) {
+for (const path of ["/ja/map", "/en/map", "/ja/notice", "/en/takedown", "/en/e2e-does-not-exist"]) {
   test(`${path} sends noindex, nofollow`, async ({ request }) => {
     const response = await request.get(path, { headers: browserLikeHeaders });
     expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow");

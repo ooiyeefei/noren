@@ -6,8 +6,8 @@ export const browserLikeHeaders = {
 };
 
 export const publicPages = [
-  "/ja",
-  "/en",
+  "/ja/map",
+  "/en/map",
   "/ja/notice",
   "/en/notice",
   "/ja/takedown",

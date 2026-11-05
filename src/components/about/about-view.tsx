@@ -15,7 +15,7 @@ type AboutMessages = MessageTable<keyof (typeof aboutMessages)["en"]>;
  */
 export function AboutView({ locale }: { locale: Locale }) {
   const m = messagesFor(aboutMessages, locale);
-  const map = localePath(locale);
+  const map = localePath(locale, "/map");
   const others = [
     { key: "maps", name: m.mapsName, question: m.mapsQuestion, gives: m.mapsGives },
     {

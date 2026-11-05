@@ -7,9 +7,9 @@ for (const path of publicPages) {
     test.beforeEach(async ({ page }) => {
       await page.goto(path);
       await expect(page.getByRole("navigation", { name: "日本語 / English" })).toBeVisible();
-      if (path === "/ja" || path === "/en") {
+      if (path === "/ja/map" || path === "/en/map") {
         await expect(
-          page.getByText(path === "/ja" ? "場所を読み込んでいます…" : "Loading places…", {
+          page.getByText(path === "/ja/map" ? "場所を読み込んでいます…" : "Loading places…", {
             exact: true,
           }),
         ).toHaveCount(0);

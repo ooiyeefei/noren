@@ -43,7 +43,7 @@ export function NeighbourhoodList({
                 className="flex min-h-11 w-full min-w-0 flex-col justify-center gap-1 rounded-[6px] py-1 text-left hover:bg-kamenozoki"
               >
                 <span className="flex min-w-0 items-baseline justify-between gap-2 text-[13px]">
-                  <span className="truncate font-bold">{name}</span>
+                  <span className="min-w-0 font-bold [overflow-wrap:anywhere]">{name}</span>
                   <span className="shrink-0 text-[12px] text-muted-foreground">
                     {neighbourhood.left === 0
                       ? m.regionDone
