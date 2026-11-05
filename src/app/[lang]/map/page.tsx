@@ -9,7 +9,7 @@ export default async function Page() {
   const locale = await getLocale();
   const region = publicRegionProps(getActiveRegion(), locale);
   return (
-    <main id="main" tabIndex={-1}>
+    <main id="main" tabIndex={-1} data-full-bleed="">
       <Suspense fallback={<PublicLoading locale={locale} />}>
         <HomeContainer locale={locale} region={region} />
       </Suspense>

@@ -32,7 +32,7 @@ for (const locale of ["ja", "en"] as const) {
     expect(missing).toBe(unreadable);
     expect(missing).toContain(shellMessages[locale].notFoundTitle);
     expect(missing).toContain(shellMessages[locale].notFoundBody);
-    expect(missing).toContain(`href="/${locale}"`);
+    expect(missing).toContain(`href="/${locale}/map"`);
     expect(missing).toContain(placePageMessages[locale].backToMap);
     expect(missing).toContain('id="main" tabindex="-1"');
     expect(missing).not.toMatch(/Error:|Application error|Unhandled Runtime Error/);

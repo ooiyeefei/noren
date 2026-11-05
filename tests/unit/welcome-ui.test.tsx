@@ -13,7 +13,7 @@ for (const locale of ["ja", "en"] as const) {
     expect(html.match(/<h1\b/g)).toHaveLength(1);
     expect(html).toContain(`>${m.heroTitle}</h1>`);
     expect(html).toContain(`<main id="main" tabindex="-1" lang="${locale}"`);
-    expect(html.split(`href="/${locale}"`)).toHaveLength(3);
+    expect(html.split(`href="/${locale}/map"`)).toHaveLength(3);
     for (const key of Object.keys(m) as (keyof typeof m)[])
       if (key !== "metaTitle") expect(html, key).toContain(m[key]);
   });

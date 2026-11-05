@@ -114,7 +114,7 @@ export function AccountMenuView({
           </DropdownMenuItem>
         )}
         <DropdownMenuItem asChild>
-          <Link href={localePath(locale)}>{m.exploreMap}</Link>
+          <Link href={localePath(locale, "/map")}>{m.exploreMap}</Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>

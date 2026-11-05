@@ -9,7 +9,7 @@ for (const locale of ["ja", "en"] as const) {
 
     test("the map fits the screen on a wide window", async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 800 });
-      await page.goto(`/${locale}`);
+      await page.goto(`/${locale}/map`);
       const canvas = page.locator("canvas.maplibregl-canvas");
       await expect(canvas).toBeVisible({ timeout: 20_000 });
       const box = await canvas.boundingBox();
@@ -26,7 +26,7 @@ for (const locale of ["ja", "en"] as const) {
       page.on("pageerror", (error) => {
         if (/worker/i.test(error.message)) offending.push(`[pageerror] ${error.message}`);
       });
-      await page.goto(`/${locale}`);
+      await page.goto(`/${locale}/map`);
       const canvas = page.locator("canvas.maplibregl-canvas");
       await expect(canvas).toBeVisible({ timeout: 20_000 });
       await expect

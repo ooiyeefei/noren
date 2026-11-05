@@ -60,7 +60,7 @@ for (const locale of ["en", "ja"] as const) {
   it(`tells an empty book to go check a place on the map (${locale})`, () => {
     const html = book([]);
     expect(html).toContain(m.empty);
-    expect(html).toContain(`href="/${locale}"`);
+    expect(html).toContain(`href="/${locale}/map"`);
     expect(book()).not.toContain(m.empty);
   });
 

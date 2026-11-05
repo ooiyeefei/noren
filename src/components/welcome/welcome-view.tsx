@@ -14,7 +14,7 @@ const POSTER = "/film/noren-intro.jpg";
  */
 export function WelcomeView({ locale }: { locale: Locale }) {
   const m = messagesFor(welcomeMessages, locale);
-  const map = localePath(locale);
+  const map = localePath(locale, "/map");
   const primary =
     "inline-flex min-h-12 items-center justify-center rounded-[10px] bg-kon px-6 text-[17px] font-bold text-white";
   const steps = [

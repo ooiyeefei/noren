@@ -30,8 +30,8 @@ import type { LatestStoryLike, PublicRegionProps, toHomeModel } from "./mapping"
 export function PublicLoading({ locale }: { locale: Locale }) {
   const m = messagesFor(publicMessages, locale);
   return (
-    <div lang={locale} className="h-[calc(100dvh-56px)] bg-kamenozoki p-6">
-      <h1 className="sr-only font-display lg:not-sr-only lg:text-4xl">{m.exploreTitle}</h1>
+    <div lang={locale} className="h-[calc(100dvh-56px)] bg-kamenozoki p-6 lg:p-5">
+      <h1 className="sr-only font-display lg:not-sr-only lg:text-[28px]">{m.exploreTitle}</h1>
       <p role="status" className="mt-6">
         {m.loading}
       </p>
@@ -143,35 +143,37 @@ export function HomeView({
               });
   const searchAndChips = (
     <>
-      <div className="relative rounded-[10px] bg-white shadow-[var(--shadow-float)] lg:shadow-none">
-        <Search
-          aria-hidden="true"
-          size={20}
-          className="pointer-events-none absolute left-3 top-3 text-ai"
-        />
-        <input
-          type="search"
-          aria-label={m.search}
-          placeholder={m.search}
-          value={search}
-          onChange={(event) => onSearchChange?.(event.target.value)}
-          className="h-11 w-full min-w-0 rounded-[10px] border border-input bg-white pl-10 pr-12 text-base"
-        />
-        {search && (
-          <button
-            type="button"
-            aria-label={m.clearSearch}
-            onClick={() => onSearchChange?.("")}
-            className="absolute right-0 top-0 flex size-11 items-center justify-center rounded-[10px]"
-          >
-            <X aria-hidden="true" size={18} />
-          </button>
-        )}
+      <div className="lg:sticky lg:top-0 lg:z-10 lg:bg-white lg:px-5 lg:py-2">
+        <div className="relative rounded-[10px] bg-white shadow-[var(--shadow-float)] lg:shadow-none">
+          <Search
+            aria-hidden="true"
+            size={20}
+            className="pointer-events-none absolute left-3 top-3 text-ai"
+          />
+          <input
+            type="search"
+            aria-label={m.search}
+            placeholder={m.search}
+            value={search}
+            onChange={(event) => onSearchChange?.(event.target.value)}
+            className="h-11 w-full min-w-0 rounded-[10px] border border-input bg-white pl-10 pr-12 text-base"
+          />
+          {search && (
+            <button
+              type="button"
+              aria-label={m.clearSearch}
+              onClick={() => onSearchChange?.("")}
+              className="absolute right-0 top-0 flex size-11 items-center justify-center rounded-[10px]"
+            >
+              <X aria-hidden="true" size={18} />
+            </button>
+          )}
+        </div>
       </div>
       <div
         role="group"
         aria-label={m.category}
-        className="mt-2 flex gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible"
+        className="mt-2 flex gap-2 overflow-x-auto pb-1 lg:mt-0 lg:flex-wrap lg:gap-1.5 lg:overflow-visible lg:px-5 lg:pb-3"
       >
         {chips.map((chip) => (
           <button
@@ -182,8 +184,8 @@ export function HomeView({
             onClick={() => onCategoryChange?.(chip.key)}
             className={
               category === chip.key
-                ? "min-h-11 shrink-0 rounded-full border border-ai bg-ai px-4 text-[13px] font-bold text-white"
-                : "min-h-11 shrink-0 rounded-full border border-input bg-white px-4 text-[13px] text-kon hover:bg-kamenozoki"
+                ? "min-h-11 shrink-0 rounded-full border border-ai bg-ai px-4 text-[13px] font-bold text-white lg:min-h-9 lg:px-3"
+                : "min-h-11 shrink-0 rounded-full border border-input bg-white px-4 text-[13px] text-kon hover:bg-kamenozoki lg:min-h-9 lg:px-3"
             }
           >
             {chip.label}
@@ -199,13 +201,10 @@ export function HomeView({
     >
       <section
         aria-label={m.places}
-        className="pointer-events-none relative z-20 h-full min-w-0 lg:pointer-events-auto lg:flex lg:flex-col lg:bg-white"
+        className="pointer-events-none relative z-20 h-full min-w-0 lg:pointer-events-auto lg:overflow-y-auto lg:overscroll-contain lg:bg-white"
       >
-        <div
-          ref={topOverlay}
-          className="pointer-events-auto absolute inset-x-3 top-3 lg:static lg:p-5 lg:pb-3"
-        >
-          <h1 className="sr-only font-display text-4xl leading-tight lg:not-sr-only lg:mb-5">
+        <div ref={topOverlay} className="pointer-events-auto absolute inset-x-3 top-3 lg:contents">
+          <h1 className="sr-only font-display text-[28px] leading-tight lg:not-sr-only lg:mx-5 lg:mt-5 lg:mb-2">
             {m.exploreTitle}
           </h1>
           {searchAndChips}
@@ -214,10 +213,10 @@ export function HomeView({
           data-sheet={sheet}
           className={
             sheet === "full"
-              ? "pointer-events-auto absolute inset-x-0 bottom-0 flex h-[calc(100%-132px)] flex-col rounded-t-[20px] bg-white shadow-[var(--shadow-float)] transition-[height] duration-200 lg:relative lg:min-h-0 lg:h-auto lg:flex-1 lg:rounded-none lg:shadow-none"
+              ? "pointer-events-auto absolute inset-x-0 bottom-0 flex h-[calc(100%-132px)] flex-col rounded-t-[20px] bg-white shadow-[var(--shadow-float)] transition-[height] duration-200 lg:static lg:h-auto lg:rounded-none lg:shadow-none"
               : sheet === "half"
-                ? "pointer-events-auto absolute inset-x-0 bottom-0 flex h-[55%] max-h-[calc(100%-132px)] flex-col rounded-t-[20px] bg-white shadow-[var(--shadow-float)] transition-[height] duration-200 lg:relative lg:min-h-0 lg:h-auto lg:flex-1 lg:max-h-none lg:rounded-none lg:shadow-none"
-                : "pointer-events-auto absolute inset-x-0 bottom-0 flex h-[264px] max-h-[calc(100%-132px)] flex-col rounded-t-[20px] bg-white shadow-[var(--shadow-float)] transition-[height] duration-200 lg:relative lg:min-h-0 lg:h-auto lg:flex-1 lg:max-h-none lg:rounded-none lg:shadow-none"
+                ? "pointer-events-auto absolute inset-x-0 bottom-0 flex h-[55%] max-h-[calc(100%-132px)] flex-col rounded-t-[20px] bg-white shadow-[var(--shadow-float)] transition-[height] duration-200 lg:static lg:h-auto lg:max-h-none lg:rounded-none lg:shadow-none"
+                : "pointer-events-auto absolute inset-x-0 bottom-0 flex h-[264px] max-h-[calc(100%-132px)] flex-col rounded-t-[20px] bg-white shadow-[var(--shadow-float)] transition-[height] duration-200 lg:static lg:h-auto lg:max-h-none lg:rounded-none lg:shadow-none"
           }
         >
           <button
@@ -249,7 +248,10 @@ export function HomeView({
           >
             <span aria-hidden="true" className="h-1 w-10 rounded-full bg-kamenozoki" />
           </button>
-          <div id={`${id}-list`} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div
+            id={`${id}-list`}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:overflow-visible lg:px-1"
+          >
             {guideVisible && (
               <div className="mx-4 mb-3 lg:mt-4">
                 <ExploreGuide locale={locale} onDismiss={onDismissGuide} />

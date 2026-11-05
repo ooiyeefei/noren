@@ -22,7 +22,7 @@ export function LatestStories({
       <h2 id="latest-stories" className="px-4 pb-2 text-[15px] font-bold">
         {m.latestStories}
       </h2>
-      <ul className="flex gap-3 overflow-x-auto px-4 pb-1">
+      <ul className="flex gap-3 overflow-x-auto px-4 pb-1 lg:flex-col lg:overflow-visible">
         {entries.map((entry) => {
           const name = placeHeading(entry.placeNames, locale, region).primary;
           const platform = platformName(entry.platform);
@@ -41,7 +41,10 @@ export function LatestStories({
               ? undefined
               : entry.translations?.find((row) => row.lang === locale)?.text;
           return (
-            <li key={`${entry.kind}:${entry.id}`} className="w-[260px] shrink-0">
+            <li
+              key={`${entry.kind}:${entry.id}`}
+              className="w-[260px] shrink-0 lg:w-auto lg:nth-[n+4]:hidden"
+            >
               <a
                 href={localePath(locale, `/places/${entry.placeSlug}`)}
                 className="flex h-full flex-col gap-2 rounded-[12px] border border-line bg-white p-3 hover:bg-kamenozoki"

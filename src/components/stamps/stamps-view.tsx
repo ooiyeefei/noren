@@ -34,7 +34,7 @@ export function StampsView({
           <p className="max-w-prose text-[17px]">{m.empty}</p>
           <a
             className="inline-flex min-h-11 items-center text-ai underline"
-            href={localePath(locale)}
+            href={localePath(locale, "/map")}
           >
             {m.goToMap}
           </a>
