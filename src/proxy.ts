@@ -26,9 +26,9 @@ export default clerkMiddleware(
   async (auth, request) => {
     const { pathname } = request.nextUrl;
     if (!UNPREFIXED.test(pathname) && localeFromPathname(pathname, region.locales) === null) {
-      // The bare domain is the front door: a signed-out visitor meets Noren on the about page. Its
+      // The bare domain is the front door: a signed-out visitor meets Noren on the welcome page. Its
       // "Open the map" leads to /{locale}, which shows the map to everyone, signed in or not.
-      const rest = pathname !== "/" ? pathname : (await auth()).isAuthenticated ? "" : "/about";
+      const rest = pathname !== "/" ? pathname : (await auth()).isAuthenticated ? "" : "/welcome";
       const url = request.nextUrl.clone();
       url.pathname = `/${requestLocale(request)}${rest}`;
       return NextResponse.redirect(url);
@@ -43,7 +43,7 @@ export default clerkMiddleware(
 export const config = {
   matcher: [
     // Skip Next.js internals and static files, as Clerk recommends.
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|mp4|vtt)).*)",
     "/(api|trpc)(.*)",
   ],
 };
