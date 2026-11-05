@@ -359,6 +359,7 @@ export const create = mutation({
         category: args.category,
         slug,
         visibility: args.onMap ? ("public" as const) : ("draft" as const),
+        hasPublishedPage: false,
         // The add form says the place is shown with the member's name; adding it is the agreement.
         ...(args.onMap ? { sharedAt: Date.now() } : {}),
         createdBy: person._id,

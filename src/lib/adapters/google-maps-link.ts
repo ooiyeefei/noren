@@ -8,7 +8,7 @@ export const googleMapsLinkAdapter: RegisteredAdapter = {
   matches(input) {
     const url = parsedUrl(input);
     if (!url) return false;
-    if (url.hostname === "maps.app.goo.gl") return true;
+    if (url.hostname === "maps.app.goo.gl" || url.hostname === "share.google") return true;
     if (url.hostname === "goo.gl") return /^\/maps(?:\/|$)/.test(url.pathname);
     return (
       /^(?:(?:www|maps)\.)?google\.(?:com|[a-z]{2}|(?:co|com)\.[a-z]{2})$/.test(url.hostname) &&

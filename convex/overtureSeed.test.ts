@@ -89,6 +89,7 @@ describe("overtureSeed.publishPlaces", () => {
       category: "cafe",
       isMock: false,
       createdBy: b.steward,
+      hasPublishedPage: false,
     });
     const place = await b.run((ctx) => ctx.db.get("place", placeId));
     expect(place?.confirmedAt).toBeUndefined();

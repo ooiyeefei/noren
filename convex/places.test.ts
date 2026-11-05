@@ -2,7 +2,7 @@
 import type { ApiFromModules } from "convex/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import nagasaki from "../regions/nagasaki.json";
-import type { Script } from "../src/lib/domain/constants";
+import { MAP_PLACE_LIMIT, type Script } from "../src/lib/domain/constants";
 import {
   addClaim,
   addCorrectedTranscript,
@@ -541,11 +541,11 @@ describe("places reads", () => {
     ).toBe("forbidden");
   });
 
-  it("listForMap caps the total across visibilities at 4000", async () => {
+  it("listForMap caps the total across visibilities at the map limit", async () => {
     const b = await setup();
-    // Straight to the table: 4,001 rows through every rule would outlast the test timeout.
+    // Straight to the table: this many rows through every rule would outlast the test timeout.
     await b.t.run(async (ctx) => {
-      for (let i = 0; i < 4001; i++)
+      for (let i = 0; i <= MAP_PLACE_LIMIT; i++)
         await ctx.db.insert("place", {
           regionId: "nagasaki",
           slug: `mock-${i}`,
@@ -561,7 +561,7 @@ describe("places reads", () => {
     });
     expect(
       await b.as("steward").query(api.places.listForMap, { regionId: "nagasaki" }),
-    ).toHaveLength(4000);
+    ).toHaveLength(MAP_PLACE_LIMIT);
   });
 });
 

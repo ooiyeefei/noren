@@ -175,8 +175,8 @@ describe("neighbourhoods", () => {
     expect(neighbourhoodAt(config, { lat: 32.9, lng: 129.75 })).toBeUndefined();
     expect(neighbourhoodAt(undefined, { lat: 32.7415, lng: 129.8755 })).toBeUndefined();
   });
-  it("the region names about eight, each in both languages and inside its bbox", () => {
-    expect(config?.neighbourhoods).toHaveLength(8);
+  it("the region names about nine, each in both languages and inside its bbox", () => {
+    expect(config?.neighbourhoods).toHaveLength(9);
     const one = nagasaki.neighbourhoods[0]!;
     const withHoods = (neighbourhoods: unknown) =>
       regionSchema.safeParse({ ...nagasaki, neighbourhoods }).success;

@@ -226,6 +226,22 @@ describe("source adapters", () => {
     expect(ADAPTERS[id].describe(canonical).canonicalUrl).toBe(canonical);
   });
 
+  it("reads a post copied from a profile's own view, with the username in the path", () => {
+    expect(metaEmbedAdapter.matches("https://www.instagram.com/example.name/reel/AbC/")).toBe(true);
+    expect(
+      metaEmbedAdapter.describe("https://www.instagram.com/example.name/p/AbC/").canonicalUrl,
+    ).toBe("https://www.instagram.com/p/AbC");
+    expect(metaEmbedAdapter.matches("https://www.instagram.com/example.name/")).toBe(false);
+    expect(metaEmbedAdapter.matches("https://www.instagram.com/a/b/reel/AbC/")).toBe(false);
+  });
+
+  it("treats a share.google link as a link to Google Maps", () => {
+    expect(googleMapsLinkAdapter.matches("https://share.google/EXAMPLE123")).toBe(true);
+    expect(googleMapsLinkAdapter.describe("https://share.google/EXAMPLE123").canonicalUrl).toBe(
+      "https://share.google/EXAMPLE123",
+    );
+  });
+
   it("keeps Instagram reels and posts distinct until interchangeability is verified", () => {
     expect(metaEmbedAdapter.describe("https://instagram.com/reel/AbC/").canonicalUrl).toBe(
       "https://www.instagram.com/reel/AbC",

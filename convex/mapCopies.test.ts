@@ -33,7 +33,7 @@ it("the place row's copies follow every write to its names, pin and pages", asyn
   expect(await copies(b, placeId)).toEqual({
     names: [{ lang: "ja", script: "kanji", value: "祈りの丘絵本美術館", isPrimary: true }],
     pin: { lat: 32.735, lng: 129.87 },
-    hasPublishedPage: undefined,
+    hasPublishedPage: false,
   });
 
   await creator.mutation(api.places.updateNames, {
