@@ -241,6 +241,8 @@ export const publishPlaces = internalMutation({
           visibility: "public" as const,
           category: item.category,
           createdBy: person._id,
+          // Unset would cost a steward's map one lookup per place (places:listForMap).
+          hasPublishedPage: false,
         }),
       );
       for (const name of item.names)

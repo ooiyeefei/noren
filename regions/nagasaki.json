@@ -4,7 +4,7 @@
     "ja": "長崎",
     "en": "Nagasaki"
   },
-  "bbox": [129.7, 32.55, 130.12, 33.0],
+  "bbox": [129.7, 32.55, 130.45, 33.0],
   "defaultCenter": {
     "lat": 32.7503,
     "lng": 129.8777,
@@ -205,6 +205,12 @@
       "names": { "ja": "大浦・南山手", "en": "Oura" },
       "center": { "lat": 32.7352, "lng": 129.8703 },
       "radiusMetres": 480
+    },
+    {
+      "id": "shimabara-castle-town",
+      "names": { "ja": "島原城下町", "en": "Shimabara Castle Town" },
+      "center": { "lat": 32.7875, "lng": 130.3685 },
+      "radiusMetres": 550
     }
   ],
   "categories": [

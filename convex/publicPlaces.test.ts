@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import nagasaki from "../regions/nagasaki.json";
+import { MAP_PLACE_LIMIT } from "../src/lib/domain/constants";
 import {
   addClaim,
   addCorrectedTranscript,
@@ -762,11 +763,11 @@ it("listForMap makes a bounded number of reads (does not scan)", async () => {
   ).toEqual([real, mock].sort());
 });
 
-it("listForMap returns more than 1200 places to a signed-out visitor and caps the combined result at 4000", async () => {
+it("listForMap returns more than 1200 places to a signed-out visitor and caps the combined result at the map limit", async () => {
   const b = newBackend(modules, { transactionLimits: { databaseQueries: 4096 } });
   const creator = await addPerson(b, "creator", "creator");
   await b.t.run(async (ctx) => {
-    for (let i = 0; i < 4001; i++)
+    for (let i = 0; i <= MAP_PLACE_LIMIT; i++)
       await ctx.db.insert("place", {
         regionId: "nagasaki",
         slug: `fixture-${i}`,
@@ -778,16 +779,18 @@ it("listForMap returns more than 1200 places to a signed-out visitor and caps th
         hasPublishedPage: false,
       });
   });
-  expect(await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).toHaveLength(4000);
+  expect(await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).toHaveLength(
+    MAP_PLACE_LIMIT,
+  );
 });
 
-it("a steward's map of 4000 named, pinned places stays within Convex's 4,096 index ranges", async () => {
+it("a steward's full map of named, pinned places stays within Convex's 4,096 index ranges", async () => {
   // The steward is the worst case: every place may show the story tab. The place rows carry copies
   // of their names, pin and published page, so no place costs a lookup.
   const b = newBackend(modules, { transactionLimits: { databaseQueries: 4096 } });
   const steward = await addPerson(b, "steward", "steward");
   await b.t.run(async (ctx) => {
-    for (let i = 0; i < 4001; i++)
+    for (let i = 0; i <= MAP_PLACE_LIMIT; i++)
       await ctx.db.insert("place", {
         regionId: "nagasaki",
         slug: `fixture-${i}`,
@@ -800,7 +803,7 @@ it("a steward's map of 4000 named, pinned places stays within Convex's 4,096 ind
       });
   });
   const places = await b.as("steward").query(api.places.listForMap, { regionId: "nagasaki" });
-  expect(places).toHaveLength(4000);
+  expect(places).toHaveLength(MAP_PLACE_LIMIT);
   expect(places[0]).toMatchObject({
     names: [expect.any(Object)],
     pin: { lat: 32.75, lng: 129.87 },

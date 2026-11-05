@@ -85,7 +85,7 @@ describe("flags", () => {
     expect(flags).toMatchObject({
       minConfidence: DEFAULT_MIN_CONFIDENCE,
       mapBudget: DEFAULT_MAP_BUDGET,
-      bbox: [129.7, 32.55, 130.12, 33.0],
+      bbox: [129.7, 32.55, 130.45, 33.0],
       dryRun: true,
     });
     expect(DEFAULT_MAP_BUDGET).toBeLessThan(MAP_PLACE_LIMIT);

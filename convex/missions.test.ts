@@ -85,7 +85,7 @@ it("counts a neighbourhood's public places: a stale check is left, and only real
   expect(mission?.nearby.map(({ slug }) => slug)).toEqual(["stale"]);
 
   const all = await b.t.query(api.missions.forRegion, { regionId: "nagasaki", now: NOW });
-  expect(all).toHaveLength(8);
+  expect(all).toHaveLength(9);
   expect(all.find(({ id }) => id === "shinchi")).toMatchObject({ checked: 2, left: 2 });
   expect(all.find(({ id }) => id === "dejima")).toMatchObject({ checked: 0, left: 1 });
   expect(all.find(({ id }) => id === "oura")).toMatchObject({ checked: 0, left: 0 });
@@ -190,8 +190,8 @@ it("the backfill works through more places than one page holds", async () => {
 });
 
 it("reads stay bounded when a neighbourhood outgrows the limit", async () => {
-  // Eight neighbourhoods' ranges plus at most 1,000 rows from the one that has them all.
-  const b = newBackend(modules, { transactionLimits: { documentsRead: 1000, databaseQueries: 8 } });
+  // Nine neighbourhoods' ranges plus at most 1,000 rows from the one that has them all.
+  const b = newBackend(modules, { transactionLimits: { documentsRead: 1000, databaseQueries: 9 } });
   const steward = await addPerson(b, "mission-steward", "steward");
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   await b.t.run(async (ctx) => {

@@ -93,6 +93,8 @@ async function insertCandidatePlace(
       visibility,
       category,
       createdBy: steward._id,
+      // Unset would cost a steward's map one lookup per place (places:listForMap).
+      hasPublishedPage: false,
     }),
   );
   for (const name of names)

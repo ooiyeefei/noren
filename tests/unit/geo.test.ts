@@ -113,7 +113,7 @@ describe("Nominatim search", () => {
       format: "jsonv2",
       limit: "5",
       countrycodes: "jp",
-      viewbox: "129.7,33,130.12,32.55",
+      viewbox: "129.7,33,130.45,32.55",
       bounded: "1",
       "accept-language": "ja,en",
       namedetails: "1",

@@ -96,7 +96,7 @@ export const LICENCES = [
  * The most places the map reads (convex/places.ts listForMap). A query may read 32,000 documents and
  * return 16 MiB; the open-data importers keep the public total under this with room to spare.
  */
-export const MAP_PLACE_LIMIT = 4000;
+export const MAP_PLACE_LIMIT = 5000;
 export const EXTERNAL_PROVIDERS = [
   "osm",
   "wikidata",

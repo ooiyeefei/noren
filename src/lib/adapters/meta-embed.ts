@@ -13,7 +13,8 @@ function metaPost(input: string): MetaPost | null {
   const url = parsedUrl(input);
   if (!url) return null;
   if (["instagram.com", "www.instagram.com"].includes(url.hostname)) {
-    const match = /^\/(p|reel|tv)\/([A-Za-z0-9_-]+)\/?$/.exec(url.pathname);
+    // A profile's own view of a post puts the username first.
+    const match = /^\/(?:[A-Za-z0-9_.]+\/)?(p|reel|tv)\/([A-Za-z0-9_-]+)\/?$/.exec(url.pathname);
     return match
       ? {
           platform: "instagram",
