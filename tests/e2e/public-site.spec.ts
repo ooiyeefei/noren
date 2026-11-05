@@ -7,7 +7,7 @@ for (const [language, expected] of [
   ["fr", "ja"],
   ["", "ja"],
 ] as const) {
-  test(`/ sends a signed-out visitor with Accept-Language ${language || "absent"} to /${expected}/about`, async ({
+  test(`/ sends a signed-out visitor with Accept-Language ${language || "absent"} to /${expected}/welcome`, async ({
     request,
   }) => {
     const response = await request.get("/", {
@@ -16,10 +16,26 @@ for (const [language, expected] of [
     });
     expect([301, 302, 303, 307, 308]).toContain(response.status());
     expect(new URL(response.headers().location!, response.url()).pathname).toBe(
-      `/${expected}/about`,
+      `/${expected}/welcome`,
     );
   });
 }
+
+test("the welcome film is served as itself, with range requests, and its captions load", async ({
+  request,
+}) => {
+  const film = await request.get("/film/noren-intro.mp4", {
+    headers: { Range: "bytes=0-1023" },
+    maxRedirects: 0,
+  });
+  expect(film.status()).toBe(206);
+  expect(film.headers()["content-type"]).toBe("video/mp4");
+  for (const language of ["en", "ja"]) {
+    const captions = await request.get(`/film/noren-intro.${language}.vtt`, { maxRedirects: 0 });
+    expect(captions.status()).toBe(200);
+    expect(await captions.text()).toMatch(/^WEBVTT/);
+  }
+});
 
 for (const locale of ["ja", "en"] as const) {
   test(`/${locale} has its language and shell; language switching preserves the page`, async ({

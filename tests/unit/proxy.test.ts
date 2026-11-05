@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
-import proxy from "@/proxy";
+import proxy, { config } from "@/proxy";
 
 // The proxy's own handler, without Clerk around it: clerkMiddleware hands back the function it wraps.
 vi.mock("@clerk/nextjs/server", () => ({ clerkMiddleware: (handler: unknown) => handler }));
@@ -27,11 +27,24 @@ async function location(response: Promise<Response | undefined>) {
 }
 
 describe("proxy", () => {
-  it("sends a signed-out visitor from the bare domain to the about page, in their language", async () => {
-    expect(await location(visit("/", false, "en").response)).toBe("/en/about");
-    expect(await location(visit("/", false, "ja").response)).toBe("/ja/about");
-    expect(await location(visit("/", false).response)).toBe("/ja/about");
-    expect(await location(visit("/?from=card", false, "en").response)).toBe("/en/about?from=card");
+  it("sends a signed-out visitor from the bare domain to the welcome page, in their language", async () => {
+    expect(await location(visit("/", false, "en").response)).toBe("/en/welcome");
+    expect(await location(visit("/", false, "ja").response)).toBe("/ja/welcome");
+    expect(await location(visit("/", false).response)).toBe("/ja/welcome");
+    expect(await location(visit("/?from=card", false, "en").response)).toBe("/en/welcome?from=card");
+  });
+
+  it("leaves the film and its captions to the static host, so they keep their path and range requests", () => {
+    const pages = new RegExp(`^${config.matcher[0]}$`);
+    expect(pages.test("/film/noren-intro.mp4")).toBe(false);
+    expect(pages.test("/film/noren-intro.ja.vtt")).toBe(false);
+    expect(pages.test("/en/welcome")).toBe(true);
+  });
+
+  it("keeps a signed-out visitor's shared links open: the welcome page only meets the bare domain", async () => {
+    expect(await visit("/en/places/some-shop", false).response).toBeUndefined();
+    expect(await visit("/en/about", false).response).toBeUndefined();
+    expect(await visit("/en/welcome", false).response).toBeUndefined();
   });
 
   it("sends a signed-in visitor from the bare domain to the map", async () => {
