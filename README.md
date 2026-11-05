@@ -4,7 +4,7 @@ Noren is a Japanese and English map of Nagasaki's local places, with the stories
 
 ## Status
 
-This is an MVP. On 4 November 2026 the live site shows 3,610 real places and 380 quotes from public posts on 168 of them, chosen from 3,089 collected posts. It has no real visitors yet. Owner interviews have only run on one 42-second clip, a fictional script read by a synthetic voice. The launch pack (terms, creator licence and privacy notice) isn't finished, so accounts are invite-only and pages stay out of search results. The labelled demo place, Demo Cafe Noren (fictional), belongs to a labelled mock account and isn't shown publicly.
+This is an MVP. On 5 November 2026 the live site shows 3,612 real places and about 1,100 checked public posts on 359 of them, chosen from about 6,200 collected posts. 108 places carry a story the agent wrote, 318 sentences in all. It has no real visitors yet. Owner interviews have only run on one 42-second clip, a fictional script read by a synthetic voice. The launch pack (terms, creator licence and privacy notice) isn't finished, so accounts are invite-only and pages stay out of search results. The labelled demo place, Demo Cafe Noren (fictional), belongs to a labelled mock account and isn't shown publicly.
 
 ## Built during the hackathon
 
@@ -24,7 +24,7 @@ Noren is an entry in the Meta Global AI Developer Hackathon (building period 27 
 - Clerk: accounts with invite-only sign-up.
 - MapLibre with OpenFreeMap tiles: the map.
 - AI, chosen per step by a setting: Meta's Muse Spark and Muse Voice Transcribe through the Meta Model API, Muse Glimmer 30B (open weights) on a Modal endpoint, Anthropic's Claude, or an OpenAI-compatible transcription endpoint. See [AI, step by step](#ai-step-by-step).
-- Apify: collects public posts for the [story finder](#story-finder), from a script run on the operator's machine.
+- Apify's free tier and open-source tools: collect public posts for the [story finder](#story-finder), from scripts run on the operator's machine. The open-source collection scripts aren't in this repository.
 
 ## Run it locally
 
@@ -127,16 +127,25 @@ Limits that hold whichever model runs:
 
 The story finder looks for what people have already written about each place. [scripts/story-finder.ts](scripts/story-finder.ts) runs the collection on your machine, with the commands `collect`, `check`, `hide`, `attach` and `replay`. [convex/storyFinder.ts](convex/storyFinder.ts) and [src/lib/story-finder](src/lib/story-finder) hold the rest.
 
-1. Collect. Apify actors search Google reviews, blogs, Instagram, TikTok, Facebook and Reddit for a place. Each post waits, with its full text, in a private table that visitors can't see. Instagram and Facebook posts get no card of their own on a page. The story agent reads them, and a sentence can cite them.
+1. Collect. Apify actors and open-source tools search Google reviews, blogs, Instagram, TikTok, Facebook and Reddit for a place. Each post waits, with its full text, in a private table that visitors can't see. Instagram and Facebook posts get no card of their own on a page. The story agent reads them, and a sentence can cite them.
 2. Check. Muse Spark reads a post through one tool call, `report_mention`. It says whether the post is about this place, what kind of post it is and which words to quote. A reply that doesn't parse leaves the post unjudged.
 3. Code decides. The quote must appear in the post word for word, however sure the model sounds. Code also refuses quotes with contact details, bare facts such as an address or opening hours, posts that name private people, sponsored posts, and reviews from a listing that doesn't match the place or has closed. It links at most 3 posts per author per collection and 20 per place.
-4. Read. Before linking, Claude Code read each batch on the operator's behalf and hid the posts that didn't fit, such as a closing notice for a different branch of a shop. It hid 419 of the 899 posts that passed. A steward can hide any post later on `/steward/story-finder`, which also lists every rejected post with its reason.
+4. Read. Before linking, Claude Code read each batch on the operator's behalf and hid the posts that didn't fit, such as a closing notice for a different branch of a shop. It hid 419 of the first 899 posts that passed. The 788 that passed after those went through the same checks, and it read a sample of them. A steward can hide any post later on `/steward/story-finder`, which also lists every rejected post with its reason.
 5. Translate and check. Muse Spark translates each quote, and Muse Glimmer checks the translation as described above.
 
 A card shows the quote, the name it was posted under, the date if known and a link to the original post.
 
 These platforms' terms generally forbid scraping, and [the research note](research/04-scraping-bootstrap.md) says so. The owner chose to run it on 4 November 2026 to find out whether the stories exist ([FR-034](specs/001-noren-mvp/spec.md)). A real launch would need permission or official routes.
 
+
+## What members add
+
+A signed-in member can add to any place from its page, in [src/components/place](src/components/place).
+
+- Write a story in their own words, under their own name. They can remove it at any time.
+- Paste a link to a post they already published. [src/lib/link-read](src/lib/link-read) reads TikTok, YouTube and X through their public oEmbed, and a blog's Open Graph and title tags over an https-only fetch that refuses private hosts. Instagram, Facebook and Threads get only their official embed, and Noren fetches nothing from them. The card credits the author and links back to the post.
+- Tick "This is my own post", and Muse Spark drafts a line from that post for them to change before sharing. With no tick, nothing goes to a model.
+- Press Still here to confirm a place in person. That leaves the place's stamp in their stamp book at `/stamps`, which only they can see, and moves its neighbourhood one place closer to done ([convex/missions.ts](convex/missions.ts), [convex/stampBook.ts](convex/stampBook.ts)). There are no points, ranks or totals per person.
 
 ## Data and licences
 
