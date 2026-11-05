@@ -168,7 +168,8 @@ async function readPage(
       outcome: "read",
       ...(tags.title ? { title: tags.title } : {}),
       ...(tags.description ? { caption: tags.description } : {}),
-      ...((tags.author ?? tags.siteName) ? { author: tags.author ?? tags.siteName } : {}),
+      // A site's name is not who wrote the post, so it stays out of the credit.
+      ...(tags.author ? { author: tags.author } : {}),
       ...(tags.siteName ? { siteName: tags.siteName } : {}),
     };
   }
