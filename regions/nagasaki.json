@@ -133,9 +133,29 @@
       "steward": "Demo Steward (mock)"
     }
   },
+  "collection": {
+    "panelsPerSet": 6,
+    "checkInMetres": 50,
+    "accuracyAllowanceMetres": 30,
+    "utcOffsetHours": 9,
+    "newAccount": {
+      "days": 7,
+      "perDay": {
+        "story": 5,
+        "place": 3,
+        "post": 5,
+        "preview": 20,
+        "draft": 3,
+        "check": 10,
+        "report": 3
+      }
+    }
+  },
   "legal": {
     "operatorName": "Noren, an open-source project run by Yee Fei",
-    "launchPackComplete": false
+    "launchPackComplete": false,
+    "accountsOpen": false,
+    "documentsVersion": null
   },
   "neighbourhoods": [
     {

@@ -10,6 +10,7 @@ const locale = z
 const localised = z.record(locale, z.string().min(1));
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
+const dailyLimit = z.number().int().positive();
 
 export const regionSchema = z
   .strictObject({
@@ -113,10 +114,38 @@ export const regionSchema = z
         steward: z.string().min(1),
       }),
     }),
+    /**
+     * The neighbourhood noren collection. The established-account limits live in
+     * convex/lib/rateLimit.ts; `newAccount` is what an account gets in its first days.
+     */
+    collection: z.strictObject({
+      panelsPerSet: z.number().int().min(2).max(12),
+      /** How near a place's pin a check-in passes, and how much of the phone's error may count. */
+      checkInMetres: z.number().positive(),
+      accuracyAllowanceMetres: z.number().min(0),
+      /** A visit keeps only its date, in this offset from UTC. */
+      utcOffsetHours: z.number().min(-12).max(14),
+      newAccount: z.strictObject({
+        days: z.number().int().positive(),
+        perDay: z.strictObject({
+          story: dailyLimit,
+          place: dailyLimit,
+          post: dailyLimit,
+          preview: dailyLimit,
+          draft: dailyLimit,
+          check: dailyLimit,
+          report: dailyLimit,
+        }),
+      }),
+    }),
     legal: z.strictObject({
       /** Named legal operator shown on notices; null until decided (blocks real people's stories). */
       operatorName: z.string().min(1).nullable(),
       launchPackComplete: z.boolean(),
+      /** Anyone old enough may make an account. It changes no other launch rule. */
+      accountsOpen: z.boolean(),
+      /** The date of the published terms and privacy notice; null while neither page exists. */
+      documentsVersion: z.string().min(1).nullable(),
     }),
   })
   .superRefine((region, ctx) => {
@@ -219,6 +248,19 @@ export const regionSchema = z
         fail(["takedown", "contact"], "required once launchPackComplete is true");
       }
     }
+
+    // Constitution: sign-up opens only with the documents, a named operator and a way to ask for removal.
+    if (region.legal.accountsOpen) {
+      if (region.legal.documentsVersion === null) {
+        fail(["legal", "documentsVersion"], "required once accountsOpen is true");
+      }
+      if (region.legal.operatorName === null) {
+        fail(["legal", "operatorName"], "required once accountsOpen is true");
+      }
+      if (region.takedown.contact === null) {
+        fail(["takedown", "contact"], "required once accountsOpen is true");
+      }
+    }
   });
 
 export type RegionConfig = z.infer<typeof regionSchema>;
@@ -234,14 +276,15 @@ export type RegionPolicy = {
 };
 
 /**
- * `launchPackComplete: false` forces invite-only accounts, noindex on every page, no `pilot`
- * visibility and real businesses in `draft` except openly licensed OSM listings (constitution,
- * Privacy and Legal Constraints). The listing exception never exposes real people's stories.
+ * `launchPackComplete: false` forces noindex on every page, no `pilot` visibility and real
+ * businesses in `draft` except openly licensed OSM listings (constitution, Privacy and Legal
+ * Constraints). The listing exception never exposes real people's stories. Accounts stay
+ * invite-only unless the launch pack is complete or `accountsOpen` is on, which changes nothing else.
  */
 export function deriveRegionPolicy(region: RegionConfig): RegionPolicy {
   const open = region.legal.launchPackComplete;
   return {
-    inviteOnly: !open,
+    inviteOnly: !(open || region.legal.accountsOpen),
     noindex: !open,
     allowPilotVisibility: open,
     realBusinessesDraftOnly: !open,

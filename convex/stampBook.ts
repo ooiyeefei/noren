@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { dayToTime } from "../src/lib/collection/reach";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { currentPerson, requirePerson } from "./lib/auth";
@@ -11,7 +12,7 @@ import { canReadPlace } from "./lib/visibility";
 // or returns a count, so it cannot become a score or a comparison (FR-015, principle I).
 
 /**
- * Rows read from each of the three tables, newest first. Past this a person's oldest rows go unread:
+ * Rows read from each of the three activity tables, newest first. Past this a person's oldest rows go unread:
  * a new stamp still appears, and an old one may show a later date.
  */
 const ROW_LIMIT = 500;
@@ -33,8 +34,8 @@ const stampView = v.object({
 });
 
 /**
- * Each place the person said "Still here" about or shared a story or link about, with the earliest
- * time they did. Something they or a steward took down no longer earns a stamp, and a post the story
+ * Each place the person said "Still here" about, shared a story or link about or checked in at, with
+ * the earliest time they did. A check-in keeps only its date, so it counts from midnight of that day. Something they or a steward took down no longer earns a stamp, and a post the story
  * finder found is not the steward's own (its origin is set), so it never does.
  */
 async function earliestByPlace(ctx: QueryCtx, person: Doc<"person">) {
@@ -65,6 +66,11 @@ async function earliestByPlace(ctx: QueryCtx, person: Doc<"person">) {
     .take(ROW_LIMIT);
   for (const source of sources)
     if (source.status !== "hidden") note(source.placeId, source._creationTime);
+  const collection = await ctx.db
+    .query("personCollection")
+    .withIndex("by_personId", (q) => q.eq("personId", person._id))
+    .unique();
+  for (const visit of collection?.visits ?? []) note(visit.placeId, dayToTime(visit.day));
   return earliest;
 }
 

@@ -28,6 +28,12 @@ const env = {
 };
 
 describe("CSP", () => {
+  it("img-src allows collection art from file storage", () => {
+    expect(cspDirectives(input)["img-src"]).toContain(
+      "https://example.ap-southeast-2.convex.cloud",
+    );
+  });
+
   it("script-src contains the Clerk Protect hosts", () => {
     expect(cspDirectives(input)["script-src"]).toEqual(
       expect.arrayContaining([
@@ -167,7 +173,13 @@ describe("CSP", () => {
     expect(cspDirectives(input)).toMatchObject({
       "default-src": ["'self'"],
       "style-src": ["'self'", "'unsafe-inline'"],
-      "img-src": ["'self'", "data:", "blob:", "https://img.clerk.com"],
+      "img-src": [
+        "'self'",
+        "data:",
+        "blob:",
+        "https://img.clerk.com",
+        "https://example.ap-southeast-2.convex.cloud",
+      ],
       "font-src": ["'self'"],
       "worker-src": ["'self'", "blob:"],
       "object-src": ["'none'"],

@@ -26,6 +26,12 @@ export function StampsView({
   return (
     <div lang={locale} className="space-y-6 text-kon" data-stamp-book="">
       <p className="max-w-prose text-[17px]">{m.intro}</p>
+      <a
+        className="inline-flex min-h-11 items-center text-ai underline"
+        href={localePath(locale, "/collection")}
+      >
+        {m.collection}
+      </a>
       {stamps?.length === 0 && (
         <div
           data-stamp-empty=""

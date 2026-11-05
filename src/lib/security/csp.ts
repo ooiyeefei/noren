@@ -87,7 +87,7 @@ export function cspDirectives(input: CspInput): Record<CspDirective, string[]> {
       ...scripts,
     ],
     "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", "blob:", "https://img.clerk.com", ...aerial],
+    "img-src": ["'self'", "data:", "blob:", "https://img.clerk.com", convex, ...aerial],
     "font-src": ["'self'"],
     "connect-src": [
       "'self'",

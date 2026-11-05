@@ -11,6 +11,7 @@ import { takedownsMessages } from "@/lib/i18n/messages/takedowns";
 import { storyFinderMessages } from "@/lib/i18n/messages/story-finder";
 import { candidateMessages } from "@/lib/i18n/messages/candidates";
 import { checkMessages } from "@/lib/i18n/messages/checks";
+import { collectionMessages } from "@/lib/i18n/messages/collection";
 import type { RegionConfig } from "@/lib/region/schema";
 import { visibilityArgs, visibilityChoices, type PlaceRow } from "./steward-logic";
 
@@ -48,6 +49,7 @@ export function StewardNav({
     | "reports"
     | "takedowns"
     | "story-finder"
+    | "collection"
     | "place-admin";
 }) {
   const m = messagesFor(stewardMessages, locale);
@@ -66,6 +68,11 @@ export function StewardNav({
       page: "story-finder",
       path: "/story-finder",
       label: messagesFor(storyFinderMessages, locale).title,
+    },
+    {
+      page: "collection",
+      path: "/collection",
+      label: messagesFor(collectionMessages, locale).stewardTitle,
     },
   ];
   return (

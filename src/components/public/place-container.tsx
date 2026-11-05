@@ -11,7 +11,8 @@ import type { PlaceCheckActions } from "@/components/place/place-check";
 import type { Locale } from "@/lib/i18n";
 import { PublicQueryBoundary } from "./home-container";
 import { PublicLoading } from "./home-view";
-import { PlaceView } from "./place-view";
+import { readLocation } from "@/lib/collection/location";
+import { PlaceView, pressedAfter, type PlaceCollection, type PressedFrom } from "./place-view";
 import { useToday } from "./use-today";
 import type { PublicRegionProps } from "./mapping";
 
@@ -45,19 +46,26 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
     api.stampBook.forPlace,
     place && isAuthenticated ? { placeId: place._id } : "skip",
   );
-  const [pressedFrom, setPressedFrom] = useState<"check" | "story" | null>(null);
+  const spot = useQuery(api.collection.forPlace, args);
+  const set = useQuery(
+    api.collection.set,
+    spot ? { regionId: region.regionId, neighbourhoodId: spot.neighbourhoodId } : "skip",
+  );
+  const person = useQuery(api.people.current, isAuthenticated ? {} : "skip");
+  const [pressedFrom, setPressedFrom] = useState<PressedFrom>(null);
   // Said before the work is done, so the stamp arrives already pressing rather than flashing first.
-  const pressing = async (from: "check" | "story", work: () => Promise<unknown>) => {
-    setPressedFrom(from);
+  const pressing = async <T,>(from: NonNullable<PressedFrom>, work: () => Promise<T>) => {
+    setPressedFrom((current) => pressedAfter(current, from));
     try {
-      await work();
+      return await work();
     } catch (error) {
-      setPressedFrom(null);
+      setPressedFrom((current) => (from === "checkIn" ? null : pressedAfter(current, null)));
       throw error;
     }
   };
   const confirm = useMutation(api.checks.confirm);
   const report = useMutation(api.checks.report);
+  const checkIn = useMutation(api.collection.checkIn);
   const addSource = useMutation(api.sources.add);
   const removeSource = useMutation(api.sources.remove);
   const writeStory = useMutation(api.stories.add);
@@ -90,6 +98,21 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
             : removeSource({ sourceId: id as Id<"source"> }),
       }
     : undefined;
+  const collection: PlaceCollection | undefined =
+    place && spot
+      ? {
+          spot,
+          set,
+          displayName: person?.displayName,
+          actions: {
+            signedIn: isLoading ? undefined : isAuthenticated,
+            locate: () => readLocation(navigator.geolocation),
+            checkIn: () => pressing("checkIn", () => checkIn({ placeId: place._id })),
+            writeLine: (args) => writeStory({ ...args, placeId: place._id }),
+            stillHere: () => confirm({ placeId: place._id }),
+          },
+        }
+      : undefined;
   return (
     <PlaceView
       locale={locale}
@@ -102,6 +125,7 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
       checks={checks}
       story={story}
       mission={mission}
+      collection={collection}
       stamp={stamp && { stampedAt: stamp.stampedAt, pressedFrom }}
     />
   );

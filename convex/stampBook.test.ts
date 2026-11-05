@@ -150,3 +150,61 @@ it("stays bounded for a person with far more rows than a book shows", async () =
     stampedAt: expect.any(Number),
   });
 });
+
+async function inSet(
+  b: Awaited<ReturnType<typeof setup>>["b"],
+  steward: Id<"person">,
+  placeId: Id<"place">,
+) {
+  await b.run(async (ctx) => {
+    const setId = await ctx.db.insert("collectionSet", {
+      regionId: "nagasaki",
+      neighbourhoodId: "shinchi",
+      names: { ja: "新地中華街", en: "Shinchi" },
+      panelCount: 6,
+      status: "live",
+    });
+    await ctx.db.insert("collectionPlace", { setId, panelIndex: 0, placeId });
+    await ctx.db.insert("personCollection", {
+      personId: steward,
+      visits: [],
+      badges: [],
+    });
+  });
+}
+
+it("adds a stamp for a check-in, dated by the visit's day in Japan, with no total", async () => {
+  vi.useFakeTimers({ now: Date.UTC(2026, 10, 5, 15, 30) });
+  try {
+    const { b, steward, first } = await setup();
+    await inSet(b, steward, first);
+    const asSteward = b.as("stamp-steward");
+    await asSteward.mutation(api.collection.checkIn, { placeId: first });
+    const stamps = await asSteward.query(api.stampBook.mine, {});
+    expect(stamps.map(({ slug }) => slug)).toEqual(["first"]);
+    expect(new Date(stamps[0]!.stampedAt).toISOString().slice(0, 10)).toBe("2026-11-06");
+    expect(await asSteward.query(api.stampBook.forPlace, { placeId: first })).toEqual({
+      stampedAt: stamps[0]!.stampedAt,
+    });
+    expect(Array.isArray(stamps)).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("keeps one stamp, the earliest, when a check-in follows an earlier story", async () => {
+  vi.useFakeTimers({ now: Date.UTC(2026, 10, 1, 3, 0) });
+  try {
+    const { b, steward, first } = await setup();
+    await inSet(b, steward, first);
+    const asSteward = b.as("stamp-steward");
+    await asSteward.mutation(api.stories.add, { placeId: first, ...write });
+    vi.setSystemTime(Date.UTC(2026, 10, 5, 3, 0));
+    await asSteward.mutation(api.collection.checkIn, { placeId: first });
+    const stamps = await asSteward.query(api.stampBook.mine, {});
+    expect(stamps).toHaveLength(1);
+    expect(new Date(stamps[0]!.stampedAt).toISOString().slice(0, 10)).toBe("2026-11-01");
+  } finally {
+    vi.useRealTimers();
+  }
+});

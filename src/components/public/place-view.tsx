@@ -8,6 +8,12 @@ import { StoryFeed, type StoryFeedActions } from "@/components/place/story-feed"
 import { PlaceCheck, type PlaceCheckActions } from "@/components/place/place-check";
 import { PlaceStory, type PlaceStoryLike } from "@/components/place/place-story";
 import { PlaceStamp } from "@/components/place/place-stamp";
+import {
+  CheckInCard,
+  type CheckInActions,
+  type CheckInSpot,
+} from "@/components/collection/check-in-card";
+import type { SetLike } from "@/components/collection/next-panel-card";
 import { NeighbourhoodMission, type MissionLike } from "@/components/place/neighbourhood-mission";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { labelForCategory } from "./category";
@@ -30,6 +36,21 @@ import {
   type WrittenStoryLike,
 } from "./mapping";
 
+/** What the person just did to earn this place's stamp, if anything. */
+export type PressedFrom = "check" | "story" | "checkIn" | null;
+
+/** The check-in result keeps its stamp for good, so a later press never opens a second one. */
+export function pressedAfter(current: PressedFrom, from: PressedFrom): PressedFrom {
+  return current === "checkIn" ? current : from;
+}
+
+export type PlaceCollection = {
+  spot: CheckInSpot;
+  set?: SetLike | null;
+  displayName?: string;
+  actions: CheckInActions;
+};
+
 export function PlaceView({
   locale,
   region,
@@ -41,6 +62,7 @@ export function PlaceView({
   checks,
   story,
   mission,
+  collection,
   stamp,
 }: {
   locale: Locale;
@@ -56,8 +78,10 @@ export function PlaceView({
   story?: AddStoryActions & StoryFeedActions;
   /** What the place's neighbourhood still needs, when it is in one. */
   mission?: MissionLike | null;
+  /** The panel this place gives, when it is in a live set. */
+  collection?: PlaceCollection;
   /** The viewer's stamp for this place, and what they just did to earn it, if anything. */
-  stamp?: { stampedAt: number; pressedFrom: "check" | "story" | null } | null;
+  stamp?: { stampedAt: number; pressedFrom: PressedFrom } | null;
 }) {
   const m = messagesFor(publicMessages, locale);
   const shell = messagesFor(shellMessages, locale);
@@ -85,7 +109,7 @@ export function PlaceView({
       </>
     );
   const heading = placeHeading(place.names, locale, region);
-  const stampHere = (from: "check" | "story") =>
+  const stampHere = (from: NonNullable<PressedFrom>) =>
     stamp && (
       <PlaceStamp
         locale={locale}
@@ -125,6 +149,19 @@ export function PlaceView({
             hasStory={page != null}
           />
           <PlaceActions locale={locale} title={heading.primary.text} pin={place.pin} />
+          {collection && place.pin && (
+            <CheckInCard
+              locale={locale}
+              region={region}
+              slug={place.slug}
+              pin={place.pin}
+              spot={collection.spot}
+              set={collection.set}
+              stamp={<div aria-live="polite">{stampHere("checkIn")}</div>}
+              displayName={collection.displayName}
+              actions={collection.actions}
+            />
+          )}
           {/* The fictional demo place has nothing to check in person. */}
           {!place.isMock && (
             <PlaceCheck
@@ -135,7 +172,11 @@ export function PlaceView({
             />
           )}
           {/* It shows where the person acted: a story's stamp appears beside the story form. */}
-          <div aria-live="polite">{stamp?.pressedFrom !== "story" && stampHere("check")}</div>
+          <div aria-live="polite">
+            {stamp?.pressedFrom !== "story" &&
+              stamp?.pressedFrom !== "checkIn" &&
+              stampHere("check")}
+          </div>
           {mission && <NeighbourhoodMission locale={locale} region={region} mission={mission} />}
           {place.visibility === "draft" && <p role="note">{m.draft}</p>}
           {(place.canEdit || place.isOwner) && (

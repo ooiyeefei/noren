@@ -99,6 +99,43 @@ describe("region loader", () => {
     expect(problem).toContain("operatorName");
     expect(problem).not.toContain("contact");
   });
+
+  it("refuses open accounts without the documents, an operator and a takedown contact", () => {
+    const open = (mutate: (r: RegionConfig) => void) =>
+      problemOf(
+        parse((r) => {
+          r.legal.accountsOpen = true;
+          r.legal.documentsVersion = "2026-11-05";
+          mutate(r);
+        }),
+      );
+    expect(open(() => {})).toBe("");
+    expect(
+      open((r) => {
+        r.legal.documentsVersion = null;
+      }),
+    ).toContain("documentsVersion");
+    expect(
+      open((r) => {
+        r.legal.operatorName = null;
+      }),
+    ).toContain("operatorName");
+    expect(
+      open((r) => {
+        r.takedown.contact = null;
+      }),
+    ).toContain("contact");
+  });
+
+  it("rejects a collection setting that makes no sense", () => {
+    expect(
+      problemOf(
+        parse((r) => {
+          r.collection.checkInMetres = 0;
+        }),
+      ),
+    ).toContain("checkInMetres");
+  });
 });
 
 describe("region policy", () => {
@@ -117,6 +154,27 @@ describe("region policy", () => {
     const region = loadRegions().get("nagasaki")!;
     expect(region.legal.operatorName).toBe("Noren, an open-source project run by Yee Fei");
     expect(region.legal.launchPackComplete).toBe(false);
+  });
+
+  it("ships with accounts closed", () => {
+    const { legal } = loadRegions().get("nagasaki")!;
+    expect(legal.accountsOpen).toBe(false);
+    expect(legal.documentsVersion).toBeNull();
+  });
+
+  it("opening accounts ends invite-only and changes no other launch rule", () => {
+    const region = loadRegions().get("nagasaki")!;
+    expect(
+      deriveRegionPolicy({
+        ...region,
+        legal: { ...region.legal, accountsOpen: true, documentsVersion: "2026-11-05" },
+      }),
+    ).toEqual({
+      inviteOnly: false,
+      noindex: true,
+      allowPilotVisibility: false,
+      realBusinessesDraftOnly: true,
+    });
   });
 
   it("lifts them only when the launch pack is complete", () => {

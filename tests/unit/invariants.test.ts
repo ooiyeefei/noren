@@ -70,6 +70,8 @@ const inheritsMockFlag = [
   "pageVersion",
   "pageSentence",
   "noteTranslation",
+  // From its person: a demo account checks in only at demo places.
+  "personCollection",
   // From its source: only story finder sources on real places have one.
   "sourceExcerptTranslation",
   // From their place and the found posts they read: the agent only runs on real places.
@@ -78,6 +80,10 @@ const inheritsMockFlag = [
 ];
 const notPersonCreated = [
   "seedOsmCandidate",
+  // Made by an admin and looked after by stewards, for real places only.
+  "collectionSet",
+  "collectionPanel",
+  "collectionPlace",
   // Public posts the story finder collected for real places only, their counts, and shown quotes.
   "mentionCandidate",
   "mentionCount",

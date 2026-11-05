@@ -3,14 +3,15 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation } from "./lib/gate";
 import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { canSeeSource, countsVisits, isPubliclyReadablePlace } from "./lib/access";
+import { isPubliclyReadablePlace } from "./lib/access";
 import { writeAudit } from "./lib/audit";
 import { currentPerson, requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
+import { liveStory } from "./lib/liveStory";
 import { readMapNames } from "./lib/mapCopies";
 import { scriptValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
-import { aboutHealth, guessLang, type MentionPlatform } from "../src/lib/story-finder/mention";
+import { aboutHealth, type MentionPlatform } from "../src/lib/story-finder/mention";
 import {
   mentionPlatformValidator,
   storyRunStatusValidator,
@@ -513,47 +514,7 @@ export const forPlace = query({
     const viewer = await currentPerson(ctx);
     const place = await ctx.db.get("place", placeId);
     if (place === null || !(await canReadPlace(ctx, viewer, place))) return null;
-    const story = await ctx.db
-      .query("placeStory")
-      .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
-      .first();
-    if (story === null || story.withdrawnAt !== undefined) return null;
-    const sentences = [];
-    const notes = [];
-    const numbered = new Map<string, number>();
-    for (const { en, ja, citations } of story.sentences) {
-      const sources = [];
-      for (const { sourceId, words } of citations) {
-        const source = await ctx.db.get("source", sourceId);
-        if (source !== null && (await canSeeSource(ctx, viewer, place, source)))
-          sources.push({ source, words });
-      }
-      if (sources.length === 0 || sources.length < citations.length) continue;
-      const at = [];
-      for (const { source, words } of sources) {
-        const key = JSON.stringify([source._id, words]);
-        let index = numbered.get(key);
-        if (index === undefined) {
-          index = notes.length;
-          numbered.set(key, index);
-          const lang = guessLang(words);
-          notes.push({
-            sourceId: source._id,
-            words,
-            ...(lang === undefined ? {} : { lang }),
-            ...(source.platform === undefined ? {} : { platform: source.platform }),
-            canonicalUrl: source.canonicalUrl,
-            ...(source.authorHandle === undefined ? {} : { authorHandle: source.authorHandle }),
-            ...(source.postedAt === undefined ? {} : { postedAt: source.postedAt }),
-            countsVisits: countsVisits(place, source),
-          });
-        }
-        at.push(index);
-      }
-      sentences.push({ en, ja, notes: at });
-    }
-    if (sentences.length === 0) return null;
-    return { sentences, notes, postsRead: story.postsRead };
+    return await liveStory(ctx, viewer, place);
   },
 });
 
