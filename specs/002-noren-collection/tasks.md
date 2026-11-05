@@ -138,8 +138,8 @@ Before writing any Convex code, read `convex/_generated/ai/guidelines.md`. All m
 
 - [X] T041 Run `pnpm test`, lint and `pnpm build`, then review the diff against the spec, using `pnpm test:e2e` with `--workers=2` for deployed checks
 - [X] T042 **OWNER ACTION**: The owner approves merging. Then commit with `-F`, rebase on the latest `origin/main`, open a PR and rebase-merge it, using `GH_TOKEN=$(gh auth token --user ooiyeefei)` for that command
-- [ ] T043 Deploy Convex first and Vercel second, because the new place page fails without the new functions. Then run `collection.createSet` for Shinchi with the slugs in data-model.md, and upload the art with `scripts/upload-set-art.mts --prod`
-- [ ] T044 As the real steward, pick lines and set Shinchi live, then run the live UAT in quickstart.md stage 1 and read the server logs
+- [X] T043 Deploy Convex first and Vercel second, because the new place page fails without the new functions. Then run `collection.createSet` for Shinchi with the slugs in data-model.md, and upload the art with `scripts/upload-set-art.mts --prod`
+- [X] T044 As the real steward, pick lines and set Shinchi live, then run the live UAT in quickstart.md stage 1 and read the server logs
 - [ ] T045 **OWNER ACTION**: Walk test in Shinchi on the owner's iPhone, using the steps in quickstart.md. Android is still to be tested by someone else. Record the results in `specs/002-noren-collection/validation-log.md`, and tune `checkInMetres` or pins if first-press success falls short
 
 **Checkpoint**: SC-101 to SC-104 are met, which opens the way to Phase 9.
