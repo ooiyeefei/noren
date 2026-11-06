@@ -131,7 +131,7 @@ The mutation refuses a place that isn't in a live set, a place the caller can't 
 | `rateLimit` | Kept. Nothing removes these rows, and their keys hold an id only |
 | `interview`, `consent`, `transcript`, `claim` (`authorId`, `reviewerId`), `placeOwner` (`personId`) | Never reached: `deleteMine` refuses while the person holds an interview or a place, so they ask a steward. An operator acts on that through `people.deletePerson`, and these rows then stay and point at the empty row |
 | Fields only a steward's action fills: `person.verifiedBy`, `placeCheck.reviewedBy`, `placeOwner.verifiedBy`, `openTextSnippet.approvedBy`, `source.demoConsentBy`, `translationCheck.decidedBy`, `pageVersion.reviewedBy`, `mentionCandidate.collectedBy`, `placeStoryRun.requestedBy` | Never reached: a steward can't delete themselves this way |
-| Clerk user | Deleted by the route, after the steps above |
+| Clerk user | Deleted by the route, after the steps above. A sweep ten minutes later empties any new row another tab made with their name |
 
 `DELETION_DECISIONS` in `convex/people.test.ts` holds one decision for every `v.id("person")` field in the schema, and its test fails when a new field has none.
 

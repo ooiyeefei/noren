@@ -210,6 +210,7 @@ Before writing any Convex code, read `convex/_generated/ai/guidelines.md`. All m
 - [ ] T069 [P] Run axe on the new pages through `tests/e2e/a11y-public.spec.ts`, and check every screen at 390 px on the deployed site
 - [ ] T070 [P] Update `README.md` and `specs/002-noren-collection/quickstart.md` with what was actually built, leaving out anything not live
 - [ ] T071 Reread every task and FR, and mark any gap
+- [ ] T072 Before T068, stop demo accounts reaching real data. Production has demo logins, including a demo steward, and about 40 steward functions plus `canReadPlace` and `stories.remove` treat them as real. The owner removes the logins in Clerk, or those functions refuse them, with tests
 
 ---
 

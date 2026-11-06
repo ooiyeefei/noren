@@ -54,25 +54,14 @@ describe("POST /api/account/delete", () => {
     expect(await response.json()).toEqual({ ok: true });
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
-    // The second Noren step catches a row that a page in another tab made in between.
-    expect(order).toEqual(["noren", "clerk", "noren"]);
-    expect(fetchMutation.mock.calls).toEqual([
-      [api.people.deleteMine, {}, { token: TOKEN }],
-      [api.people.deleteMine, {}, { token: TOKEN }],
-    ]);
+    expect(order).toEqual(["noren", "clerk"]);
+    expect(fetchMutation).toHaveBeenCalledExactlyOnceWith(
+      api.people.deleteMine,
+      {},
+      { token: TOKEN },
+    );
     expect(deleteUser).toHaveBeenCalledExactlyOnceWith(USER_ID);
     expect(logged).not.toHaveBeenCalled();
-  });
-
-  it("still answers ok when the last check fails, because the account is gone, and logs its name", async () => {
-    fetchMutation.mockResolvedValueOnce(null);
-    fetchMutation.mockRejectedValueOnce(named("FictionalOutage", "try later"));
-
-    const response = await press();
-
-    expect(response.status).toBe(200);
-    expect(deleteUser).toHaveBeenCalledExactlyOnceWith(USER_ID);
-    expect(logText()).toContain("FictionalOutage");
   });
 
   it("answers 401 with no session, before touching anything", async () => {
@@ -173,8 +162,7 @@ describe("POST /api/account/delete", () => {
 
       expect(again.status).toBe(200);
       expect(await again.json()).toEqual({ ok: true });
-      // Once on the first press, then the step and the last check on the second.
-      expect(fetchMutation).toHaveBeenCalledTimes(3);
+      expect(fetchMutation).toHaveBeenCalledTimes(2);
       expect(deleteUser).toHaveBeenCalledTimes(2);
     });
 

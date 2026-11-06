@@ -291,6 +291,8 @@ export const setDisplayName = internalMutation({
 });
 
 const DELETED_NAME = "Former member";
+/** Well past the life of a Clerk token, after which nothing can make a row with the old sign-in. */
+const SWEEP_AFTER_DELETION_MS = 10 * 60 * 1000;
 /**
  * Rows touched by one run of `continueDeletion`. Small, because each deleted story or hidden link
  * also rereads its place's stories through the map copy trigger, and a mutation has a read limit.
@@ -437,6 +439,10 @@ export const deleteMine = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (identity === null) throw appError("unauthenticated", "sign in to continue");
+    // A refusal below rolls this back too.
+    await ctx.scheduler.runAfter(SWEEP_AFTER_DELETION_MS, internal.people.sweepAfterDeletion, {
+      tokenIdentifier: identity.tokenIdentifier,
+    });
     const person = await findPerson(ctx, identity.tokenIdentifier);
     if (person === null) return null;
     if (person.isMock) throw appError("forbidden", "a demo account stays with the demo");
@@ -456,6 +462,23 @@ export const deleteMine = mutation({
     if (interview !== null || ownership !== null) {
       throw appError("forbidden", "a steward deletes accounts that hold interviews or ownership");
     }
+    await emptyPerson(ctx, person);
+    return null;
+  },
+});
+
+/**
+ * A page loaded in another tab during deletion makes a new row with their name, through
+ * `ensureCurrent`, and once Clerk has closed the sign-in nothing else would ever remove it. So this
+ * runs after the last token can have expired, whatever became of the request that started it. If the
+ * Clerk step failed and they stayed signed in, a new row of theirs goes too, as they asked.
+ */
+export const sweepAfterDeletion = internalMutation({
+  args: { tokenIdentifier: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { tokenIdentifier }) => {
+    const person = await findPerson(ctx, tokenIdentifier);
+    if (person === null || person.role !== "user" || person.isMock) return null;
     await emptyPerson(ctx, person);
     return null;
   },

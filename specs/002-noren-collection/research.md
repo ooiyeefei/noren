@@ -83,7 +83,7 @@ Every Convex function using `requirePerson` and every signed-in route was checke
 ## R12. Account deletion runs on the server, Noren first
 
 - **Decision**: `POST /api/account/delete` checks the session, calls `people.deleteMine` with the person's Convex token through `src/lib/convex/server.ts`, then calls `clerkClient().users.deleteUser(userId)`. Clerk's "Allow users to delete their accounts" stays off, so this is the only way to delete.
-- **Rationale**: Noren's step needs the token, so it must run first. Doing both in one request means closing the tab can't leave it half done. If the Clerk step fails, the person is told and can press again, which empties any new `person` row a page load made. The route runs `deleteMine` once more after Clerk's step, for a row made in another tab just before the sign-in closed.
+- **Rationale**: Noren's step needs the token, so it must run first. Doing both in one request means closing the tab can't leave it half done. If the Clerk step fails, the person is told and can press again, which empties any new `person` row a page load made. `deleteMine` also schedules `sweepAfterDeletion` for ten minutes later, past the life of a Clerk token, for a row made in another tab with their name. It runs whatever became of the request, and Convex keeps that scheduled call's Clerk ID in its record of finished jobs for about a week.
 - **What happens to each record**: see [data-model.md](./data-model.md#account-deletion).
 - **Role limit**: Self-service is for `user` only. Interviews, consents and ownership depend on the other roles, so they ask a steward (FR-130).
 

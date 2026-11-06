@@ -38,11 +38,10 @@ export async function POST(request: Request): Promise<Response> {
     return jsonError("forbidden", "this request came from another site");
   }
   let userId: string | null;
-  let token: string | null;
   try {
     ({ userId } = await auth());
     if (!userId) return jsonError("unauthenticated", "sign in to continue");
-    token = await convexToken();
+    const token = await convexToken();
     if (token === null) return jsonError("unauthenticated", "sign in to continue");
     await fetchMutation(api.people.deleteMine, {}, { token });
   } catch (error) {
@@ -66,14 +65,6 @@ export async function POST(request: Request): Promise<Response> {
         { status: 502, headers: HEADERS },
       );
     }
-  }
-  // A page loaded in another tab meanwhile would have made a new row with their name, through
-  // `ensureCurrent`, and with the sign-in closed nothing else would ever remove it. The token still
-  // works until it expires. With no such row this does nothing.
-  try {
-    await fetchMutation(api.people.deleteMine, {}, { token });
-  } catch (error) {
-    console.error(`account deletion: the last check failed (${describeError(error)})`);
   }
   return Response.json({ ok: true }, { headers: HEADERS });
 }

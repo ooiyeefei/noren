@@ -1062,6 +1062,51 @@ describe("people.deleteMine", () => {
     });
   });
 
+  describe("the sweep after deletion", () => {
+    const stored = (b: Backend, id: Id<"person">) => b.run((ctx) => ctx.db.get("person", id));
+
+    it("empties a row another tab made afterwards with their name, however the request ended", async () => {
+      const { b, leaving, member } = await world();
+      await leaving.mutation(api.people.deleteMine, {});
+      const fresh = await leaving.mutation(api.people.ensureCurrent, {});
+      expect(fresh).not.toBe(member);
+      expect(await stored(b, fresh)).toMatchObject({ displayName: NAME });
+
+      await finish(b);
+
+      expect(await stored(b, fresh)).toMatchObject({
+        displayName: "Former member",
+        clerkUserId: `deleted:${fresh}`,
+      });
+      const rows = await b.run((ctx) => ctx.db.query("person").take(10));
+      expect(JSON.stringify(rows)).not.toContain(NAME);
+    });
+
+    it.each([
+      ["a role a steward has since given them", { role: "creator" as const }],
+      ["a demo account", { isMock: true }],
+    ])("leaves %s alone", async (_label, change) => {
+      const { b, member } = await world();
+      const person = await stored(b, member);
+      await b.run((ctx) => ctx.db.patch("person", member, change));
+
+      await b.t.mutation(internal.people.sweepAfterDeletion, {
+        tokenIdentifier: person!.tokenIdentifier,
+      });
+      await finish(b);
+
+      expect(await stored(b, member)).toMatchObject({ displayName: NAME });
+    });
+
+    it("does nothing when no row came back", async () => {
+      const { b, leaving, member } = await world();
+      await leaving.mutation(api.people.deleteMine, {});
+      await finish(b);
+      expect(await b.run((ctx) => ctx.db.query("person").take(10))).toHaveLength(3);
+      expect(await stored(b, member)).toMatchObject({ displayName: "Former member" });
+    });
+  });
+
   describe("people.deletePerson, which an operator runs for someone else", () => {
     it("deletes an account its owner can't, keeps what depends on them, and leaves a record", async () => {
       const { b, leaving, member, placeId } = await world();
