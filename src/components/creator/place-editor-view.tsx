@@ -7,6 +7,7 @@ import { labelForCategory } from "@/components/public/category";
 import { DemoBadge } from "@/components/badges";
 import { EmbedView, type EmbedSourceView } from "@/components/embeds/embed-view";
 import { PageContainer } from "@/components/layout/page-container";
+import { ShownAs, type ShownAsActions } from "@/components/place/shown-as";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,13 @@ import {
 } from "./new-place-view";
 import { previewSource, type PlaceDraft, type PlaceErrors, type SourceDraft } from "./place-form";
 
-export type EditorPlace = { id: string; slug: string; canEdit: boolean; isMock: boolean };
+export type EditorPlace = {
+  id: string;
+  slug: string;
+  canEdit: boolean;
+  isMock: boolean;
+  waitingForSteward?: boolean;
+};
 export type EditorInterview = {
   id: string;
   language: string;
@@ -44,6 +51,8 @@ export type PlaceEditorViewProps = {
   posts: EmbedSourceView[];
   interviews: EditorInterview[];
   canInterview?: boolean;
+  /** Set until the member has seen the name their post goes out under (FR-131). */
+  shownAs?: ShownAsActions;
   interviewLanguage: string;
   pending?: string;
   error?: string;
@@ -146,6 +155,7 @@ export function PlaceEditorView(props: PlaceEditorViewProps) {
       }
     >
       {place.isMock && <DemoBadge locale={locale} />}
+      {place.waitingForSteward && <p data-waiting-note="">{m.waitingNote}</p>}
       {error && <Alert>{error}</Alert>}
       {saved && <p role="status">{m.saved}</p>}
       {!place.canEdit && <p>{m.readOnly}</p>}
@@ -370,10 +380,14 @@ export function PlaceEditorView(props: PlaceEditorViewProps) {
             <p className="text-sm">{m.authorHint}</p>
             {sourceField("authorHandle")}
             {sourceField("authorUrl")}
+            {props.shownAs && (
+              <ShownAs locale={locale} hintId={`${id}-name`} actions={props.shownAs} />
+            )}
             <Button
               className="min-h-11 rounded-[10px] px-4 whitespace-normal"
               type="submit"
-              disabled={!preview?.ok}
+              disabled={!preview?.ok || !!props.shownAs}
+              aria-describedby={props.shownAs ? `${id}-name` : undefined}
             >
               {pending === "post" ? m.pending : m.addPost}
             </Button>

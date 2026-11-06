@@ -5,8 +5,10 @@ import { useMutation, useQuery } from "convex/react";
 import { errorText } from "@/components/layout/error-text";
 import { ErrorPage } from "@/components/layout/error-page";
 import { PageContainer } from "@/components/layout/page-container";
+import { labelForCategory } from "@/components/public/category";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { stewardMessages } from "@/lib/i18n/messages/steward";
+import { pickPlaceName } from "@/lib/region/names";
 import type { RegionConfig } from "@/lib/region/schema";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -70,8 +72,10 @@ export function StewardHomeContainer({
 }) {
   use(params);
   const places = useQuery(api.places.listAll, { regionId: region.id });
+  const waiting = useQuery(api.places.listWaiting, { regionId: region.id });
   const setKind = useMutation(api.places.setKind);
   const setVisibility = useMutation(api.places.setVisibility);
+  const declineWaiting = useMutation(api.places.declineWaiting);
   const [drafts, setDrafts] = useState<Record<string, VisibilityDraft>>({});
   const { state, run } = useStewardAction(locale);
   if (places === undefined)
@@ -83,6 +87,26 @@ export function StewardHomeContainer({
       rows={placeRows(places, locale, region)}
       drafts={drafts}
       {...state}
+      waiting={waiting?.map((place) => ({
+        id: place._id,
+        slug: place.slug,
+        name: pickPlaceName(place.names, locale, region).primary?.value ?? place.slug,
+        category: place.category && labelForCategory(region, place.category, locale),
+        addedBy: place.addedBy,
+        sharedAt: place.sharedAt,
+      }))}
+      onPublishWaiting={(id) =>
+        void run(`waiting:${id}`, async () => {
+          await setVisibility({ placeId: id as Id<"place">, visibility: "public" });
+          return messagesFor(stewardMessages, locale).waitingPublished;
+        })
+      }
+      onDeclineWaiting={(id) =>
+        void run(`waiting:${id}`, async () => {
+          await declineWaiting({ placeId: id as Id<"place"> });
+          return messagesFor(stewardMessages, locale).waitingDeclined;
+        })
+      }
       onDraft={(id, draft) => setDrafts((old) => ({ ...old, [id]: draft }))}
       onKind={(id, kind) =>
         void run(`kind:${id}`, async () => {

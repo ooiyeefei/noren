@@ -19,6 +19,7 @@ export type CreatorPlace = {
   names: NameDraft[];
   visibility: Visibility;
   isMock: boolean;
+  waitingForSteward?: boolean;
 };
 /** A post the member linked, with the visits Noren sent to its original (FR-024). */
 export type SharedPostLike = {
@@ -134,7 +135,11 @@ export function CreatorHomeView({
                       </Link>
                     </div>
                     <span className="rounded-full bg-kamenozoki px-3 py-1 text-[13px] text-kon">
-                      {isPublic ? m.publicStatus : m.draftStatus}
+                      {isPublic
+                        ? m.publicStatus
+                        : place.waitingForSteward
+                          ? m.waitingStatus
+                          : m.draftStatus}
                     </span>
                     {place.isMock && <DemoBadge locale={locale} />}
                     <Link

@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { categoryOptions } from "@/components/public/category";
 import { normalisePoint } from "@/components/map/map-helpers";
 import { PlaceMap } from "@/components/map/place-map";
+import { ShownAs, type ShownAsActions } from "@/components/place/shown-as";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -562,6 +563,10 @@ export type NewPlaceViewProps = {
   role: Role;
   /** Whether the place goes on the public map when added, or is saved as a draft. */
   onMap?: boolean;
+  /** A new member's place: with `onMap`, it waits for a steward before going on the map. */
+  waits?: boolean;
+  /** Set until the member has seen the name their place goes out under (FR-131). */
+  shownAs?: ShownAsActions;
   draft: PlaceDraft;
   errors?: PlaceErrors;
   pending?: boolean;
@@ -578,6 +583,8 @@ export function NewPlaceView({
   locale,
   region,
   onMap = false,
+  waits = false,
+  shownAs,
   draft,
   errors,
   pending,
@@ -660,8 +667,9 @@ export function NewPlaceView({
               </p>
             </section>
             <p className="max-w-prose text-[15px] leading-relaxed">
-              {onMap ? m.businessHint : m.draftHint}
+              {!onMap ? m.draftHint : waits ? m.waitingHint : m.businessHint}
             </p>
+            {shownAs && <ShownAs locale={locale} hintId={`${reasonId}-name`} actions={shownAs} />}
           </>
         )}
         {error && <Alert>{error}</Alert>}
@@ -693,11 +701,11 @@ export function NewPlaceView({
             <Button
               className="min-h-11 rounded-[10px] px-5 whitespace-normal"
               type="button"
-              disabled={!!reason || pending}
-              aria-describedby={reason ? reasonId : undefined}
+              disabled={!!reason || pending || !!shownAs}
+              aria-describedby={reason ? reasonId : shownAs ? `${reasonId}-name` : undefined}
               onClick={onCreate}
             >
-              {pending ? m.pending : onMap ? m.create : m.createDraft}
+              {pending ? m.pending : !onMap ? m.createDraft : waits ? m.createWaiting : m.create}
             </Button>
           )}
         </div>

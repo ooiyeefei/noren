@@ -8,7 +8,9 @@ import { ErrorPage } from "@/components/layout/error-page";
 import { PageContainer } from "@/components/layout/page-container";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { creatorMessages } from "@/lib/i18n/messages/creator";
+import { useShownAs } from "@/components/place/use-shown-as";
 import type { RegionConfig } from "@/lib/region";
+import { isNewAccount } from "@/lib/region/new-account";
 import { api } from "../../../convex/_generated/api";
 import { searchPlaces } from "./geo-search";
 import { CreatorHomeView } from "./creator-home-view";
@@ -124,6 +126,11 @@ export function CreatorHomeContainer({
   // A member's place goes on the map with their agreement, before launch too (FR-033); a demo
   // account's place stays a draft.
   const onMap = person?.isMock === false;
+  // A query may not read the clock, so the form works this out to word its promise. The server
+  // decides for itself; a tab left open past the seventh day only errs towards saying "waits".
+  const [openedAt] = useState(() => Date.now());
+  const waits = onMap && isNewAccount(person, region, openedAt);
+  const shownAs = useShownAs(person);
   async function submit() {
     const errors = validatePlaceDraft(draft, region);
     setErrors(errors);
@@ -164,6 +171,8 @@ export function CreatorHomeContainer({
         region={region}
         role={person.role}
         onMap={onMap}
+        waits={waits}
+        shownAs={shownAs}
         draft={draft}
         onChange={(next) => {
           setDraft(next);

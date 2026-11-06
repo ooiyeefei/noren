@@ -3,6 +3,7 @@ import { renderToStaticMarkup as render } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddStory, type AddStoryActions } from "@/components/place/add-story";
 import { READ_DELAY_MS } from "@/components/place/link-read";
+import { ShownAs, type ShownAsActions } from "@/components/place/shown-as";
 import {
   describeStoryLink,
   failureName,
@@ -430,6 +431,198 @@ describe("sharing a story", () => {
     await vi.waitFor(() => expect(form.html()).toContain(shellMessages.en.rate_limited));
     expect(form.html()).toContain(">A story</textarea>");
     expect(form.html()).not.toContain(m.added);
+  });
+});
+
+describe("the name before the first share (FR-131)", () => {
+  const m = addStoryMessages.en;
+  const shownAs = (fields: Partial<ShownAsActions> = {}): ShownAsActions => ({
+    displayName: "Fictional Walker",
+    confirm: vi.fn(async () => null),
+    save: vi.fn(async () => null),
+    ...fields,
+  });
+  const member = (fields: Partial<AddStoryActions> = {}): AddStoryActions => ({
+    signedIn: true,
+    add: vi.fn(async () => null),
+    write: vi.fn(async () => null),
+    ...fields,
+  });
+  const control = (fields: Partial<ShownAsActions> = {}, locale: "en" | "ja" = "en") =>
+    harness(() => ShownAs({ locale, hintId: "name-hint", actions: shownAs(fields) }));
+
+  it.each(["write", "link"] as const)(
+    "the %s form shows the name and a way to change it, and holds Share until it is settled",
+    (mode) => {
+      const form = mount(member({ shownAs: shownAs() }));
+      expect(form.html()).not.toContain(m.useThisName);
+      form.click(m[mode]);
+      const html = form.html();
+      expect(html).toContain(format(m.shownAs, { name: "Fictional Walker" }));
+      expect(html).toContain(`>${m.useThisName}</button>`);
+      expect(html).toContain(`>${m.changeName}</button>`);
+      expect(html).toMatch(
+        /<button type="submit" disabled="" aria-describedby="story-public story-name"[^>]*>Share</,
+      );
+      expect(html).toContain('id="story-name"');
+      // Written in the form, so it is seen before the Share button.
+      expect(html.indexOf(m.useThisName)).toBeLessThan(html.indexOf(">Share<"));
+    },
+  );
+
+  it("shows nothing and holds nothing once the name is confirmed", () => {
+    const form = mount(member());
+    form.click(m.write);
+    const html = form.html();
+    expect(html).not.toContain(m.useThisName);
+    expect(html).not.toContain("data-shown-as");
+    expect(html).toMatch(/<button type="submit" aria-describedby="story-public"[^>]*>Share</);
+  });
+
+  it("a visitor who is signed out sees no name", () => {
+    const form = mount(member({ signedIn: false, shownAs: shownAs() }));
+    expect(form.html()).not.toContain("data-shown-as");
+  });
+
+  it("sends nothing while the name waits, then shares the same story once it is settled", async () => {
+    const write = vi.fn(async () => null);
+    let actions = member({ write, shownAs: shownAs() });
+    const form = harness(() => AddStory({ locale: "en", region, actions }));
+    form.click(m.write);
+    form.type("textarea", 0, "A story");
+    form.submit();
+    await Promise.resolve();
+    expect(write).not.toHaveBeenCalled();
+    actions = { ...actions, shownAs: undefined };
+    expect(form.html()).toContain(">A story</textarea>");
+    form.submit();
+    await vi.waitFor(() => expect(form.html()).toContain(m.added));
+    expect(write).toHaveBeenCalledWith({ body: "A story", lang: "en" });
+  });
+
+  it("explains the server's refusal by its code, keeping the story", async () => {
+    const write = vi.fn(async () => {
+      throw Object.assign(new Error("[CONVEX] redacted"), {
+        data: { code: "name_not_confirmed", message: "confirm your name" },
+      });
+    });
+    const form = mount(member({ write }));
+    form.click(m.write);
+    form.type("textarea", 0, "A story");
+    form.submit();
+    await vi.waitFor(() => expect(form.html()).toContain(shellMessages.en.name_not_confirmed));
+    expect(form.html()).toContain(">A story</textarea>");
+  });
+
+  it("Use this name confirms it, once however often it is pressed", async () => {
+    let finish: (value: null) => void = () => {};
+    const confirm = vi.fn(() => new Promise<null>((resolve) => (finish = resolve)));
+    const form = control({ confirm });
+    form.click(m.useThisName);
+    expect(form.html()).toContain(m.savingName);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    finish(null);
+    await vi.waitFor(() => expect(form.html()).toContain(m.useThisName));
+  });
+
+  it("Change opens the name to edit, and saving sends it trimmed", async () => {
+    const save = vi.fn(async () => null);
+    const form = control({ save });
+    form.click(m.changeName);
+    expect(form.inputs()).toEqual(["Fictional Walker"]);
+    expect(form.html()).toContain(m.yourName);
+    expect(form.html()).toContain('maxLength="80"');
+    form.type("input", 0, "  Lantern fan  ");
+    form.click(m.saveName);
+    await vi.waitFor(() => expect(save).toHaveBeenCalledWith("Lantern fan"));
+  });
+
+  it.each(["", "   ", "a".repeat(81), "walker@example.invalid"])(
+    "will not send the name %j, and says why",
+    (bad) => {
+      const save = vi.fn(async () => null);
+      const form = control({ save });
+      form.click(m.changeName);
+      form.type("input", 0, bad);
+      form.click(m.saveName);
+      expect(form.html()).toContain(m.nameProblem);
+      expect(form.html()).toContain('aria-invalid="true"');
+      expect(save).not.toHaveBeenCalled();
+    },
+  );
+
+  it("Cancel goes back to the name as it was", () => {
+    const form = control();
+    form.click(m.changeName);
+    form.type("input", 0, "Half typed");
+    form.click(m.cancel);
+    expect(form.html()).toContain(format(m.shownAs, { name: "Fictional Walker" }));
+    expect(form.html()).not.toContain("<input");
+    form.click(m.changeName);
+    expect(form.inputs()).toEqual(["Fictional Walker"]);
+  });
+
+  it("a provider's name that breaks the rule goes to the editor rather than to the server", () => {
+    const confirm = vi.fn(async () => null);
+    const form = control({ confirm, displayName: "walker@example.invalid" });
+    form.click(m.useThisName);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(form.html()).toContain(m.nameProblem);
+    expect(form.html()).toContain("<input");
+  });
+
+  it("shows a refusal from the server, and lets the member try again", async () => {
+    const confirm = vi.fn(async () => {
+      throw Object.assign(new Error("[CONVEX] redacted"), {
+        data: { code: "invalid_input", message: "a display name is 1 to 80 characters" },
+      });
+    });
+    const form = control({ confirm });
+    form.click(m.useThisName);
+    await vi.waitFor(() => expect(form.html()).toContain(shellMessages.en.invalid_input));
+    expect(form.html()).toContain(`>${m.useThisName}</button>`);
+  });
+
+  it("Enter saves the name and never submits the story form, and ending a Japanese conversion saves nothing", async () => {
+    const save = vi.fn(async () => null);
+    const state = { values: [] as unknown[], cursor: 0 };
+    const view = () => {
+      state.cursor = 0;
+      hooks.current = state;
+      try {
+        return ShownAs({ locale: "ja", hintId: "name-hint", actions: shownAs({ save }) });
+      } finally {
+        hooks.current = undefined;
+      }
+    };
+    const find = (type: string) => elements(view()).filter((item) => item.type === type);
+    (
+      find("button").find((item) => item.props.children === addStoryMessages.ja.changeName)!.props
+        .onClick as () => void
+    )();
+    const press = (isComposing: boolean) => {
+      const preventDefault = vi.fn();
+      (find("input")[0]!.props.onKeyDown as (event: unknown) => void)({
+        key: "Enter",
+        preventDefault,
+        nativeEvent: { isComposing },
+      });
+      return preventDefault;
+    };
+    expect(press(true)).toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    expect(press(false)).toHaveBeenCalled();
+    expect(save).toHaveBeenCalledWith("Fictional Walker");
+  });
+
+  it("has every string in Japanese", () => {
+    const ja = addStoryMessages.ja;
+    const html = control({}, "ja").html();
+    for (const text of [format(ja.shownAs, { name: "Fictional Walker" }), ja.shownAsHint])
+      expect(html).toContain(text);
+    expect(html).toContain(`>${ja.useThisName}</button>`);
+    expect(html).toContain(`>${ja.changeName}</button>`);
+    expect(shellMessages.ja.name_not_confirmed).toBeTruthy();
   });
 });
 

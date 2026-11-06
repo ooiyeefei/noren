@@ -9,6 +9,7 @@ import {
   type StoryRegion,
   type WrittenStoryArgs,
 } from "@/components/place/add-story-form";
+import { ShownAs, type ShownAsActions } from "@/components/place/shown-as";
 import type { PublicRegionProps } from "@/components/public/mapping";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
@@ -22,6 +23,8 @@ export type CheckInResultActions = {
   writeLine(args: WrittenStoryArgs): Promise<unknown>;
   /** A normal "Still here". A check-in alone confirms nothing (FR-119). */
   stillHere(): Promise<unknown>;
+  /** Set until the member has seen the name their line goes out under (FR-131). */
+  shownAs?: ShownAsActions;
 };
 
 const SECONDARY =
@@ -32,11 +35,13 @@ function LineForm({
   region,
   displayName,
   write,
+  shownAs,
 }: {
   locale: Locale;
   region: StoryRegion;
   displayName?: string;
   write: CheckInResultActions["writeLine"];
+  shownAs?: ShownAsActions;
 }) {
   const m = messagesFor(collectionMessages, locale);
   const id = useId();
@@ -49,7 +54,7 @@ function LineForm({
   async function share() {
     const prepared = toWrittenArgs({ url: "", note: "", title: "", author: "", body }, region);
     setProblem(!prepared.ok);
-    if (!prepared.ok || busy.current) return;
+    if (!prepared.ok || busy.current || shownAs) return;
     busy.current = true;
     setPending(true);
     setError(null);
@@ -84,6 +89,7 @@ function LineForm({
         className="block w-full rounded-[10px] border border-input p-3 text-[16px]"
         onChange={(event) => setBody(event.target.value)}
       />
+      {shownAs && <ShownAs locale={locale} hintId={`${id}-name`} actions={shownAs} />}
       {/* Sharing is the agreement to show it; saying so beside the button is the consent. */}
       <p id={`${id}-public`} className="text-[13px] text-muted-foreground">
         {displayName
@@ -98,8 +104,8 @@ function LineForm({
       {error !== null && <ErrorMessage error={error} locale={locale} />}
       <button
         type="button"
-        disabled={pending}
-        aria-describedby={`${id}-public`}
+        disabled={pending || !!shownAs}
+        aria-describedby={shownAs ? `${id}-public ${id}-name` : `${id}-public`}
         className={SECONDARY}
         onClick={() => void share()}
       >
@@ -231,6 +237,7 @@ export function CheckInResult({
         region={region}
         displayName={displayName}
         write={actions.writeLine}
+        shownAs={actions.shownAs}
       />
       <StillHere locale={locale} press={actions.stillHere} />
       {outcome.finished ? (

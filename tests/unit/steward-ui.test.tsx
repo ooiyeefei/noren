@@ -1,6 +1,8 @@
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { StewardHomeView, type StewardHomeProps } from "@/components/steward/steward-home-view";
+import { WaitingPlaces } from "@/components/steward/waiting-places";
 import {
   PlaceAdminView,
   ComposeResultView,
@@ -148,6 +150,71 @@ function openText(locale: Locale): OpenTextProps {
 function encoded(text: string) {
   return renderToStaticMarkup(<span>{text}</span>).slice(6, -7);
 }
+describe("places waiting for a steward (FR-129)", () => {
+  const row = {
+    id: "waiting-1",
+    slug: "fictional-tea-house",
+    name: "Fictional Tea House",
+    category: "Cafe",
+    addedBy: "Fictional Walker",
+    sharedAt: Date.UTC(2026, 10, 5),
+  };
+  it.each(["ja", "en"] as const)("%s lists each with who added it and both choices", (locale) => {
+    const m = stewardMessages[locale];
+    const html = renderToStaticMarkup(
+      <StewardHomeView
+        {...home(locale)}
+        waiting={[row]}
+        onPublishWaiting={noop}
+        onDeclineWaiting={noop}
+      />,
+    );
+    expect(html).toContain(encoded(m.waitingTitle));
+    expect(html).toContain(encoded(m.waitingIntro));
+    expect(html).toContain(`href="/${locale}/places/fictional-tea-house"`);
+    expect(html).toContain("Fictional Tea House");
+    expect(html).toContain("Fictional Walker");
+    expect(html).toContain("Cafe");
+    expect(html).toContain(`>${encoded(m.waitingPublish)}</button>`);
+    expect(html).toContain(`>${encoded(m.waitingDecline)}</button>`);
+    // It comes first: this is the work the page is asking for.
+    expect(html.indexOf(encoded(m.waitingTitle))).toBeLessThan(html.indexOf(encoded(m.places)));
+  });
+  it("says when nothing waits, leaves the section out while loading, and holds buttons while busy", () => {
+    const m = stewardMessages.en;
+    const view = (fields: Partial<StewardHomeProps>) =>
+      renderToStaticMarkup(
+        <StewardHomeView
+          {...home("en")}
+          onPublishWaiting={noop}
+          onDeclineWaiting={noop}
+          {...fields}
+        />,
+      );
+    expect(view({ waiting: [] })).toContain(encoded(m.waitingEmpty));
+    expect(view({ waiting: [] })).not.toContain(encoded(m.waitingIntro));
+    expect(view({})).not.toContain("data-waiting-places");
+    expect(view({ waiting: [row], pending: "waiting:waiting-1" })).toMatch(
+      new RegExp(`<button[^>]*disabled=""[^>]*>${encoded(m.waitingPublish)}</button>`),
+    );
+  });
+  it("each button acts on its own place", () => {
+    const onPublish = vi.fn();
+    const onDecline = vi.fn();
+    const tree = WaitingPlaces({ locale: "en", rows: [row], onPublish, onDecline });
+    const find = (node: ReactNode): ReactElement<Record<string, unknown>>[] =>
+      isValidElement<Record<string, unknown>>(node)
+        ? [node, ...Children.toArray(node.props.children as ReactNode).flatMap(find)]
+        : [];
+    const press = (label: string) =>
+      (find(tree).find((item) => item.props.children === label)!.props.onClick as () => void)();
+    press(stewardMessages.en.waitingPublish);
+    expect(onPublish).toHaveBeenCalledWith("waiting-1");
+    expect(onDecline).not.toHaveBeenCalled();
+    press(stewardMessages.en.waitingDecline);
+    expect(onDecline).toHaveBeenCalledWith("waiting-1");
+  });
+});
 describe("steward views", () => {
   it.each(["ja", "en"] as const)(
     "%s publishes a real place without an owner checkbox and offers back to draft",
