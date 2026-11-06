@@ -62,10 +62,14 @@ Read every screen of `/[lang]/for-local-teams` in both languages (SC-106). Each 
 | FR-129, SC-108 | `convex/places.test.ts` | A new member's place stays draft, then a steward can publish it |
 | FR-130, SC-107 | `convex/people.test.ts` | Every row in the deletion table ends as described. Other roles are refused |
 | FR-131 | `convex/people.test.ts`, `tests/unit/add-story.test.tsx` | A share is refused until the name is confirmed, and the form shows the name first |
+| FR-126 documents | `tests/unit/legal-documents.test.tsx` | Both documents have the same sections in both languages and take their facts from the region file. Every service the code uses is named with its country, and every row of the deletion table is stated. `/terms` and `/privacy` answer 404 while `documentsVersion` is null, and the footer has no links to them |
+| FR-125, FR-126 sign-up | `tests/unit/sign-up.test.tsx` | `/sign-up` answers 404 while `accountsOpen` is false. Once open, the provider and the sign-in form point to it, and the tick states the minimum age in both languages |
+| FR-125 prompts | `tests/unit/check-in-card.test.tsx`, `tests/unit/welcome-ui.test.tsx` | Signed out, the card leads to sign-up and back to the same place when open, and to sign-in when closed. The welcome page's note follows `accountsOpen` |
+| Routing | `tests/unit/proxy.test.ts`, `tests/e2e/public-site.spec.ts` | Signed-out visitors reach all three pages without the welcome redirect, an address with no language gets the visitor's language, and each page's status follows the region file |
 
 ### Owner review
 
-1. Read `/terms` and `/privacy` in both languages, with a lawyer's check. The services named in the notice must match what the code uses on that day.
+1. Read the terms and the privacy notice in both languages, with a lawyer's check. The services named in the notice must match what the code uses on that day. Both pages answer 404 until step 3, so read them in `src/lib/i18n/messages/legal-documents.ts`, or on a local run with `documentsVersion` set in an edit you don't commit. Keep or drop the notice's "Photos you add" section at this point, because photos ship switched off.
 2. Have a person review all new Japanese copy.
 3. Set `documentsVersion`.
 
@@ -75,8 +79,8 @@ Read every screen of `/[lang]/for-local-teams` in both languages (SC-106). Each 
 2. Legal: turn on "Require express consent to legal documents", with `/terms` and `/privacy`.
 3. Protect or restrictions: block disposable addresses and email subaddresses, and keep the suspicious sign-up challenge on.
 4. Keep "Allow users to delete their accounts" off.
-5. Choose which sign-up methods to offer. Email code and Google are the suggestion for now.
-6. Set the access setting to Public.
+5. Choose which sign-up methods to offer. Email code and Google are the suggestion for now. The privacy notice names Google, so drop that entry if Google isn't offered.
+6. On the Access mode page, select Open and save. Clerk's API calls this value `public`, and T067 in tasks.md and R16 in research.md call it Public. The other modes are Invite-only (`restricted`), which is where Noren is today, and Waitlist (`waitlist`), which Noren doesn't use.
 
 Then deploy with `accountsOpen: true`.
 
@@ -84,11 +88,11 @@ Then deploy with `accountsOpen: true`.
 
 Use a fictional test name and a test address.
 
-1. On a phone, while signed out, press "I'm here" at a Shinchi place. Sign up by email. The tick must state 16 or over, and the person must return to the same place.
-2. Do the same through Google. The tick must appear before the account finishes, and the story form must show the Google name for confirming before any share.
+1. On a phone, while signed out, open a Shinchi place and press "Make a free account to keep your panels" on its card. Sign up by email. The tick must state 16 or over in both languages, its two links must open the terms and the privacy notice in the visitor's language, and the person must return to the same place.
+2. Do the same through Google, starting once from the sign-up form and once from the sign-in form. The tick must appear before the account finishes, and the story form must show the Google name for confirming before any share.
 3. Hit one daily limit and add one place. The place must stay off the public map, and show in the steward's waiting section.
 4. Delete the test account from `/account` and check SC-107. Signing in again must not bring anything back.
 
 ## Rollback
 
-Set Clerk's access setting back to Restricted and deploy `accountsOpen: false`. Existing accounts keep working, and no data changes.
+On Clerk's Access mode page, select Invite-only (API value `restricted`) and save, and deploy `accountsOpen: false`. Existing accounts keep working, and no data changes.
