@@ -1098,6 +1098,28 @@ describe("people.deleteMine", () => {
       expect(await stored(b, member)).toMatchObject({ displayName: NAME });
     });
 
+    it("leaves a plain user who holds an interview or a place, as deleteMine does", async () => {
+      const { b, member, steward, placeId } = await world();
+      const person = await stored(b, member);
+      const sweep = async () => {
+        await b.t.mutation(internal.people.sweepAfterDeletion, {
+          tokenIdentifier: person!.tokenIdentifier,
+        });
+        await finish(b);
+      };
+
+      await addInterview(b, { placeId, interviewerId: member });
+      await sweep();
+      expect(await stored(b, member)).toMatchObject({ displayName: NAME });
+
+      const interviews = await b.run((ctx) => ctx.db.query("interview").take(5));
+      for (const { _id } of interviews) await b.run((ctx) => ctx.db.delete("interview", _id));
+      await addOwner(b, placeId, member, steward);
+      await b.run((ctx) => ctx.db.patch("person", member, { role: "user" }));
+      await sweep();
+      expect(await stored(b, member)).toMatchObject({ displayName: NAME });
+    });
+
     it("does nothing when no row came back", async () => {
       const { b, leaving, member } = await world();
       await leaving.mutation(api.people.deleteMine, {});
