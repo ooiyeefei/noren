@@ -238,6 +238,7 @@ export function PlaceView({
                   scriptOrigins={region.scriptOrigins}
                   frameOrigins={region.frameOrigins}
                   actions={story}
+                  photoBaseUrl={region.photos?.baseUrl}
                 />
               </>
             )}

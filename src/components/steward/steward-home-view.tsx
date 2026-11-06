@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { DemoBadge } from "@/components/badges/demo-badge";
 import { PageContainer } from "@/components/layout/page-container";
@@ -105,9 +106,12 @@ export type StewardHomeProps = ActionState & {
   waiting?: readonly WaitingRow[];
   onPublishWaiting?: (id: string) => void;
   onDeclineWaiting?: (id: string) => void;
+  /** New members' photos, while photos are on. */
+  waitingPhotos?: ReactNode;
 };
 export function StewardHomeView(props: StewardHomeProps) {
-  const { locale, region, rows, drafts, onDraft, onKind, onVisibility, pending } = props;
+  const { locale, region, rows, drafts, onDraft, onKind, onVisibility, pending, waitingPhotos } =
+    props;
   const m = messagesFor(stewardMessages, locale);
   return (
     <PageContainer locale={locale} title={m.home}>
@@ -129,6 +133,7 @@ export function StewardHomeView(props: StewardHomeProps) {
             onDecline={props.onDeclineWaiting}
           />
         )}
+        {waitingPhotos}
         <section className="space-y-4">
           <h2 className="min-w-0 text-[22px] font-bold break-words">{m.places}</h2>
           <div className="max-w-prose space-y-2 rounded-[10px] bg-kamenozoki p-4">

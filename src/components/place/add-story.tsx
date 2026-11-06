@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
+import { NO_PHOTOS, type PhotoDraft } from "@/lib/photos/upload";
 import { cn } from "@/lib/utils";
 import {
   AUTHOR_LIMIT,
@@ -20,6 +21,7 @@ import {
   type WrittenStoryArgs,
 } from "./add-story-form";
 import { LinkPreview, useLinkRead, type LinkReadActions } from "./link-read";
+import { PhotoPicker, type PhotoPickerActions } from "./photo-picker";
 import { ShownAs, type ShownAsActions } from "./shown-as";
 
 /** What the page can do with a story; the container wires these to Convex. */
@@ -32,6 +34,8 @@ export type AddStoryActions = LinkReadActions & {
   write(args: WrittenStoryArgs): Promise<unknown>;
   /** Set until the member has seen the name their story goes out under (FR-131). */
   shownAs?: ShownAsActions;
+  /** Set only when this member can add photos at this place. */
+  photos?: PhotoPickerActions;
 };
 
 type Mode = "write" | "link";
@@ -62,6 +66,7 @@ export function AddStory({
   const [pending, setPending] = useState(false);
   const [added, setAdded] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [photos, setPhotos] = useState<PhotoDraft>(NO_PHOTOS);
   const busy = useRef(false);
   const reader = useLinkRead({ locale, region, actions, draft, setDraft });
   if (actions?.signedIn === undefined) return null;
@@ -82,7 +87,10 @@ export function AddStory({
   function prepare(current: Mode, send: AddStoryActions) {
     if (current === "write") {
       const result = toWrittenArgs(draft, region);
-      return result.ok ? { ok: true as const, run: () => send.write(result.args) } : result;
+      if (!result.ok) return result;
+      const { photoIds } = photos;
+      const args = photoIds.length ? { ...result.args, photoIds } : result.args;
+      return { ok: true as const, run: () => send.write(args) };
     }
     const result = toStoryArgs(draft, region);
     return result.ok ? { ok: true as const, run: () => send.add(result.args) } : result;
@@ -90,7 +98,8 @@ export function AddStory({
   async function submit(current: Mode, send: AddStoryActions) {
     const prepared = prepare(current, send);
     setProblem(prepared.ok ? undefined : prepared.problem);
-    if (!prepared.ok || busy.current || send.shownAs) return;
+    if (!prepared.ok || busy.current || send.shownAs || (current === "write" && photos.busy))
+      return;
     busy.current = true;
     setPending(true);
     setError(null);
@@ -278,6 +287,9 @@ export function AddStory({
                 </label>
               </>
             )}
+            {mode === "write" && actions.photos && (
+              <PhotoPicker locale={locale} actions={actions.photos} onChange={setPhotos} />
+            )}
             {actions.shownAs && (
               <ShownAs locale={locale} hintId={`${id}-name`} actions={actions.shownAs} />
             )}
@@ -288,7 +300,7 @@ export function AddStory({
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={!!actions.shownAs}
+                disabled={!!actions.shownAs || (mode === "write" && photos.busy)}
                 aria-describedby={actions.shownAs ? `${id}-public ${id}-name` : `${id}-public`}
                 className={cn(BUTTON, "bg-kon text-white")}
               >

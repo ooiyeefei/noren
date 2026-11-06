@@ -1,5 +1,6 @@
 import { frameHostsFor, scriptHostsFor } from "../adapters";
 import type { SourceAdapterId } from "../domain/constants";
+import { activePhotoSettings, photoUploadOrigin } from "../photos/settings";
 import type { RegionConfig } from "../region/schema";
 
 export const CSP_DIRECTIVES = [
@@ -26,6 +27,8 @@ export type CspInput = {
   mapStyleUrl: string;
   /** The region's aerial photo tile template, if it has one. */
   aerialTilesUrl?: string;
+  /** Where story photos are served from and posted to, only while photos are on. */
+  photos?: { servedFrom: string; uploadedTo: string };
   adapterIds: readonly SourceAdapterId[];
   extra?: Partial<Record<CspDirective, readonly string[]>>;
 };
@@ -66,6 +69,12 @@ export function cspDirectives(input: CspInput): Record<CspDirective, string[]> {
     input.aerialTilesUrl === undefined
       ? []
       : [httpsUrl(input.aerialTilesUrl, "aerialTilesUrl").origin];
+  const photosServed = input.photos
+    ? [httpsUrl(input.photos.servedFrom, "photos.servedFrom").origin]
+    : [];
+  const photosUploaded = input.photos
+    ? [httpsUrl(input.photos.uploadedTo, "photos.uploadedTo").origin]
+    : [];
   let scripts: string[];
   let frames: string[];
   try {
@@ -87,7 +96,15 @@ export function cspDirectives(input: CspInput): Record<CspDirective, string[]> {
       ...scripts,
     ],
     "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", "blob:", "https://img.clerk.com", convex, ...aerial],
+    "img-src": [
+      "'self'",
+      "data:",
+      "blob:",
+      "https://img.clerk.com",
+      convex,
+      ...aerial,
+      ...photosServed,
+    ],
     "font-src": ["'self'"],
     "connect-src": [
       "'self'",
@@ -98,6 +115,7 @@ export function cspDirectives(input: CspInput): Record<CspDirective, string[]> {
       convex.replace(/^https:/, "wss:"),
       map,
       ...aerial,
+      ...photosUploaded,
     ],
     "media-src": ["'self'", "blob:", convex],
     "frame-src": ["https://challenges.cloudflare.com", ...frames, ...scripts],
@@ -157,7 +175,11 @@ export function clerkFrontendApiOrigin(publishableKey: string | undefined): stri
 
 export function cspHeaderFromEnv(
   env: Readonly<Record<string, string | undefined>>,
-  options: { enforce: boolean; region: Pick<RegionConfig, "geo" | "enabledSourceAdapters"> },
+  options: {
+    enforce: boolean;
+    region: Pick<RegionConfig, "geo" | "enabledSourceAdapters"> &
+      Partial<Pick<RegionConfig, "photos">>;
+  },
 ): { key: "Content-Security-Policy" | "Content-Security-Policy-Report-Only"; value: string } {
   const clerk = clerkFrontendApiOrigin(env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
   if (!clerk) throw new CspConfigError("Invalid NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
@@ -165,6 +187,7 @@ export function cspHeaderFromEnv(
   if (!["production", "development", "test"].includes(env.NODE_ENV ?? "")) {
     throw new CspConfigError("Invalid NODE_ENV");
   }
+  const photos = activePhotoSettings(options.region, env);
   return {
     key: options.enforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only",
     value: buildCsp(
@@ -174,6 +197,14 @@ export function cspHeaderFromEnv(
         convexUrl: convex,
         mapStyleUrl: options.region.geo.mapStyle.url,
         aerialTilesUrl: options.region.geo.aerialPhoto?.tiles,
+        ...(photos
+          ? {
+              photos: {
+                servedFrom: photos.publicBaseUrl,
+                uploadedTo: photoUploadOrigin(photos),
+              },
+            }
+          : {}),
         adapterIds: options.region.enabledSourceAdapters,
       },
       options,

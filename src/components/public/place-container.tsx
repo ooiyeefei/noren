@@ -6,9 +6,11 @@ import { api } from "../../../convex/_generated/api";
 import { PageContainer } from "@/components/layout/page-container";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { AddStoryActions } from "@/components/place/add-story";
+import type { WrittenStoryArgs } from "@/components/place/add-story-form";
 import type { StoryFeedActions } from "@/components/place/story-feed";
 import type { PlaceCheckActions } from "@/components/place/place-check";
 import type { Locale } from "@/lib/i18n";
+import { uploadStoryPhoto } from "@/lib/photos/upload";
 import { PublicQueryBoundary } from "./home-container";
 import { PublicLoading } from "./home-view";
 import { readLocation } from "@/lib/collection/location";
@@ -16,6 +18,13 @@ import { PlaceView, pressedAfter, type PlaceCollection, type PressedFrom } from 
 import { useShownAs } from "@/components/place/use-shown-as";
 import { useToday } from "./use-today";
 import type { PublicRegionProps } from "./mapping";
+
+/** The form's photo ids came from Convex a moment ago, and stories.add checks each one again. */
+const writtenStory = ({ photoIds, ...args }: WrittenStoryArgs, placeId: Id<"place">) => ({
+  ...args,
+  placeId,
+  ...(photoIds ? { photoIds: photoIds as Id<"storyPhoto">[] } : {}),
+});
 
 type Props = {
   params: Promise<{ lang: string; slug: string }>;
@@ -54,6 +63,11 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
   );
   const person = useQuery(api.people.current, isAuthenticated ? {} : "skip");
   const shownAs = useShownAs(person);
+  const photoLimits = region.photos;
+  const canAddPhotos = useQuery(
+    api.storyPhotos.forPlace,
+    photoLimits && place && isAuthenticated ? { placeId: place._id } : "skip",
+  );
   const [pressedFrom, setPressedFrom] = useState<PressedFrom>(null);
   // Said before the work is done, so the stamp arrives already pressing rather than flashing first.
   const pressing = async <T,>(from: NonNullable<PressedFrom>, work: () => Promise<T>) => {
@@ -72,6 +86,7 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
   const removeSource = useMutation(api.sources.remove);
   const writeStory = useMutation(api.stories.add);
   const removeStory = useMutation(api.stories.remove);
+  const removePhoto = useMutation(api.storyPhotos.remove);
   const previewLink = useAction(api.linkRead.previewLink);
   const draftNote = useAction(api.linkRead.draftNote);
   if (place === undefined)
@@ -91,8 +106,19 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
     ? {
         signedIn: isLoading ? undefined : isAuthenticated,
         add: (args) => pressing("story", () => addSource({ ...args, placeId: place._id })),
-        write: (args) => pressing("story", () => writeStory({ ...args, placeId: place._id })),
+        write: (args) => pressing("story", () => writeStory(writtenStory(args, place._id))),
         shownAs,
+        photos:
+          photoLimits && canAddPhotos?.allowed
+            ? {
+                maxPerStory: canAddPhotos.maxPerStory,
+                waitsUntil: canAddPhotos.waitsUntil,
+                upload: (file) =>
+                  uploadStoryPhoto(file, { placeId: place._id, limits: photoLimits }),
+                remove: (photoId) => removePhoto({ photoId: photoId as Id<"storyPhoto"> }),
+              }
+            : undefined,
+        removePhoto: (photoId) => removePhoto({ photoId: photoId as Id<"storyPhoto"> }),
         preview: (url) => previewLink({ placeId: place._id, url }),
         draftNote: (args) => draftNote({ ...args, placeId: place._id, mine: true }),
         remove: ({ kind, id }) =>
@@ -111,7 +137,7 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
             signedIn: isLoading ? undefined : isAuthenticated,
             locate: () => readLocation(navigator.geolocation),
             checkIn: () => pressing("checkIn", () => checkIn({ placeId: place._id })),
-            writeLine: (args) => writeStory({ ...args, placeId: place._id }),
+            writeLine: (args) => writeStory(writtenStory(args, place._id)),
             shownAs,
             stillHere: () => confirm({ placeId: place._id }),
           },
