@@ -119,6 +119,9 @@ export function AccountMenuView({
         <DropdownMenuItem asChild>
           <Link href={localePath(locale, "/map")}>{m.exploreMap}</Link>
         </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={localePath(locale, "/account")}>{m.account}</Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           {signOut ?? <button type="button">{m.signOut}</button>}
