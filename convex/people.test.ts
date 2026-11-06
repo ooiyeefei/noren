@@ -522,6 +522,7 @@ describe("setDisplayName", () => {
 const DELETION_DECISIONS = {
   "personCollection.personId": "deleted",
   "story.authorPersonId": "deleted",
+  "storyPhoto.uploaderPersonId": "deleted",
   "placeCheck.personId": "deleted",
   "note.authorPersonId": "deleted",
   "source.addedBy": "hidden",
@@ -1068,11 +1069,17 @@ describe("people.deleteMine", () => {
       await leaving.mutation(api.people.deleteMine, {});
       expect(await remaining()).toBe(STORIES);
 
-      vi.runOnlyPendingTimers();
-      await b.t.finishInProgressScheduledFunctions();
-      const afterOneRun = await remaining();
-      expect(afterOneRun).toBeLessThan(STORIES);
-      expect(afterOneRun).toBeGreaterThan(0);
+      const runOnce = async () => {
+        vi.runOnlyPendingTimers();
+        await b.t.finishInProgressScheduledFunctions();
+      };
+      // The first run finds no photos. The next takes one page of stories.
+      await runOnce();
+      expect(await remaining()).toBe(STORIES);
+      await runOnce();
+      const afterOnePage = await remaining();
+      expect(afterOnePage).toBeLessThan(STORIES);
+      expect(afterOnePage).toBeGreaterThan(0);
 
       await finish(b);
       expect(await remaining()).toBe(0);

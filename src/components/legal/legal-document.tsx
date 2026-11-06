@@ -38,6 +38,7 @@ export function LegalDocumentView({
   values: DocumentValues;
 }) {
   const legal = legalDocuments[locale][kind];
+  const shown = legal.sections.filter(({ id }) => id !== "photos" || values.photos === "on");
   return (
     <PageContainer locale={locale} title={legal.title}>
       <div lang={locale} className="max-w-prose space-y-8 leading-[1.8]">
@@ -47,7 +48,7 @@ export function LegalDocumentView({
           </p>
           <p>{legal.lead}</p>
         </div>
-        {legal.sections.map((section) => (
+        {shown.map((section) => (
           <section key={section.id} aria-labelledby={section.id} className="space-y-3">
             <h2 id={section.id} className="text-[20px] leading-snug font-bold">
               <Filled text={section.heading} values={values} />

@@ -10,7 +10,6 @@ import {
 } from "../tests/convex/fixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { removeAllPhotosOf } from "./lib/storyPhotos";
 import * as region from "./lib/region";
 
 // The fake stands in for S3 itself: no test here can reach AWS, whatever the settings say.
@@ -688,9 +687,11 @@ describe("removal", () => {
   });
 });
 
-describe("removeAllPhotosOf, for account deletion", () => {
-  it("removes every photo of one person in every state, and leaves others' alone", async () => {
-    const { b, placeId, member, other } = await world();
+describe("deleting an account", () => {
+  const finish = (b: Backend) => b.t.finishAllScheduledFunctions(vi.runAllTimers);
+
+  it("removes every photo of theirs in every state, its files too, and leaves others' alone", async () => {
+    const { b, placeId } = await world();
     const attached = await stored(b, "member", placeId);
     await story(b, "member", placeId, [attached]);
     const unattached = await stored(b, "member", placeId);
@@ -704,30 +705,36 @@ describe("removeAllPhotosOf, for account deletion", () => {
       const row = (await photoRow(b, id))!;
       keys.push(row.key, row.incomingKey);
     }
-    const result = await b.run((ctx) => removeAllPhotosOf(ctx, member));
-    expect(result).toEqual({ removed: 3, more: false });
+    await b.as("member").mutation(api.people.deleteMine, {});
+    await finish(b);
+
     for (const id of [attached, unattached, uploading]) expect(await photoRow(b, id)).toBeNull();
     expect(await photoRow(b, theirs)).not.toBeNull();
-    expect(await queuedKeys(b)).toEqual(keys.sort());
-    await b.t.finishAllScheduledFunctions(vi.runAllTimers);
     expect(fake.removed.sort()).toEqual(keys.sort());
-    expect(await b.run((ctx) => removeAllPhotosOf(ctx, other))).toEqual({
-      removed: 1,
-      more: false,
-    });
+    expect(await queuedKeys(b)).toEqual([]);
   });
 
-  it("removes nothing for a person with no photos and queues no work", async () => {
-    const { b, member } = await world();
-    expect(await b.run((ctx) => removeAllPhotosOf(ctx, member))).toEqual({
-      removed: 0,
-      more: false,
-    });
-    await b.t.finishAllScheduledFunctions(vi.runAllTimers);
+  it("keeps a removal waiting while storage is down, so no file is forgotten", async () => {
+    const { b, placeId } = await world();
+    const photo = await stored(b, "member", placeId);
+    const row = (await photoRow(b, photo))!;
+    fake.remove.mockRejectedValue(new Error("fictional outage"));
+
+    await b.as("member").mutation(api.people.deleteMine, {});
+    await finish(b);
+
+    expect(await photoRow(b, photo)).toBeNull();
+    expect(await queuedKeys(b)).toEqual([row.key, row.incomingKey].sort());
+  });
+
+  it("asks storage for nothing when the person has no photos", async () => {
+    const { b } = await world();
+    await b.as("member").mutation(api.people.deleteMine, {});
+    await finish(b);
     expect(fake.remove).not.toHaveBeenCalled();
   });
 
-  it("carries on by itself past one batch", async () => {
+  it("goes on past one transaction's worth of photos", async () => {
     const { b, member, placeId } = await world();
     await b.run(async (ctx) => {
       for (let i = 0; i < 120; i++)
@@ -739,11 +746,8 @@ describe("removeAllPhotosOf, for account deletion", () => {
           key: `photos/${i}.jpg`,
         });
     });
-    expect(await b.run((ctx) => removeAllPhotosOf(ctx, member))).toEqual({
-      removed: 50,
-      more: true,
-    });
-    await b.t.finishAllScheduledFunctions(vi.runAllTimers);
+    await b.as("member").mutation(api.people.deleteMine, {});
+    await finish(b);
     expect(await b.run((ctx) => ctx.db.query("storyPhoto").take(1))).toEqual([]);
     // Overlapping runs may delete a key twice, which S3 ignores. Every key must go at least once.
     expect(new Set(fake.removed).size).toBe(240);

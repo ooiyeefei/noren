@@ -120,7 +120,8 @@ The mutation refuses a place that isn't in a live set, a place the caller can't 
 |---|---|
 | `personCollection` | Deleted: check-ins, panels and badges |
 | `person` | Kept as an empty row: name "Former member", `publicProfileUrl` cleared, identity fields set to `deleted:<id>` |
-| `story` by them | Deleted. No table refers to a story by id |
+| `storyPhoto` they added | Deleted in every state, ahead of stories. Both files are queued for deletion from storage, and the queue holds a random key only |
+| `story` by them | Deleted. Photos are the only rows that name a story, and they went first |
 | `source` added by them | Hidden through the same steps as `sources.remove`, including `eraseFoundPost`, because AI story citations may point at it |
 | `placeCheck` by them | Deleted |
 | `note` by them | Deleted, along with its `noteTranslation` rows |

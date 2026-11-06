@@ -32,7 +32,11 @@ describe("consumeRateLimit", () => {
 
 describe("limitContribution", () => {
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const { days, perDay } = nagasaki.collection.newAccount;
+  // Photos count in lib/storyPhotos.ts instead, against the region's own daily limit.
+  const {
+    days,
+    perDay: { photo, ...perDay },
+  } = nagasaki.collection.newAccount;
   const newAccountLimits = Object.entries(perDay) as [keyof typeof perDay, number][];
   const established = {
     place: 20,
@@ -77,6 +81,7 @@ describe("limitContribution", () => {
       report: 3,
     });
     expect(days).toBe(7);
+    expect(photo).toBeLessThan(nagasaki.photos.perDay);
   });
 
   it.each(newAccountLimits)("a new member is refused at %s number %i", async (kind, limit) => {

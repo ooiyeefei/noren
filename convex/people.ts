@@ -10,6 +10,7 @@ import { currentPerson, findPerson, nameIsConfirmed, requirePerson, requireRole 
 import { appError } from "./lib/errors";
 import { eraseFoundPost } from "./lib/foundPosts";
 import { internalMutation, mutation } from "./lib/gate";
+import { removePhotos } from "./lib/storyPhotos";
 import { literals, roleValidator } from "./lib/validators";
 
 const FALLBACK_NAME = "New member";
@@ -316,7 +317,17 @@ type DeletionStep = (
  * Every entry must be safe to run twice, because an operator reruns them all after a failed run.
  */
 const DELETION_STEPS: readonly DeletionStep[] = [
-  // Deleted. No table refers to a story by id.
+  // Deleted in every state, with both files queued for removal from storage. Ahead of stories,
+  // because a photo names its story.
+  async (ctx, personId, paginationOpts) => {
+    const page = await ctx.db
+      .query("storyPhoto")
+      .withIndex("by_uploaderPersonId", (q) => q.eq("uploaderPersonId", personId))
+      .paginate(paginationOpts);
+    await removePhotos(ctx, page.page);
+    return page;
+  },
+  // Deleted. The entry above removed the only rows that name a story.
   async (ctx, personId, paginationOpts) => {
     const page = await ctx.db
       .query("story")

@@ -25,7 +25,7 @@ Against version 2.3.0.
 
 **Needs an owner decision before `enabled: true`.** The bullet lists what a public demo may show: "a place a member adds, a story a member writes and a public post a member links", then says "No other real person's data is shown." A photo is not on that list, and a photo can show a bystander's face. The form's request to ask first is a mitigation, not a rule that holds. The bullet needs a MINOR amendment that names photos, says what happens to a person shown without asking, and states the takedown path. Nothing is amended here, and shipping switched off breaks nothing.
 
-**The privacy notice must also name Amazon Web Services** (S3 in Tokyo, CloudFront worldwide) before this is on. T057 names services "as the code uses them that day", so this needs telling to whoever finishes those documents.
+**The privacy notice names Amazon Web Services** (S3 in Tokyo, CloudFront worldwide) only while photos are on, because T057 names services as the code uses them that day.
 
 ## Design
 
@@ -40,7 +40,7 @@ src/components/place/photo-shrink.ts  browser: canvas to JPEG
 src/components/place/photo-upload.ts  browser: shrink, permit, S3, finish
 src/app/api/story-photos/*         thin wiring
 convex/tables/storyPhotos.ts       storyPhoto, photoObjectRemoval
-convex/lib/storyPhotos.ts          rules and helpers, including removeAllPhotosOf
+convex/lib/storyPhotos.ts          rules and helpers, including removePhotos
 convex/storyPhotos.ts              public and internal functions
 convex/storyPhotoActions.ts        "use node": deletes objects
 src/components/place/photo-picker.tsx, story-photos.tsx
@@ -72,7 +72,7 @@ The content security policy is built in `next.config.ts`, so these must be in Ve
 
 ## Turning it on
 
-1. Owner decides the constitution question and the privacy notice names AWS.
+1. Owner decides the constitution question. The privacy notice's photos section appears by itself once `enabled` is true, so the same change sets a new `documentsVersion`, and the lawyer reads that section first.
 2. Owner runs `scripts/setup-photo-bucket.sh <aws-profile> <account-id>`.
 3. Owner adds the settings above, then deletes the file holding the secret.
 4. Set `photos.enabled: true`, deploy Convex and the site.

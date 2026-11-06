@@ -6,6 +6,8 @@ import type { RegionConfig } from "@/lib/region/schema";
 export type DocumentValues = Readonly<Record<string, string>> & {
   version: string;
   contact: string;
+  /** The notice states what the code uses that day (FR-126), so photos appear only while on. */
+  photos: "on" | "off";
 };
 
 /** The platforms whose posts load inside a page. A Google Maps link is only ever a link. */
@@ -25,6 +27,7 @@ export function documentValues(region: RegionConfig, locale: Locale): DocumentVa
   return {
     version: documentsVersion,
     contact,
+    photos: region.photos.enabled ? "on" : "off",
     operator: operatorName,
     region: region.name[locale] ?? region.id,
     minimumAge: String(region.minimumAge),
