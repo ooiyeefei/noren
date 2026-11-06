@@ -214,10 +214,13 @@ describe("the documents' text (T057)", () => {
       "`place`, `pin`, `placeName` they made": "places you added",
       "`auditLog`": "no longer identifies you",
       "`rateLimit`": "they expire",
+      "`mentionCandidate.hiddenBy`": "no longer identifies you",
       "Clerk user": "your sign-in at Clerk",
     };
     const deletion = sectionText(section("en", "privacy", "deletion"));
     for (const row of rows) {
+      // Deletion never reaches these: it refuses first, or only a steward's action fills them.
+      if (/^`interview`|^Fields only/.test(row)) continue;
       if (/photo/i.test(row)) {
         expect(sectionText(section("en", "privacy", "photos"))).toContain("deletes your photos");
         continue;
