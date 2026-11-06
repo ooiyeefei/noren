@@ -21,3 +21,41 @@ Shinchi went live on production with the six panels in data-model.md, and the st
 ## Walk test in Shinchi, 7 Nov 2026
 
 The owner walks on an iPhone. Android is still to be tested by someone else. Results go here.
+
+## Shimabara Castle Town set, 6 Nov 2026 JST
+
+Before the owner's first visits as a real user. Scripted browser runs on production as the real steward, with the location simulated at the stop. Nothing was pressed that writes to the account.
+
+| Check | How | Result |
+| --- | --- | --- |
+| Set live with art on all six panels | `collection:setStatus`, steward list | Live, no warnings |
+| Map, place page, Link a post previews, stamp book, set page | Phone and desktop, standing at Inohara | 29 of 29 |
+| Add a place at Bravo World, wider map box | Phone, up to the last screen, then left | 5 of 5, nothing added |
+| Show my location, pressed as soon as the button appears | Desktop, signed in and signed out | Blue dot and the map moves |
+| Search by English and Japanese name | Phone | Found. Bravo returns nothing until it is added |
+| Fill from link | Phone | `maps.app.goo.gl` works. `share.google` is refused, though Link a post accepts it |
+| Signed-out suite against production | Playwright, two workers | 155 passed, 12 skipped, 1 flaky from the test machine's `ERR_NETWORK_CHANGED` |
+| Server logs | Convex | No failures |
+
+**Still unproven on production:** a press that passes. The owner's first I'm here in Shimabara or Shinchi will be the first one.
+
+**Known and harmless:** the `listForMap` warning reads "5275 places, showing 5000" for a steward because it counts 776 hidden drafts before filtering them. The map holds 4,498 public places, with room for about 500 more.
+
+**Known defects:** the two hand-published refs for Inohara and Hibaruyama carry `retrievedAt` one day late (not shown in the UI). Odd OpenStreetMap rows remain in Castle Town, such as 島原市 and Castle/volcano picture.
+
+## Walk test in Shimabara, 6 Nov 2026
+
+The owner walks on an iPhone with a field guide. Results go here.
+
+## The owner's first stories in Shimabara, 6 Nov 2026 JST
+
+At the owner's request, from their own notes, on their account:
+
+- Added Bravo World to the map through `places.create` with the pin from their itinerary link. The add form's last button is still untested on production.
+- Added the English name Shimabara City to the row `osm-node-4757957896`.
+- Published four stories: one on Bravo World, one on Honda Japanese Wax Workshop, two on Shimabara City. None of these places is in a set, so no panel changed.
+- No check-in ran. A passing check-in on production is still waiting for the owner's first "I'm here".
+
+Live check signed out, phone and desktop: each story shows with its place name and author, the Japanese page shows the Bravo World name and story, map search finds Bravo World, no page errors. Signed out, `/en/creator` and `/en/stamps` redirect to sign-in in a browser, so the earlier note about "page not found" was wrong (curl sees a 404).
+
+Update the same day: the owner said they met the teacher, and learned about the dialect, at a welcome party at Bravo World. Both stories moved there in their words, and the copies on Shimabara City were hidden. Bravo World now carries three stories, and Shimabara City carries none.
