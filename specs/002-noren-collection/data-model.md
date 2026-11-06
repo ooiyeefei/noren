@@ -128,8 +128,8 @@ The mutation refuses a place that isn't in a live set, a place the caller can't 
 | `place`, `pin`, `placeName` they made | Kept as facts about a place. The link to them now points at the empty row, so no name shows. The privacy notice says this |
 | `auditLog` | Kept. Entries point at the empty row, and an entry about the person keeps only `role` and `isMock` from its `diff`, so a changed display name doesn't stay in it |
 | `mentionCandidate.hiddenBy` | Kept, pointing at the empty row. A member who added a place can take a found post off it |
-| `rateLimit` | Left to expire in place. Keys hold an id only |
-| `interview`, `consent`, `transcript`, `claim` (`authorId`, `reviewerId`), `placeOwner` (`personId`) | Never reached: `deleteMine` refuses while the person holds an interview or a place, so they ask a steward |
+| `rateLimit` | Kept. Nothing removes these rows, and their keys hold an id only |
+| `interview`, `consent`, `transcript`, `claim` (`authorId`, `reviewerId`), `placeOwner` (`personId`) | Never reached: `deleteMine` refuses while the person holds an interview or a place, so they ask a steward. An operator acts on that through `people.deletePerson`, and these rows then stay and point at the empty row |
 | Fields only a steward's action fills: `person.verifiedBy`, `placeCheck.reviewedBy`, `placeOwner.verifiedBy`, `openTextSnippet.approvedBy`, `source.demoConsentBy`, `translationCheck.decidedBy`, `pageVersion.reviewedBy`, `mentionCandidate.collectedBy`, `placeStoryRun.requestedBy` | Never reached: a steward can't delete themselves this way |
 | Clerk user | Deleted by the route, after the steps above |
 

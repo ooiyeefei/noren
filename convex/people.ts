@@ -397,16 +397,39 @@ const DELETION_STEPS: readonly DeletionStep[] = [
 ];
 
 /**
+ * The person's row and collection change in one transaction, so the moment this commits their token
+ * no longer finds them. The rest continues in `continueDeletion`.
+ */
+async function emptyPerson(ctx: MutationCtx, person: Doc<"person">): Promise<void> {
+  const collection = await ctx.db
+    .query("personCollection")
+    .withIndex("by_personId", (q) => q.eq("personId", person._id))
+    .unique();
+  if (collection !== null) await ctx.db.delete("personCollection", collection._id);
+  // A replace, so any profile field added later goes too unless it is listed here.
+  await ctx.db.replace("person", person._id, {
+    tokenIdentifier: deletedIdentity(person._id),
+    clerkUserId: deletedIdentity(person._id),
+    role: person.role,
+    displayName: DELETED_NAME,
+    isMock: person.isMock,
+  });
+  await ctx.scheduler.runAfter(0, internal.people.continueDeletion, {
+    personId: person._id,
+    step: 0,
+    cursor: null,
+  });
+}
+
+/**
  * Deletes the caller's account from Noren (FR-130). POST /api/account/delete calls this, then
  * deletes the Clerk user, which it can only do in that order because this needs the Clerk token.
  *
- * The person's row and collection change here, in one transaction, so the moment this commits the
- * token no longer finds them. The rest continues in `continueDeletion`. Places, pins and place names
- * they made stay as facts about the place, and rate limit rows expire by themselves; both now lead
- * only to the empty row, so no name shows.
+ * Places, pins and place names they made stay as facts about the place, and rate limit rows stay and
+ * hold only an id; both now lead only to the empty row, so no name shows.
  *
- * It is safe to press again if the Clerk step fails. The token then finds no row, or a new empty one
- * that a page load made through `ensureCurrent`, which this empties in turn.
+ * It is safe to press again if the Clerk step fails. The token then finds no row, or a new one that a
+ * page load made through `ensureCurrent`, which this empties in turn.
  */
 export const deleteMine = mutation({
   args: {},
@@ -416,6 +439,7 @@ export const deleteMine = mutation({
     if (identity === null) throw appError("unauthenticated", "sign in to continue");
     const person = await findPerson(ctx, identity.tokenIdentifier);
     if (person === null) return null;
+    if (person.isMock) throw appError("forbidden", "a demo account stays with the demo");
     if (person.role !== "user") {
       throw appError("forbidden", `a steward deletes ${person.role} accounts`);
     }
@@ -432,23 +456,31 @@ export const deleteMine = mutation({
     if (interview !== null || ownership !== null) {
       throw appError("forbidden", "a steward deletes accounts that hold interviews or ownership");
     }
-    const collection = await ctx.db
-      .query("personCollection")
-      .withIndex("by_personId", (q) => q.eq("personId", person._id))
-      .unique();
-    if (collection !== null) await ctx.db.delete("personCollection", collection._id);
-    // A replace, so any profile field added later goes too unless it is listed here.
-    await ctx.db.replace("person", person._id, {
-      tokenIdentifier: deletedIdentity(person._id),
-      clerkUserId: deletedIdentity(person._id),
-      role: person.role,
-      displayName: DELETED_NAME,
-      isMock: person.isMock,
-    });
-    await ctx.scheduler.runAfter(0, internal.people.continueDeletion, {
-      personId: person._id,
-      step: 0,
-      cursor: null,
+    await emptyPerson(ctx, person);
+    return null;
+  },
+});
+
+/**
+ * An operator deletes someone else's account where the documents promise it: one reported as under
+ * age, or a creator, shop owner or steward who asked (FR-130). Check what they hold first: interviews,
+ * consents and ownership stay, and point at the empty row. Then delete the user in Clerk's dashboard,
+ * because only that ends their sign-in.
+ *
+ *   npx convex run --prod people:deletePerson '{"personId": "..."}'
+ */
+export const deletePerson = internalMutation({
+  args: { personId: v.id("person") },
+  returns: v.null(),
+  handler: async (ctx, { personId }) => {
+    const person = await ctx.db.get("person", personId);
+    if (person === null) throw appError("not_found", "no such person");
+    await emptyPerson(ctx, person);
+    await writeAudit(ctx, {
+      actorKind: "system",
+      action: "person.delete_by_operator",
+      targetType: "person",
+      targetId: personId,
     });
     return null;
   },

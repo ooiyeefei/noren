@@ -213,7 +213,7 @@ describe("the documents' text (T057)", () => {
       "`note` by them": "visitor notes",
       "`place`, `pin`, `placeName` they made": "places you added",
       "`auditLog`": "no longer identifies you",
-      "`rateLimit`": "they expire",
+      "`rateLimit`": "hold only an account ID",
       "`mentionCandidate.hiddenBy`": "no longer identifies you",
       "Clerk user": "your sign-in at Clerk",
     };

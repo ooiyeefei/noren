@@ -131,9 +131,11 @@ export function createPhotoFinishRoute(
       try {
         await on.convex.complete({ photoId, width, height });
       } catch (error) {
-        // The row went while this ran, so nothing will ever delete the file just written. In any
-        // other failure the row still names it, and removing the row queues its deletion.
-        if (convexCode(error) === "not_found") await store.remove(key);
+        // The row or its member went while this ran (a deleted account answers unauthenticated), so
+        // nothing will ever delete the file just written. In any other failure the row still names
+        // it, and removing the row queues its deletion.
+        const code = convexCode(error);
+        if (code === "not_found" || code === "unauthenticated") await store.remove(key);
         throw error;
       }
       return Response.json({ photoId, width, height }, { headers: HEADERS });

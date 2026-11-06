@@ -93,14 +93,23 @@ export const placeTables = {
     hiddenReason: v.optional(v.union(v.literal("not_for_visitors"), v.literal("reported"))),
     /**
      * When a member who had been there added the place to the map and agreed to show it (FR-032).
-     * Such a place may be public before launch, like an open-data listing. A new member's place is
-     * a draft with this set until a steward publishes it (FR-129).
+     * Such a place may be public before launch, like an open-data listing.
      */
     sharedAt: v.optional(v.number()),
+    /**
+     * A new member's place, a draft until a steward decides (FR-129). This is its own field because
+     * a draft with `sharedAt` can also be a place that was hidden, and that must never look one
+     * press from going back on the map.
+     */
+    awaitingSteward: v.optional(v.literal(true)),
   })
     .index("by_regionId_and_slug", ["regionId", "slug"])
     .index("by_regionId_and_visibility", ["regionId", "visibility"])
-    .index("by_regionId_and_visibility_and_sharedAt", ["regionId", "visibility", "sharedAt"])
+    .index("by_regionId_and_awaitingSteward_and_sharedAt", [
+      "regionId",
+      "awaitingSteward",
+      "sharedAt",
+    ])
     .index("by_createdBy", ["createdBy"])
     .index("by_regionId_and_neighbourhood_and_visibility", [
       "regionId",
