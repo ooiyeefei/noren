@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { browserLikeHeaders, visibleText } from "./helpers";
 
@@ -107,6 +108,28 @@ for (const role of ["creator", "owner", "steward"]) {
     const target = new URL(location, response.url());
     expect(new URL(target.searchParams.get("redirect_url")!, response.url()).pathname).toBe(path);
   });
+}
+
+// These follow regions/nagasaki.json, so the same test holds before and after sign-up opens.
+const { legal } = JSON.parse(readFileSync("regions/nagasaki.json", "utf8")) as {
+  legal: { documentsVersion: string | null; accountsOpen: boolean };
+};
+for (const locale of ["ja", "en"] as const) {
+  for (const [page, open] of [
+    ["terms", legal.documentsVersion !== null],
+    ["privacy", legal.documentsVersion !== null],
+    ["sign-up", legal.accountsOpen],
+  ] as const) {
+    test(`/${locale}/${page} answers ${open ? 200 : 404} to a signed-out visitor`, async ({
+      request,
+    }) => {
+      const response = await request.get(`/${locale}/${page}`, {
+        headers: browserLikeHeaders,
+        maxRedirects: 0,
+      });
+      expect(response.status()).toBe(open ? 200 : 404);
+    });
+  }
 }
 
 test("geo search refuses signed-out callers with a JSON message", async ({ request }) => {
