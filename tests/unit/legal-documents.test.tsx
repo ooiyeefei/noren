@@ -279,8 +279,8 @@ describe("the pages (T058)", () => {
         state.locale = locale;
       });
 
-      it("answers 404 while documentsVersion is null, as shipped", async () => {
-        expect(config.legal.documentsVersion).toBeNull();
+      it("answers 404 while documentsVersion is null", async () => {
+        state.region = published((r) => (r.legal.documentsVersion = null));
         await expect(Page()).rejects.toThrow("NEXT_NOT_FOUND");
       });
 
@@ -362,7 +362,7 @@ describe("the pages (T058)", () => {
   });
 
   it("publishes only with a version, an operator and a contact", () => {
-    expect(documentsPublished(config)).toBe(false);
+    expect(documentsPublished(published((r) => (r.legal.documentsVersion = null)))).toBe(false);
     expect(documentsPublished(published())).toBe(true);
     expect(documentsPublished(published((r) => (r.legal.operatorName = null)))).toBe(false);
     expect(documentsPublished(published((r) => (r.takedown.contact = null)))).toBe(false);

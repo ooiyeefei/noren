@@ -120,6 +120,7 @@ describe.each(["en", "ja"] as const)("sign-up in %s (T060)", (locale) => {
   });
 
   it("documents open separately from accounts, because they must be readable first", async () => {
+    state.region = region((r) => (r.legal.documentsVersion = null));
     expect(find(await layout(), "DocumentLinksProvider")).toMatchObject({ published: false });
     state.region = region((r) => (r.legal.documentsVersion = "2030-01-31"));
     expect(find(await layout(), "DocumentLinksProvider")).toMatchObject({ published: true });

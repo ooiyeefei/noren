@@ -1,13 +1,15 @@
 import { defineMessages, type Locale } from "../index";
 
-// The terms and the privacy notice (FR-126). These are DRAFTS for the owner and a lawyer to read, and a
-// person has not reviewed the Japanese (T059). Both pages answer 404 until documentsVersion is set.
+// The terms and the privacy notice (FR-126). The owner approved them on 6 Nov 2026 (T059), with no
+// lawyer's read and no second person's review of the Japanese recorded. Both pages answer 404 while
+// documentsVersion is null.
 //
 // Every {placeholder} is filled from regions/<id>.json by src/components/legal/documents.ts, so the
 // operator, the contact, the minimum age and the takedown times are never typed here.
 //
-// The services below were traced from the code at commit 0a0891b. Check them again before setting
-// documentsVersion, because the notice must match what the code uses on that day (FR-126).
+// The services below were traced from the code at commit 0a0891b and checked again at d8f1df0, when
+// kept drafts were added. Check them again with every change of documentsVersion, because the notice
+// must match what the code uses on that day (FR-126).
 
 export type LegalService = {
   /** The same in every language, so a test can hold the list against the code. */
@@ -290,6 +292,7 @@ export const legalDocuments: Readonly<
           heading: "ブラウザが読み込むもの",
           paragraphs: [
             "Noren は Clerk のログイン用の Cookie を使います。広告や利用状況の分析のための Cookie は使いません。ブラウザは、地図の案内を閉じたことも覚えています。",
+            "書きかけの文章と選んだ写真は、ページが読み込み直されても消えないよう、あなたの端末のブラウザに保存します。共有するか消すと削除され、ログアウトしたときや 1 週間たったときにも削除されます。ログインしていないときは、そのタブを閉じるまでです。この保存は端末の外に出ません。",
             "地図の画像は OpenFreeMap から、ピンを置く地図の航空写真は日本の国土地理院から、ブラウザが直接読み込みます。",
             "次のサービスの投稿は、その投稿の読み込みボタンを押すまで読み込まれません：{platforms}。押すと、そのサービスが Cookie を設定し、あなたの訪問を知ることがあります。",
             "リンクを貼ると、プレビューのために Noren のサーバーがそのページを開きます。相手のサイトに見えるのは Noren のサーバーで、あなたではありません。",
@@ -595,6 +598,7 @@ export const legalDocuments: Readonly<
           heading: "What your browser loads",
           paragraphs: [
             "Noren uses Clerk's sign-in cookies. It uses no cookies for advertising or for measuring visits. Your browser also remembers that you closed the map's guide.",
+            "So that a page that reloads doesn't lose your work, your browser keeps what you were writing and any photos you picked, on your device. They go when you share or clear them, when you sign out, or after a week; when you're not signed in, when you close the tab. None of this leaves your device.",
             "Your browser gets map images directly from OpenFreeMap, and the aerial photos on a map for placing a pin directly from Japan's Geospatial Information Authority.",
             "Posts from these platforms load only when you press a post's load button: {platforms}. The platform may then set cookies and see your visit.",
             "When you paste a link, Noren's server opens that page to show a preview. The site sees Noren's server and does not see you.",
