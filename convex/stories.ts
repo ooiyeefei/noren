@@ -17,6 +17,13 @@ import { withMock } from "./lib/mock";
 import { readMapNames } from "./lib/mapCopies";
 import { limitContribution } from "./lib/rateLimit";
 import { isRegionLocale, regionConfig } from "./lib/region";
+import {
+  attachPhotos,
+  placePhotoRules,
+  removeStoryPhotos,
+  storyPhotoView,
+  storyPhotoViews,
+} from "./lib/storyPhotos";
 import { scriptValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
 
@@ -36,6 +43,7 @@ const storyView = v.object({
   isMock: v.boolean(),
   addedByMe: v.boolean(),
   canRemove: v.boolean(),
+  photos: v.array(storyPhotoView),
 });
 
 /**
@@ -43,9 +51,14 @@ const storyView = v.object({
  * form says the story is shown in public with their name; writing it is the agreement.
  */
 export const add = mutation({
-  args: { placeId: v.id("place"), body: v.string(), lang: v.string() },
+  args: {
+    placeId: v.id("place"),
+    body: v.string(),
+    lang: v.string(),
+    photoIds: v.optional(v.array(v.id("storyPhoto"))),
+  },
   returns: v.id("story"),
-  handler: async (ctx, { placeId, body, lang }) => {
+  handler: async (ctx, { placeId, body, lang, photoIds }) => {
     const person = await requirePerson(ctx);
     requireConfirmedName(person);
     const place = await loadReadablePlace(ctx, person, placeId);
@@ -55,7 +68,7 @@ export const add = mutation({
     if (!isRegionLocale(regionConfig(place.regionId), lang))
       throw appError("invalid_input", "lang must be a region locale");
     await limitContribution(ctx, person, "story", place.regionId);
-    return await ctx.db.insert(
+    const storyId = await ctx.db.insert(
       "story",
       withMock(person, {
         placeId,
@@ -65,6 +78,8 @@ export const add = mutation({
         status: "live" as const,
       }),
     );
+    await attachPhotos(ctx, { person, place, storyId, photoIds: photoIds ?? [] });
+    return storyId;
   },
 });
 
@@ -81,6 +96,7 @@ export const listForPlace = query({
       .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId).eq("status", "live"))
       .order("desc")
       .take(50);
+    const photoRules = await placePhotoRules(ctx, viewer, place);
     const views = [];
     for (const story of stories) {
       const addedByMe = viewer !== null && story.authorPersonId === viewer._id;
@@ -95,6 +111,7 @@ export const listForPlace = query({
         isMock: story.isMock,
         addedByMe,
         canRemove: addedByMe || canEditPlace(viewer, place),
+        photos: await storyPhotoViews(ctx, story._id, addedByMe, photoRules),
       });
     }
     return views;
@@ -237,6 +254,7 @@ export const remove = mutation({
     }
     if (story.status === "hidden") return null;
     await ctx.db.patch("story", storyId, { status: "hidden" });
+    await removeStoryPhotos(ctx, storyId);
     if (person.role === "steward" && story.authorPersonId !== person._id)
       await writeAudit(ctx, {
         actorKind: "person",
