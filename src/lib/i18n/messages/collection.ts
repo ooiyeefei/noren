@@ -51,6 +51,8 @@ export const collectionMessages = defineMessages({
     far: "この場所まで{metres} mあります。{limit} m以内まで来て、もう一度押してください。",
     signInToCheckIn: "のれんを染めるにはログインしてください。",
     inviteOnly: "今は招待された方だけがアカウントを作れます。",
+    makeAccount: "無料のアカウントを作って、のれんを集める",
+    haveAccount: "アカウントをお持ちの方は",
     signIn: "ログイン",
 
     dyedTitle: "{panel}枚目を染めました",
@@ -144,6 +146,8 @@ export const collectionMessages = defineMessages({
     far: "You are {metres} m from this place. Come within {limit} m and press again.",
     signInToCheckIn: "Sign in to dye this panel.",
     inviteOnly: "Accounts are invite-only for now.",
+    makeAccount: "Make a free account to keep your panels",
+    haveAccount: "Already have an account?",
     signIn: "Sign in",
 
     dyedTitle: "Panel {panel} dyed",
