@@ -7,9 +7,11 @@ import { ErrorMessage } from "@/components/layout/error-message";
 import type { StoryFeedEntry } from "@/components/public/mapping";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
+import { StoryPhotos } from "./story-photos";
 
 export type StoryFeedActions = {
   remove(entry: Pick<StoryFeedEntry, "kind" | "id">): Promise<unknown>;
+  removePhoto?(photoId: string): Promise<unknown>;
 };
 
 const LINK = "inline-flex min-h-11 items-center underline";
@@ -21,12 +23,15 @@ export function StoryFeed({
   scriptOrigins,
   frameOrigins,
   actions,
+  photoBaseUrl,
 }: {
   locale: Locale;
   entries: readonly StoryFeedEntry[];
   scriptOrigins: readonly string[];
   frameOrigins: readonly string[];
   actions?: StoryFeedActions;
+  /** Where photos are served from; unset while photos are off. */
+  photoBaseUrl?: string;
 }) {
   const ui = messagesFor(placePageMessages, locale);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -91,6 +96,15 @@ export function StoryFeed({
             {entry.kind === "written" ? (
               <article lang={entry.story.lang} className="space-y-3 rounded-lg border p-4">
                 <p className="text-[18px] leading-[1.8] whitespace-pre-wrap">{entry.story.body}</p>
+                {photoBaseUrl && !!entry.story.photos?.length && (
+                  <StoryPhotos
+                    locale={locale}
+                    photos={entry.story.photos}
+                    baseUrl={photoBaseUrl}
+                    authorName={entry.story.authorName}
+                    remove={actions?.removePhoto}
+                  />
+                )}
                 <footer
                   lang={locale}
                   className="flex flex-wrap items-center gap-x-3 text-[15px] text-muted-foreground"

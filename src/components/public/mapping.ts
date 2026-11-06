@@ -1,6 +1,7 @@
 import { categoryOptions, labelForCategory } from "./category";
 import type { EmbedSourceView } from "@/components/embeds/embed-view";
 import type { MapMarker } from "@/components/map/map-helpers";
+import type { StoryPhotoLike } from "@/components/place/story-photos";
 import type { PlaceListItem } from "@/components/places/place-list";
 import type { StoryClaimView, StorySentenceView, StoryViewModel } from "@/components/story/types";
 import { frameHostsFor, scriptHostsFor } from "@/lib/adapters";
@@ -10,6 +11,7 @@ import { createOpenFreeMapStyle } from "@/lib/geo";
 import { outboundPath } from "@/lib/http/outbound";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { publicMessages } from "@/lib/i18n/messages/public";
+import type { PublicPhotoProps } from "@/lib/photos/settings";
 import { pickPlaceName, type PlaceNameLike } from "@/lib/region/names";
 import type { RegionConfig } from "@/lib/region/schema";
 
@@ -31,6 +33,8 @@ export type PublicRegionProps = {
   checkIn: Pick<RegionConfig["collection"], "checkInMetres" | "accuracyAllowanceMetres">;
   /** Anyone old enough may make an account, so a signed-out prompt leads to sign-up. */
   accountsOpen: boolean;
+  /** Set only on the place page, while the region has photos on and every setting is in place. */
+  photos?: PublicPhotoProps;
 };
 export type NameLike = PlaceNameLike;
 export type PlaceSummaryLike = {
@@ -82,6 +86,7 @@ export type WrittenStoryLike = {
   addedAt: number;
   isMock: boolean;
   canRemove: boolean;
+  photos?: readonly StoryPhotoLike[];
 };
 /** One of the newest stories in the region, for the home page (FR-033). */
 export type LatestStoryLike = {

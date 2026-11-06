@@ -11,7 +11,7 @@ export type StoryArgs = {
   title?: string;
   authorHandle?: string;
 };
-export type WrittenStoryArgs = { body: string; lang: string };
+export type WrittenStoryArgs = { body: string; lang: string; photoIds?: string[] };
 export type StoryRegion = {
   sourceAdapters: readonly SourceAdapterId[];
   locales: readonly string[];
