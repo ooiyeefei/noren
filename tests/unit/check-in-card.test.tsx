@@ -179,6 +179,54 @@ describe("CheckInCard", () => {
     expect(html).toContain("invite-only");
   });
 
+  describe("signed out, once accounts are open", () => {
+    const open = { ...region, accountsOpen: true };
+
+    it("the shipped region is closed, so the card above is the one people see today", () => {
+      expect(region.accountsOpen).toBe(false);
+    });
+
+    it.each([
+      ["en", "Make a free account to keep your panels", "Already have an account?"],
+      ["ja", "無料のアカウントを作って、のれんを集める", "アカウントをお持ちの方は"],
+    ] as const)(
+      "asks for a free account and returns to the same place (%s)",
+      (locale, ask, have) => {
+        const html = render(card({ locale, region: open, actions: actions({ signedIn: false }) }));
+        expect(html).toContain(ask);
+        expect(html).toContain(have);
+        expect(html).toContain(`/${locale}/sign-up?redirect_url=%2F${locale}%2Fplaces%2Fa-shop`);
+        expect(html).toContain(`/${locale}/sign-in?redirect_url=%2F${locale}%2Fplaces%2Fa-shop`);
+        expect(html).not.toContain("data-im-here");
+        expect(html).not.toMatch(/invite-only|招待/);
+      },
+    );
+
+    it("keeps a slug with odd characters safe in the return address", () => {
+      const html = render(
+        card({ region: open, slug: "a shop&co", actions: actions({ signedIn: false }) }),
+      );
+      expect(html).toContain("/en/sign-up?redirect_url=%2Fen%2Fplaces%2Fa%2520shop%2526co");
+    });
+
+    it("reads no location before the person has an account", () => {
+      const locate = vi.fn(actions().locate);
+      render(card({ region: open, actions: actions({ signedIn: false, locate }) }));
+      expect(locate).not.toHaveBeenCalled();
+    });
+
+    it("changes nothing for someone signed in", () => {
+      const html = render(card({ region: open }));
+      expect(html).toContain("data-im-here");
+      expect(html).not.toContain("/sign-up");
+    });
+  });
+
+  it("has no sign-up link while accounts are closed", () => {
+    const html = render(card({ actions: actions({ signedIn: false }) }));
+    expect(html).not.toContain("/sign-up");
+  });
+
   it("shows no button until sign-in has settled", () => {
     expect(render(card({ actions: actions({ signedIn: undefined }) }))).not.toContain(
       "data-im-here",

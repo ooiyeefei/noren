@@ -190,9 +190,10 @@ export function CheckInCard({
                     limit: String(region.checkIn.checkInMetres),
                   })
                 : null;
-  const signInHref = `${localePath(locale, "/sign-in")}?redirect_url=${encodeURIComponent(
+  const back = `?redirect_url=${encodeURIComponent(
     localePath(locale, `/places/${encodeURIComponent(slug)}`),
   )}`;
+  const signInHref = `${localePath(locale, "/sign-in")}${back}`;
   return (
     <section
       data-check-in={step.kind}
@@ -206,16 +207,29 @@ export function CheckInCard({
             : format(m.givesPanel, { name, panel })}
         </span>
       </p>
-      {actions.signedIn === false && (
-        <div className="space-y-2">
-          <p>
-            {m.signInToCheckIn} {m.inviteOnly}
-          </p>
-          <a className="inline-flex min-h-11 items-center text-ai underline" href={signInHref}>
-            {m.signIn}
-          </a>
-        </div>
-      )}
+      {actions.signedIn === false &&
+        (region.accountsOpen ? (
+          <div className="space-y-2">
+            <a className={BUTTON} href={`${localePath(locale, "/sign-up")}${back}`}>
+              {m.makeAccount}
+            </a>
+            <p>
+              {m.haveAccount}{" "}
+              <a className="inline-flex min-h-11 items-center text-ai underline" href={signInHref}>
+                {m.signIn}
+              </a>
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p>
+              {m.signInToCheckIn} {m.inviteOnly}
+            </p>
+            <a className="inline-flex min-h-11 items-center text-ai underline" href={signInHref}>
+              {m.signIn}
+            </a>
+          </div>
+        ))}
       {actions.signedIn && (
         <div className="space-y-2">
           {message && (

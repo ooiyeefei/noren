@@ -12,7 +12,7 @@ const POSTER = "/film/noren-intro.jpg";
  * loads nothing until someone presses play. Its voice is English, so a Japanese page starts with
  * Japanese captions on.
  */
-export function WelcomeView({ locale }: { locale: Locale }) {
+export function WelcomeView({ locale, accountsOpen }: { locale: Locale; accountsOpen: boolean }) {
   const m = messagesFor(welcomeMessages, locale);
   const map = localePath(locale, "/map");
   const primary =
@@ -88,7 +88,19 @@ export function WelcomeView({ locale }: { locale: Locale }) {
                 </li>
               ))}
             </ul>
-            <p className="leading-[1.8] text-muted-foreground">{m.membersNote}</p>
+            {accountsOpen ? (
+              <p className="leading-[1.8] text-muted-foreground">
+                {m.membersNoteOpen}{" "}
+                <Link
+                  className="underline underline-offset-4"
+                  href={localePath(locale, "/sign-up")}
+                >
+                  {m.makeAccount}
+                </Link>
+              </p>
+            ) : (
+              <p className="leading-[1.8] text-muted-foreground">{m.membersNote}</p>
+            )}
           </div>
         </section>
 

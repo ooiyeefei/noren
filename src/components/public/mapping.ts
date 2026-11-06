@@ -29,6 +29,8 @@ export type PublicRegionProps = {
   cautionVocabulary: RegionConfig["cautionVocabulary"];
   /** How near a place's pin "I'm here" passes. The phone works this out and sends only the place. */
   checkIn: Pick<RegionConfig["collection"], "checkInMetres" | "accuracyAllowanceMetres">;
+  /** Anyone old enough may make an account, so a signed-out prompt leads to sign-up. */
+  accountsOpen: boolean;
 };
 export type NameLike = PlaceNameLike;
 export type PlaceSummaryLike = {
@@ -125,6 +127,7 @@ export function publicRegionProps(region: RegionConfig, locale: Locale): PublicR
       checkInMetres: region.collection.checkInMetres,
       accuracyAllowanceMetres: region.collection.accuracyAllowanceMetres,
     },
+    accountsOpen: region.legal.accountsOpen,
   };
 }
 

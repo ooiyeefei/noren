@@ -23,6 +23,8 @@ export const welcomeMessages = defineMessages({
     addBody:
       "自分の物語を書くことも、すでに投稿したもののリンクを貼ることもできます。「今もあります」をワンタップすると、次に来る人の役に立ち、スタンプ帳にそのお店のスタンプが入ります。",
     membersNote: "読むのは誰でもできます。投稿は、いまは招待制です。",
+    membersNoteOpen: "読むのは誰でもできます。投稿するには、無料のアカウントが必要です。",
+    makeAccount: "無料のアカウントを作る",
     ctaTitle: "次にのれんをくぐるとき、その誰かは、あなたかもしれません。",
   },
   en: {
@@ -46,6 +48,8 @@ export const welcomeMessages = defineMessages({
     addBody:
       "Write your own story, or paste a link to something you already posted. One tap on Still here helps the next visitor and puts the place's stamp in your stamp book.",
     membersNote: "Anyone can read Noren. Adding to it is invite-only for now.",
+    membersNoteOpen: "Anyone can read Noren. Adding to it takes a free account.",
+    makeAccount: "Make a free account",
     ctaTitle: "Next time you walk through a noren, that somebody could be you.",
   },
 });

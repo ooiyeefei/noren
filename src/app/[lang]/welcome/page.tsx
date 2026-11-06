@@ -3,6 +3,7 @@ import { WelcomeView } from "@/components/welcome/welcome-view";
 import { isSupportedLocale, messagesFor } from "@/lib/i18n";
 import { welcomeMessages } from "@/lib/i18n/messages/welcome";
 import { getLocale } from "@/lib/i18n/server";
+import { activeRegionConfig } from "@/lib/region/registry";
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/welcome">): Promise<Metadata> {
   const { lang } = await params;
@@ -11,5 +12,10 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/welcome">)
 }
 
 export default async function Page() {
-  return <WelcomeView locale={await getLocale()} />;
+  return (
+    <WelcomeView
+      locale={await getLocale()}
+      accountsOpen={activeRegionConfig().legal.accountsOpen}
+    />
+  );
 }
