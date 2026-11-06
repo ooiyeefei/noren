@@ -1,6 +1,10 @@
+"use client";
+
+import { useState } from "react";
 import { platformName } from "@/components/embeds/platform-name";
 import { outboundPath } from "@/lib/http/outbound";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 
 export type PlaceStoryLike = {
@@ -18,6 +22,9 @@ export type PlaceStoryLike = {
   postsRead: number;
 };
 
+/** Short stories show whole; longer ones fold to about three lines. */
+const COLLAPSE_AT = 180;
+
 const noteId = (index: number) => `story-note-${index + 1}`;
 
 /**
@@ -26,17 +33,22 @@ const noteId = (index: number) => `story-note-${index + 1}`;
  */
 export function PlaceStory({ locale, story }: { locale: Locale; story: PlaceStoryLike }) {
   const ui = messagesFor(placePageMessages, locale);
+  const text = story.sentences.map((s) => (locale === "ja" ? s.ja : s.en)).join(" ");
+  const long = text.length > COLLAPSE_AT;
+  // Three lines and a way to read on; the sources come open with the rest.
+  const [expanded, setExpanded] = useState(false);
+  const collapsed = long && !expanded;
   const month = new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     timeZone: "UTC",
   });
   return (
-    <section className="space-y-4 border-t border-line pt-10" aria-labelledby="place-story-heading">
+    <section className="space-y-3 border-t border-line pt-6" aria-labelledby="place-story-heading">
       <h2 id="place-story-heading" className="font-sans text-[22px] font-bold">
         {ui.agentStory}
       </h2>
-      <p className="text-[18px] leading-relaxed">
+      <p className={cn("text-[17px] leading-relaxed", collapsed && "line-clamp-3")}>
         {story.sentences.map((sentence, index) => (
           <span key={index}>
             {index > 0 && " "}
@@ -47,6 +59,7 @@ export function PlaceStory({ locale, story }: { locale: Locale; story: PlaceStor
                   href={`#${noteId(note)}`}
                   aria-label={format(ui.agentStoryNote, { number: String(note + 1) })}
                   className="text-ai underline"
+                  onClick={() => setExpanded(true)}
                 >
                   {note + 1}
                 </a>
@@ -55,10 +68,20 @@ export function PlaceStory({ locale, story }: { locale: Locale; story: PlaceStor
           </span>
         ))}
       </p>
+      {long && (
+        <button
+          type="button"
+          aria-expanded={!collapsed}
+          onClick={() => setExpanded(!expanded)}
+          className="inline-flex min-h-11 items-center font-bold text-ai underline"
+        >
+          {collapsed ? ui.readMore : ui.readLess}
+        </button>
+      )}
       <p role="note" className="max-w-prose text-[15px]">
         {format(ui.agentStoryLabel, { count: String(story.postsRead) })}
       </p>
-      <ol className="space-y-3 text-[15px]">
+      <ol hidden={collapsed} className="space-y-3 text-[15px]">
         {story.notes.map((note, index) => {
           const credit = [
             platformName(note.platform) ?? ui.agentStoryWebPage,

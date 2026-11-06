@@ -86,7 +86,8 @@ for (const locale of ["ja", "en"] as const) {
     );
     expect(real).toContain('data-check="unconfirmed"');
     expect(real).toContain(`href="/${locale}/notice"`);
-    expect(real.indexOf("data-check=")).toBeLessThan(real.indexOf('id="where-heading"'));
+    // It sits on the Visit tab, not the one that opens first.
+    expect(real.indexOf("data-check=")).toBeGreaterThan(real.indexOf("-panel-visit"));
     const demo = render(
       <PlaceView locale={locale} region={region} place={place} page={null} sources={[]} />,
     );

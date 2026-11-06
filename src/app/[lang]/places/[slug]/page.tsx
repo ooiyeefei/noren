@@ -7,7 +7,7 @@ import { getLocale } from "@/lib/i18n/server";
 import { publicPhotoProps } from "@/lib/photos/settings";
 import { getActiveRegion } from "@/lib/region";
 
-export default async function Page({ params }: PageProps<"/[lang]/places/[slug]">) {
+export default async function Page({ params, searchParams }: PageProps<"/[lang]/places/[slug]">) {
   const locale = await getLocale();
   const active = getActiveRegion();
   const region = {
@@ -22,7 +22,7 @@ export default async function Page({ params }: PageProps<"/[lang]/places/[slug]"
         </PageContainer>
       }
     >
-      <PlaceContainer params={params} locale={locale} region={region} />
+      <PlaceContainer params={params} searchParams={searchParams} locale={locale} region={region} />
     </Suspense>
   );
 }

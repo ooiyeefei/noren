@@ -39,6 +39,16 @@ export type AddStoryActions = LinkReadActions & {
   photos?: PhotoPickerActions;
 };
 
+/** The props of the form, for a wrapper that adds the open request. */
+export type AddStoryProps = {
+  locale: Locale;
+  region: StoryRegion;
+  actions?: AddStoryActions;
+  draftName?: string;
+  /** Opens the written form each time this number goes up (the place page's "Add your story"). */
+  openWritten?: number;
+};
+
 type Mode = "write" | "link";
 
 const BUTTON =
@@ -56,12 +66,8 @@ export function AddStory({
   region,
   actions,
   draftName,
-}: {
-  locale: Locale;
-  region: StoryRegion;
-  actions?: AddStoryActions;
-  draftName?: string;
-}) {
+  openWritten = 0,
+}: AddStoryProps) {
   const m = messagesFor(addStoryMessages, locale);
   const id = useId();
   const [mode, setMode] = useDraft<Mode | null>(draftName && `${draftName}:mode`, null);
@@ -73,6 +79,11 @@ export function AddStory({
   const [photos, setPhotos] = useState<PhotoDraft>(NO_PHOTOS);
   const keptPhotos = usePhotoDrafts(draftName);
   const busy = useRef(false);
+  const [openedFor, setOpenedFor] = useState(0);
+  if (openWritten > openedFor) {
+    setOpenedFor(openWritten);
+    setMode("write");
+  }
   const reader = useLinkRead({ locale, region, actions, draft, setDraft });
   if (actions?.signedIn === undefined) return null;
   if (!actions.signedIn)
