@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
+import { useDocumentLinks } from "./document-links";
 
 export function SiteFooter({
   locale,
@@ -10,6 +13,7 @@ export function SiteFooter({
   compact?: boolean;
 }): React.JSX.Element {
   const m = messagesFor(shellMessages, locale);
+  const documents = useDocumentLinks();
   return (
     <footer
       lang={locale}
@@ -50,6 +54,22 @@ export function SiteFooter({
           >
             {m.askRemoval}
           </Link>
+          {documents && (
+            <>
+              <Link
+                className="flex min-h-11 items-center underline underline-offset-4 hover:text-ai"
+                href={localePath(locale, "/terms")}
+              >
+                {m.terms}
+              </Link>
+              <Link
+                className="flex min-h-11 items-center underline underline-offset-4 hover:text-ai"
+                href={localePath(locale, "/privacy")}
+              >
+                {m.privacy}
+              </Link>
+            </>
+          )}
         </div>
         <p>{m.japaneseReview}</p>
       </div>
