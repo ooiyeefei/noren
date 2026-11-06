@@ -82,4 +82,16 @@ describe("proxy", () => {
     await response;
     expect(auth.protect).toHaveBeenCalledOnce();
   });
+
+  it("sends signed-out visitors to the account page to sign in", async () => {
+    const { auth, response } = visit("/en/account", false);
+    await response;
+    expect(auth.protect).toHaveBeenCalledOnce();
+  });
+
+  it("leaves the account deletion route to answer for itself, so it can say 401 as JSON", async () => {
+    const { auth, response } = visit("/api/account/delete", false);
+    expect(await response).toBeUndefined();
+    expect(auth.protect).not.toHaveBeenCalled();
+  });
 });

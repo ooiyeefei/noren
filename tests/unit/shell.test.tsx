@@ -288,10 +288,10 @@ it("keeps the role and demo line inside the menu, with localised trigger names",
 
 it("lists exactly each role's destinations, in order, in both languages", () => {
   const paths = {
-    user: ["/stamps", "/collection", "/creator", "/map"],
-    creator: ["/stamps", "/collection", "/creator", "/map"],
-    business_owner: ["/stamps", "/collection", "/creator", "/owner", "/map"],
-    steward: ["/stamps", "/collection", "/creator", "/steward", "/map"],
+    user: ["/stamps", "/collection", "/creator", "/map", "/account"],
+    creator: ["/stamps", "/collection", "/creator", "/map", "/account"],
+    business_owner: ["/stamps", "/collection", "/creator", "/owner", "/map", "/account"],
+    steward: ["/stamps", "/collection", "/creator", "/steward", "/map", "/account"],
   };
   for (const locale of SUPPORTED_LOCALES) {
     for (const role of ["user", "creator", "business_owner", "steward"] as const) {

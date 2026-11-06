@@ -29,9 +29,10 @@ Footer: add Terms and Privacy links once `documentsVersion` is set. Account menu
 
 ```text
 401 unauthenticated  no session
-403 forbidden        role is not user
+403 forbidden        role is not user, the person still holds an interview or a place, or the request came from another site
+500 internal         Noren's step failed and the Clerk step did not run; pressing again is safe
 502 clerk_failed     Noren's data is gone and the Clerk step failed; pressing again is safe
-200 { ok: true }
+200 { ok: true }     also when Clerk says the user is already gone, for an answer that got lost
 ```
 
 Steps are in [research R12](../research.md#r12-account-deletion-runs-on-the-server-noren-first). Failures log the error's name and a fallback, so a non-`Error` throw can't produce an empty diagnostic. The client signs out and goes to `/welcome`.
