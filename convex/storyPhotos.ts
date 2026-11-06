@@ -10,13 +10,7 @@ import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { readMapNames } from "./lib/mapCopies";
 import { regionConfig } from "./lib/region";
-import {
-  limitPhoto,
-  newMemberUntil,
-  removeAllPhotosOf,
-  removePhotos,
-  uploadRefusal,
-} from "./lib/storyPhotos";
+import { limitPhoto, newMemberUntil, removePhotos, uploadRefusal } from "./lib/storyPhotos";
 import { scriptValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
 
@@ -258,15 +252,6 @@ export const sweepUnattached = internalMutation({
     await removePhotos(ctx, stale);
     if (stale.length === SWEEP_BATCH)
       await ctx.scheduler.runAfter(0, internal.storyPhotos.sweepUnattached, {});
-    return null;
-  },
-});
-
-export const continueRemovingPhotosOf = internalMutation({
-  args: { personId: v.id("person") },
-  returns: v.null(),
-  handler: async (ctx, { personId }) => {
-    await removeAllPhotosOf(ctx, personId);
     return null;
   },
 });

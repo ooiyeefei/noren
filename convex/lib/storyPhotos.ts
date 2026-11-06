@@ -6,13 +6,12 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { canEditPlace, type Viewer } from "./access";
 import { appError } from "./errors";
-import { consumeRateLimit } from "./rateLimit";
+import { consumeRateLimit, isNewMember } from "./rateLimit";
 import { regionConfig } from "./region";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A story holds few photos; this bound outlasts lowering the region's number later. */
 const STORY_PHOTOS_READ = 20;
-const PERSON_BATCH = 50;
 /** An owner's word counts from the moment they confirmed it, before any steward publishes it. */
 const OWNER_SAID = ["owner_confirmed", "published", "disputed"] as const;
 
@@ -76,11 +75,6 @@ export function newMemberUntil(person: Doc<"person">, region: RegionConfig): num
     : null;
 }
 
-function isNewMember(person: Doc<"person">, region: RegionConfig, now: number): boolean {
-  const until = newMemberUntil(person, region);
-  return until !== null && now < until;
-}
-
 /** Counted when the upload begins, because storage is spent from there on. A steward has no limit. */
 export async function limitPhoto(
   ctx: MutationCtx,
@@ -91,7 +85,7 @@ export async function limitPhoto(
   const now = Date.now();
   const result = await consumeRateLimit(ctx, {
     key: `contribution:photo:${person._id}`,
-    limit: isNewMember(person, region, now)
+    limit: isNewMember(person, region.id, now)
       ? region.collection.newAccount.perDay.photo
       : region.photos.perDay,
     windowMs: DAY_MS,
@@ -123,7 +117,7 @@ export async function attachPhotos(
     throw appError("invalid_input", `a story holds at most ${region.photos.maxPerStory} photos`);
   if (new Set(photoIds).size !== photoIds.length)
     throw appError("invalid_input", "the same photo was given twice");
-  const status = isNewMember(person, region, Date.now()) ? "waiting" : "live";
+  const status = isNewMember(person, region.id, Date.now()) ? "waiting" : "live";
   for (const [position, photoId] of photoIds.entries()) {
     const photo = await ctx.db.get("storyPhoto", photoId);
     if (
@@ -216,23 +210,4 @@ export async function removeStoryPhotos(ctx: MutationCtx, storyId: Id<"story">):
       .withIndex("by_storyId", (q) => q.eq("storyId", storyId))
       .take(STORY_PHOTOS_READ),
   );
-}
-
-/**
- * Removes every photo one person added, for account deletion. A person with many finishes by itself
- * in later transactions, so a caller needs only this one call and can check `more` if it cares.
- */
-export async function removeAllPhotosOf(
-  ctx: MutationCtx,
-  personId: Id<"person">,
-): Promise<{ removed: number; more: boolean }> {
-  const photos = await ctx.db
-    .query("storyPhoto")
-    .withIndex("by_uploaderPersonId", (q) => q.eq("uploaderPersonId", personId))
-    .take(PERSON_BATCH);
-  await removePhotos(ctx, photos);
-  const more = photos.length === PERSON_BATCH;
-  if (more)
-    await ctx.scheduler.runAfter(0, internal.storyPhotos.continueRemovingPhotosOf, { personId });
-  return { removed: photos.length, more };
 }

@@ -261,7 +261,7 @@ describe("the documents' text (T057)", () => {
     ])
       expect(ja).toContain(fact);
     expect(section("en", "privacy", "photos").paragraphs).toHaveLength(1);
-    // Only that section speaks of Amazon, so dropping it leaves nothing behind.
+    // Only that section speaks of Amazon, so hiding it leaves nothing behind.
     for (const s of legalDocuments.en.privacy.sections)
       if (s.id !== "photos") expect(sectionText(s)).not.toContain("Amazon");
   });
@@ -347,6 +347,18 @@ describe("the pages (T058)", () => {
     const html = render(<LegalDocumentView locale="en" kind="privacy" values={values} />);
     expect(text(html)).toContain("the Noren desk");
     expect(html).not.toContain('href="the Noren desk"');
+  });
+
+  it("names the photo storage in the privacy notice only while photos are on (FR-126)", () => {
+    const notice = (enabled: boolean) => {
+      const values = documentValues(
+        published((r) => (r.photos.enabled = enabled)),
+        "en",
+      )!;
+      return text(render(<LegalDocumentView locale="en" kind="privacy" values={values} />));
+    };
+    expect(notice(false)).not.toContain("Amazon");
+    expect(notice(true)).toContain("Amazon Web Services in Tokyo, Japan");
   });
 
   it("publishes only with a version, an operator and a contact", () => {

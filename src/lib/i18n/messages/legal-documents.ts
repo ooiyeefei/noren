@@ -276,8 +276,8 @@ export const legalDocuments: Readonly<
             "インタビューは別の扱いです。店主には先に専用の同意書で同意していただき、そこで録音と文章を扱うサービスを示します。",
           ],
         },
-        // Owner: keep or drop this section. Photos ship switched off, and the section stands alone, so
-        // dropping it removes Amazon Web Services and Amazon CloudFront from the notice.
+        // Shown only while photos are on. Turning them on changes this notice, so set a new
+        // documentsVersion in the same change.
         {
           id: "photos",
           heading: "追加した写真",
@@ -581,8 +581,8 @@ export const legalDocuments: Readonly<
             "An interview works differently. A shop owner first agrees to a separate consent form, which names the services that handle the recording and the transcript.",
           ],
         },
-        // Owner: keep or drop this section. Photos ship switched off, and the section stands alone, so
-        // dropping it removes Amazon Web Services and Amazon CloudFront from the notice.
+        // Shown only while photos are on. Turning them on changes this notice, so set a new
+        // documentsVersion in the same change.
         {
           id: "photos",
           heading: "Photos you add",
