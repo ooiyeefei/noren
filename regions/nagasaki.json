@@ -147,9 +147,23 @@
         "preview": 20,
         "draft": 3,
         "check": 10,
-        "report": 3
+        "report": 3,
+        "photo": 5
       }
     }
+  },
+  "photos": {
+    "enabled": false,
+    "maxPerStory": 4,
+    "maxEdgePixels": 2048,
+    "maxInputPixels": 24000000,
+    "maxUploadBytes": 6000000,
+    "jpegQuality": 82,
+    "perDay": 30,
+    "unattachedHours": 24,
+    "permitSeconds": 300,
+    "cacheSeconds": 3600,
+    "refusingCaution": "no_photography"
   },
   "legal": {
     "operatorName": "Noren, an open-source project run by Yee Fei",

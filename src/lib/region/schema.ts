@@ -135,8 +135,30 @@ export const regionSchema = z
           draft: dailyLimit,
           check: dailyLimit,
           report: dailyLimit,
+          photo: dailyLimit,
         }),
       }),
+    }),
+    /** Photos on a written story (specs/003-story-photos). Off means no control and no route. */
+    photos: z.strictObject({
+      enabled: z.boolean(),
+      maxPerStory: z.number().int().positive(),
+      /** The longest side of a stored photo, and of what the browser sends. */
+      maxEdgePixels: z.number().int().positive(),
+      /** A picture with more pixels than this is refused before it is decoded in full. */
+      maxInputPixels: z.number().int().positive(),
+      maxUploadBytes: z.number().int().positive(),
+      jpegQuality: z.number().int().min(1).max(100),
+      /** An established member's daily limit; a new member's is in collection.newAccount.perDay. */
+      perDay: dailyLimit,
+      /** How long a photo may wait for its story before the cron removes it. */
+      unattachedHours: z.number().positive(),
+      /** How long the upload permit lasts. */
+      permitSeconds: z.number().int().positive(),
+      /** How long a browser or the CDN may keep a served photo, so a removal takes effect by then. */
+      cacheSeconds: z.number().int().positive(),
+      /** A key from cautionVocabulary: the owner has said no photos. */
+      refusingCaution: z.string().min(1),
     }),
     legal: z.strictObject({
       /** Named legal operator shown on notices; null until decided (blocks real people's stories). */
@@ -216,6 +238,12 @@ export const regionSchema = z
     const keys = region.cautionVocabulary.map((c) => c.key);
     if (new Set(keys).size !== keys.length) {
       fail(["cautionVocabulary"], "caution keys must be unique");
+    }
+    if (!keys.includes(region.photos.refusingCaution)) {
+      fail(["photos", "refusingCaution"], "must be a key from cautionVocabulary");
+    }
+    if (region.photos.maxInputPixels < region.photos.maxEdgePixels ** 2) {
+      fail(["photos", "maxInputPixels"], "must allow a square picture at maxEdgePixels");
     }
 
     // A processor reaches people's words only when the text they agreed to names it. Older texts
