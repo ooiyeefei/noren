@@ -168,32 +168,32 @@ Before writing any Convex code, read `convex/_generated/ai/guidelines.md`. All m
 
 ### Protections
 
-- [ ] T049 [P] [US6] Extend `convex/rateLimit.test.ts`: each new-account limit refuses at its number, and the higher limits apply after 7 days, to a creator, and no limit to a steward
-- [ ] T050 [US6] Add `check: 100` and `report: 20` to `CONTRIBUTIONS_PER_DAY` and the region's `newAccount.perDay` branch to `limitContribution` in `convex/lib/rateLimit.ts`, for `role === "user"` within `newAccount.days` of `person._creationTime`
-- [ ] T051 [US6] Call `limitContribution` from `checks.confirm`, after its existing repeat-press return, and from `checks.report` in `convex/checks.ts`, with tests in `convex/checks.test.ts`
-- [ ] T052 [US6] In `places.create` in `convex/places.ts`, store a new member's `onMap` place as `draft` with `sharedAt` set and return `waiting: true`, with tests in `convex/places.test.ts` that a steward can then publish it through `places.setVisibility`
-- [ ] T053 [US6] Add `places.listWaiting` and a "waiting" section in `src/components/steward/` on the steward places page, and make the add-place form say the place is waiting
+- [X] T049 [P] [US6] Extend `convex/rateLimit.test.ts`: each new-account limit refuses at its number, and the higher limits apply after 7 days, to a creator, and no limit to a steward
+- [X] T050 [US6] Add `check: 100` and `report: 20` to `CONTRIBUTIONS_PER_DAY` and the region's `newAccount.perDay` branch to `limitContribution` in `convex/lib/rateLimit.ts`, for `role === "user"` within `newAccount.days` of `person._creationTime`
+- [X] T051 [US6] Call `limitContribution` from `checks.confirm`, after its existing repeat-press return, and from `checks.report` in `convex/checks.ts`, with tests in `convex/checks.test.ts`
+- [X] T052 [US6] In `places.create` in `convex/places.ts`, store a new member's `onMap` place as `draft` with `sharedAt` set and return `waiting: true`, with tests in `convex/places.test.ts` that a steward can then publish it through `places.setVisibility`
+- [X] T053 [US6] Add `places.listWaiting` and a "waiting" section in `src/components/steward/` on the steward places page, and make the add-place form say the place is waiting
 
 ### Name
 
-- [ ] T054 [US6] Add `nameConfirmedAt` to `person` in `convex/tables/places.ts`, plus `people.setMyDisplayName`, `people.confirmMyDisplayName` and `people.backfillNameConfirmed`, and `nameConfirmed` on `people.current`, with tests in `convex/people.test.ts`. Name rule: 1 to 80 characters, no `@`
-- [ ] T055 [US6] Refuse with `name_not_confirmed` in `stories.add`, `sources.add` and `places.create` for an unconfirmed real member, with tests in the matching `convex/*.test.ts` files
-- [ ] T056 [US6] Show "Shown as" with an edit control in `src/components/place/add-story.tsx` and the add-place form until the name is confirmed, with tests in `tests/unit/add-story.test.tsx`
+- [X] T054 [US6] Add `nameConfirmedAt` to `person` in `convex/tables/places.ts`, plus `people.setMyDisplayName`, `people.confirmMyDisplayName` and `people.backfillNameConfirmed`, and `nameConfirmed` on `people.current`, with tests in `convex/people.test.ts`. Name rule: 1 to 80 characters, no `@`
+- [X] T055 [US6] Refuse with `name_not_confirmed` in `stories.add`, `sources.add` and `places.create` for an unconfirmed real member, with tests in the matching `convex/*.test.ts` files
+- [X] T056 [US6] Show "Shown as" with an edit control in `src/components/place/add-story.tsx` and the add-place form until the name is confirmed, with tests in `tests/unit/add-story.test.tsx`
 
 ### Documents
 
-- [ ] T057 [US6] Draft the terms and privacy notice in `src/lib/i18n/messages/legal-documents.ts`, in Japanese and English, naming every service outside Japan that holds or processes account data as the code uses them that day, and stating what deletion removes and that places a person added stay without their name
-- [ ] T058 [US6] Create `src/app/[lang]/terms/page.tsx` and `src/app/[lang]/privacy/page.tsx`, answering 404 while `documentsVersion` is null, and add footer links in `src/components/layout/site-footer.tsx` under the same condition
+- [X] T057 [US6] Draft the terms and privacy notice in `src/lib/i18n/messages/legal-documents.ts`, in Japanese and English, naming every service outside Japan that holds or processes account data as the code uses them that day, and stating what deletion removes and that places a person added stay without their name
+- [X] T058 [US6] Create `src/app/[lang]/terms/page.tsx` and `src/app/[lang]/privacy/page.tsx`, answering 404 while `documentsVersion` is null, and add footer links in `src/components/layout/site-footer.tsx` under the same condition
 - [ ] T059 **OWNER ACTION**: The owner and a lawyer read both documents, a person reviews all new Japanese copy, and then `documentsVersion` is set in `regions/nagasaki.json`
 
 ### Sign-up and deletion
 
-- [ ] T060 [US6] Create `src/app/[lang]/sign-up/[[...sign-up]]/page.tsx`, answering 404 while `accountsOpen` is false. Pass `signUpUrl` to `ClerkProvider` in `src/app/[lang]/layout.tsx` and `SignIn` when open. Override `signUp.legalConsent.checkbox.label__termsOfServiceAndPrivacyPolicy` in `CLERK_LOCALIZATION` to state 16 or over, in both languages
-- [ ] T061 [US6] Make the check-in card's signed-out state link to sign-up with `redirect_url` back to the same place when open, and sign-in when closed, and make `membersNote` in `src/lib/i18n/messages/welcome.ts` follow `accountsOpen`
-- [ ] T062 [P] [US6] Write tests in `convex/people.test.ts` for `people.deleteMine`, checking every row of the deletion table in data-model.md and refusing other roles
-- [ ] T063 [US6] Add `people.deleteMine` and `people.continueDeletion` to `convex/people.ts`, first checking the table against every `v.id("person")` field in `convex/tables/`
-- [ ] T064 [US6] Create `src/app/api/account/delete/route.ts` as in contracts/pages-and-routes.md, using `src/lib/convex/server.ts` and `clerkClient().users.deleteUser`, logging the error's name and a fallback on failure
-- [ ] T065 [US6] Create `src/app/[lang]/account/page.tsx` and `src/components/account/account-view.tsx` for the name and deletion, add `/account` to `ROLE_PAGES` in `src/proxy.ts`, and link it from `src/components/layout/account-menu.tsx`
+- [X] T060 [US6] Create `src/app/[lang]/sign-up/[[...sign-up]]/page.tsx`, answering 404 while `accountsOpen` is false. Pass `signUpUrl` to `ClerkProvider` in `src/app/[lang]/layout.tsx` and `SignIn` when open. Override `signUp.legalConsent.checkbox.label__termsOfServiceAndPrivacyPolicy` in `CLERK_LOCALIZATION` to state 16 or over, in both languages
+- [X] T061 [US6] Make the check-in card's signed-out state link to sign-up with `redirect_url` back to the same place when open, and sign-in when closed, and make `membersNote` in `src/lib/i18n/messages/welcome.ts` follow `accountsOpen`
+- [X] T062 [P] [US6] Write tests in `convex/people.test.ts` for `people.deleteMine`, checking every row of the deletion table in data-model.md and refusing other roles
+- [X] T063 [US6] Add `people.deleteMine` and `people.continueDeletion` to `convex/people.ts`, first checking the table against every `v.id("person")` field in `convex/tables/`
+- [X] T064 [US6] Create `src/app/api/account/delete/route.ts` as in contracts/pages-and-routes.md, using `src/lib/convex/server.ts` and `clerkClient().users.deleteUser`, logging the error's name and a fallback on failure
+- [X] T065 [US6] Create `src/app/[lang]/account/page.tsx` and `src/components/account/account-view.tsx` for the name and deletion, add `/account` to `ROLE_PAGES` in `src/proxy.ts`, and link it from `src/components/layout/account-menu.tsx`
 
 ### Release
 

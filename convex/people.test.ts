@@ -626,6 +626,7 @@ describe("people.deleteMine", () => {
     const steward = await addPerson(b, "stella", "steward");
     const other = await addPerson(b, "ken", "user");
     const member = await leaving.mutation(api.people.ensureCurrent, {});
+    await leaving.mutation(api.people.confirmMyDisplayName, {});
     const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
     return { b, leaving, steward, other, member, placeId };
   }
@@ -944,6 +945,7 @@ describe("people.deleteMine", () => {
       personId: member,
       displayName: CHOSEN_NAME,
     });
+    await leaving.mutation(api.people.setMyDisplayName, { displayName: "Aiko on her own" });
     const search = () =>
       b.run(async (ctx) => {
         const rows = [];
@@ -952,6 +954,7 @@ describe("people.deleteMine", () => {
         return JSON.stringify(rows);
       });
     expect(await search()).toContain(CHOSEN_NAME);
+    expect(await search()).toContain("Aiko on her own");
     expect(await search()).toContain(NAME);
     expect(await search()).toContain(SUBJECT);
 
@@ -960,6 +963,7 @@ describe("people.deleteMine", () => {
 
     const stored = await search();
     expect(stored).not.toContain(CHOSEN_NAME);
+    expect(stored).not.toContain("Aiko on her own");
     expect(stored).not.toContain(NAME);
     expect(stored).not.toContain(SUBJECT);
   });

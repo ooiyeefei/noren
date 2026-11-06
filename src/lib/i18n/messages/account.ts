@@ -4,6 +4,7 @@ import { defineMessages } from "../index";
 export const accountMessages = defineMessages({
   ja: {
     title: "アカウント",
+    nameHint: "共有するものに、この名前が表示されます。本名でなくてもかまいません。",
     deleteTitle: "アカウントを削除する",
     deleteIntro: "Noren はいつでもやめられます。アカウントを削除すると、元に戻せません。",
     goesTitle: "なくなるもの",
@@ -41,6 +42,7 @@ export const accountMessages = defineMessages({
   },
   en: {
     title: "Your account",
+    nameHint: "This name goes beside what you share. It doesn't have to be your real name.",
     deleteTitle: "Delete your account",
     deleteIntro: "You can leave Noren at any time. Deleting your account can't be undone.",
     goesTitle: "What goes",
