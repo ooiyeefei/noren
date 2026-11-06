@@ -66,9 +66,6 @@ export function WelcomeView({ locale, accountsOpen }: { locale: Locale; accounts
               />
               <a href={FILM}>{m.filmFallback}</a>
             </video>
-            <figcaption className="text-[15px] leading-[1.7] text-muted-foreground">
-              {m.filmNote}
-            </figcaption>
           </figure>
         </section>
 
