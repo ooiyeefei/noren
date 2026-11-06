@@ -19,7 +19,9 @@ export const communityTables = {
     lang: v.string(),
     status: noteStatusValidator,
     isMock: v.boolean(),
-  }).index("by_placeId_and_status", ["placeId", "status"]),
+  })
+    .index("by_placeId_and_status", ["placeId", "status"])
+    .index("by_authorPersonId", ["authorPersonId"]),
 
   /**
    * A story a member wrote in Noren about a place: what they heard, saw or tasted there, shown in
@@ -109,5 +111,5 @@ export const communityTables = {
     targetId: v.optional(v.string()),
     diff: v.optional(v.record(v.string(), v.any())),
     modelVersion: v.optional(v.string()),
-  }),
+  }).index("by_targetType_and_targetId", ["targetType", "targetId"]),
 };

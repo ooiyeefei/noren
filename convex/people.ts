@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import type { UserIdentity } from "convex/server";
+import type { PaginationOptions, UserIdentity } from "convex/server";
 import { ASSIGNABLE_ROLES } from "../src/lib/domain/constants";
 import { cleanDisplayName } from "../src/lib/domain/display-name";
 import { internal } from "./_generated/api";
@@ -8,6 +8,7 @@ import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { writeAudit } from "./lib/audit";
 import { currentPerson, findPerson, nameIsConfirmed, requirePerson, requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
+import { eraseFoundPost } from "./lib/foundPosts";
 import { internalMutation, mutation } from "./lib/gate";
 import { literals, roleValidator } from "./lib/validators";
 
@@ -284,6 +285,189 @@ export const setDisplayName = internalMutation({
       targetId: personId,
       diff: { displayName: { from: person.displayName, to: displayName } },
     });
+    return null;
+  },
+});
+
+const DELETED_NAME = "Former member";
+/**
+ * Rows touched by one run of `continueDeletion`. Small, because each deleted story or hidden link
+ * also rereads its place's stories through the map copy trigger, and a mutation has a read limit.
+ */
+const DELETION_BATCH = 20;
+/** What an audit entry about a deleted person may still say: its other keys can hold their name. */
+const AUDIT_KEYS_KEPT = new Set(["role", "isMock"]);
+
+/** Clerk's identities hold the issuer's address, so this can never match a real sign-in. */
+const deletedIdentity = (personId: Id<"person">) => `deleted:${personId}`;
+
+type DeletionStep = (
+  ctx: MutationCtx,
+  personId: Id<"person">,
+  paginationOpts: PaginationOptions,
+) => Promise<{ isDone: boolean; continueCursor: string }>;
+
+/**
+ * What account deletion does to a person's rows, one entry per table ("Account deletion" in
+ * specs/002-noren-collection/data-model.md). Each entry handles one page and returns it, and
+ * `continueDeletion` runs one page per transaction. To cover another table, add an entry here, ahead
+ * of any table its rows depend on, and a decision in DELETION_DECISIONS in people.test.ts.
+ *
+ * Every entry must be safe to run twice, because an operator reruns them all after a failed run.
+ */
+const DELETION_STEPS: readonly DeletionStep[] = [
+  // Deleted. No table refers to a story by id.
+  async (ctx, personId, paginationOpts) => {
+    const page = await ctx.db
+      .query("story")
+      .withIndex("by_authorPersonId", (q) => q.eq("authorPersonId", personId))
+      .paginate(paginationOpts);
+    for (const story of page.page) await ctx.db.delete("story", story._id);
+    return page;
+  },
+  // Hidden through the same steps as sources.remove, because AI story citations may point at it.
+  async (ctx, personId, paginationOpts) => {
+    const page = await ctx.db
+      .query("source")
+      .withIndex("by_addedBy", (q) => q.eq("addedBy", personId))
+      .paginate(paginationOpts);
+    for (const source of page.page) {
+      if (source.status !== "hidden")
+        await ctx.db.patch("source", source._id, { status: "hidden" });
+      await eraseFoundPost(ctx, source, personId);
+    }
+    return page;
+  },
+  // Deleted. Nothing refers to a check by id, and the place keeps its own confirmation.
+  async (ctx, personId, paginationOpts) => {
+    const page = await ctx.db
+      .query("placeCheck")
+      .withIndex("by_personId_and_verdict", (q) => q.eq("personId", personId))
+      .paginate(paginationOpts);
+    for (const check of page.page) await ctx.db.delete("placeCheck", check._id);
+    return page;
+  },
+  // Deleted with its translations. A note has one per region language, so one read gets them all.
+  async (ctx, personId, paginationOpts) => {
+    const page = await ctx.db
+      .query("note")
+      .withIndex("by_authorPersonId", (q) => q.eq("authorPersonId", personId))
+      .paginate(paginationOpts);
+    for (const note of page.page) {
+      const translations = await ctx.db
+        .query("noteTranslation")
+        .withIndex("by_noteId_and_lang", (q) => q.eq("noteId", note._id))
+        .take(8);
+      for (const translation of translations)
+        await ctx.db.delete("noteTranslation", translation._id);
+      await ctx.db.delete("note", note._id);
+    }
+    return page;
+  },
+  // Kept, pointing at the empty row. An entry about the person loses whatever could name them, such
+  // as the from and to of a changed display name.
+  async (ctx, personId, paginationOpts) => {
+    const page = await ctx.db
+      .query("auditLog")
+      .withIndex("by_targetType_and_targetId", (q) =>
+        q.eq("targetType", "person").eq("targetId", personId),
+      )
+      .paginate(paginationOpts);
+    for (const entry of page.page) {
+      if (entry.diff === undefined) continue;
+      const kept = Object.entries(entry.diff).filter(([key]) => AUDIT_KEYS_KEPT.has(key));
+      if (kept.length === Object.keys(entry.diff).length) continue;
+      await ctx.db.patch("auditLog", entry._id, {
+        diff: kept.length === 0 ? undefined : Object.fromEntries(kept),
+      });
+    }
+    return page;
+  },
+];
+
+/**
+ * Deletes the caller's account from Noren (FR-130). POST /api/account/delete calls this, then
+ * deletes the Clerk user, which it can only do in that order because this needs the Clerk token.
+ *
+ * The person's row and collection change here, in one transaction, so the moment this commits the
+ * token no longer finds them. The rest continues in `continueDeletion`. Places, pins and place names
+ * they made stay as facts about the place, and rate limit rows expire by themselves; both now lead
+ * only to the empty row, so no name shows.
+ *
+ * It is safe to press again if the Clerk step fails. The token then finds no row, or a new empty one
+ * that a page load made through `ensureCurrent`, which this empties in turn.
+ */
+export const deleteMine = mutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity === null) throw appError("unauthenticated", "sign in to continue");
+    const person = await findPerson(ctx, identity.tokenIdentifier);
+    if (person === null) return null;
+    if (person.role !== "user") {
+      throw appError("forbidden", `a steward deletes ${person.role} accounts`);
+    }
+    // A steward can make someone a plain user without touching what they hold, and interviews,
+    // consents and ownership still depend on them, so they ask a steward like any other role.
+    const interview = await ctx.db
+      .query("interview")
+      .withIndex("by_interviewerId", (q) => q.eq("interviewerId", person._id))
+      .first();
+    const ownership = await ctx.db
+      .query("placeOwner")
+      .withIndex("by_personId", (q) => q.eq("personId", person._id))
+      .first();
+    if (interview !== null || ownership !== null) {
+      throw appError("forbidden", "a steward deletes accounts that hold interviews or ownership");
+    }
+    const collection = await ctx.db
+      .query("personCollection")
+      .withIndex("by_personId", (q) => q.eq("personId", person._id))
+      .unique();
+    if (collection !== null) await ctx.db.delete("personCollection", collection._id);
+    // A replace, so any profile field added later goes too unless it is listed here.
+    await ctx.db.replace("person", person._id, {
+      tokenIdentifier: deletedIdentity(person._id),
+      clerkUserId: deletedIdentity(person._id),
+      role: person.role,
+      displayName: DELETED_NAME,
+      isMock: person.isMock,
+    });
+    await ctx.scheduler.runAfter(0, internal.people.continueDeletion, {
+      personId: person._id,
+      step: 0,
+      cursor: null,
+    });
+    return null;
+  },
+});
+
+/**
+ * Runs one page of one deletion step, then schedules the next. The person can't restart this, because
+ * their token no longer finds their row, so if a run fails an operator starts it again from the
+ * failed scheduled function's person id, which repeats nothing harmful:
+ *
+ *   npx convex run people:continueDeletion '{"personId": "...", "step": 0, "cursor": null}'
+ */
+export const continueDeletion = internalMutation({
+  args: { personId: v.id("person"), step: v.number(), cursor: v.union(v.string(), v.null()) },
+  returns: v.null(),
+  handler: async (ctx, { personId, step, cursor }) => {
+    const person = await ctx.db.get("person", personId);
+    if (person?.tokenIdentifier !== deletedIdentity(personId)) {
+      throw appError("conflict", "this person's deletion has not started");
+    }
+    const run = DELETION_STEPS[step];
+    if (run === undefined) return null;
+    const page = await run(ctx, personId, { numItems: DELETION_BATCH, cursor });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.people.continueDeletion,
+      page.isDone
+        ? { personId, step: step + 1, cursor: null }
+        : { personId, step, cursor: page.continueCursor },
+    );
     return null;
   },
 });
