@@ -77,6 +77,8 @@ const inheritsMockFlag = [
   // From their place and the found posts they read: the agent only runs on real places.
   "placeStory",
   "placeStoryRun",
+  // From its person and place: a demo account or a demo place is refused at upload.
+  "storyPhoto",
 ];
 const notPersonCreated = [
   "seedOsmCandidate",
@@ -94,6 +96,8 @@ const notPersonCreated = [
   "rateLimit",
   "auditLog",
   "translationCheckRun",
+  // Storage keys waiting to be deleted, written by the system after a removal.
+  "photoObjectRemoval",
 ];
 
 it("no table or field is named like a rating, score or sentiment", () => {

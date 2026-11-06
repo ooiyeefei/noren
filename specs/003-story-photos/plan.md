@@ -36,8 +36,8 @@ src/lib/photos/settings.ts         reads the environment, fails closed; no AWS i
 src/lib/photos/process.ts          sharp: real JPEG check, re-encode, no metadata
 src/lib/photos/s3-store.ts         the only file that imports the AWS SDK
 src/lib/photos/routes.ts           both routes, with store, Convex and sharp injected
-src/lib/photos/shrink.ts           browser: canvas to JPEG
-src/lib/photos/upload.ts           browser: shrink, permit, S3, finish
+src/components/place/photo-shrink.ts  browser: canvas to JPEG
+src/components/place/photo-upload.ts  browser: shrink, permit, S3, finish
 src/app/api/story-photos/*         thin wiring
 convex/tables/storyPhotos.ts       storyPhoto, photoObjectRemoval
 convex/lib/storyPhotos.ts          rules and helpers, including removeAllPhotosOf

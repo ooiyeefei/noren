@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fitWithin, PhotoUnreadable } from "@/lib/photos/shrink";
+import { fitWithin, PhotoUnreadable } from "@/components/place/photo-shrink";
 import {
   isStillPhotoFile,
   photoDraft,
@@ -7,7 +7,7 @@ import {
   takeFiles,
   uploadStoryPhoto,
   type PickedPhoto,
-} from "@/lib/photos/upload";
+} from "@/components/place/photo-upload";
 
 describe("fitting a picture", () => {
   it.each([

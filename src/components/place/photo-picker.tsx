@@ -13,7 +13,7 @@ import {
   type PhotoProblem,
   type PickedPhoto,
   type UploadedPhoto,
-} from "@/lib/photos/upload";
+} from "./photo-upload";
 
 export type PhotoPickerActions = {
   maxPerStory: number;
@@ -52,7 +52,9 @@ export function PhotoPicker({
   const dropped = useRef(new Set<number>());
   const previews = useRef(new Set<string>());
 
-  useEffect(() => onChange(photoDraft(items)), [items, onChange]);
+  useEffect(() => {
+    onChange(photoDraft(items));
+  }, [items, onChange]);
   // Leaving the form leaves no photos behind in it, and frees the previews.
   useEffect(() => {
     const urls = previews.current;
@@ -128,16 +130,19 @@ export function PhotoPicker({
         <ul className="grid grid-cols-2 gap-3">
           {items.map((item, index) => (
             <li key={item.id} className="min-w-0 space-y-1">
-              {/* A blob address of the member's own file, so no resizing service applies. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.preview}
-                alt={format(m.yourPhoto, { number: index + 1 })}
-                className={cn(
-                  "aspect-[4/3] w-full rounded-[10px] bg-kamenozoki object-cover",
-                  item.state === "working" && "opacity-60",
-                )}
-              />
+              {/* A file the browser can't read has no picture to show, only a broken icon. */}
+              {item.problem !== "unreadable" && (
+                // A blob address of the member's own file, so no resizing service applies.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.preview}
+                  alt={format(m.yourPhoto, { number: index + 1 })}
+                  className={cn(
+                    "aspect-[4/3] w-full rounded-[10px] bg-kamenozoki object-cover",
+                    item.state === "working" && "opacity-60",
+                  )}
+                />
+              )}
               {item.state === "working" && (
                 <p role="status" className="text-[15px]">
                   {m.preparing}
