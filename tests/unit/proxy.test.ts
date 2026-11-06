@@ -71,6 +71,47 @@ describe("proxy", () => {
     expect(notice.auth).not.toHaveBeenCalled();
   });
 
+  describe.each(["terms", "privacy", "sign-up"])("the public page /%s", (page) => {
+    it.each(["en", "ja"])(
+      "reaches a signed-out visitor in %s, without the welcome page",
+      async (lang) => {
+        const { auth, response } = visit(`/${lang}/${page}`, false);
+        expect(await response).toBeUndefined();
+        expect(auth).not.toHaveBeenCalled();
+        expect(auth.protect).not.toHaveBeenCalled();
+      },
+    );
+
+    it("takes the visitor's language when the address has none, which is what Clerk's legal links use", async () => {
+      const en = visit(`/${page}`, false, "en");
+      expect(await location(en.response)).toBe(`/en/${page}`);
+      expect(await location(visit(`/${page}`, false, "ja").response)).toBe(`/ja/${page}`);
+      expect(await location(visit(`/${page}`, false).response)).toBe(`/ja/${page}`);
+      expect(en.auth).not.toHaveBeenCalled();
+    });
+
+    it("goes through the proxy like any page, so Clerk can see the request", () => {
+      const pages = new RegExp(`^${config.matcher[0]}$`);
+      expect(pages.test(`/${page}`)).toBe(true);
+      expect(pages.test(`/en/${page}`)).toBe(true);
+    });
+  });
+
+  it("keeps the return address when sign-up has no language in its address", async () => {
+    const path = "/sign-up?redirect_url=%2Fen%2Fplaces%2Fa-shop";
+    expect(await location(visit(path, false, "en").response)).toBe(
+      "/en/sign-up?redirect_url=%2Fen%2Fplaces%2Fa-shop",
+    );
+  });
+
+  it("leaves the steps inside Clerk's sign-up form to the form", async () => {
+    for (const step of ["sso-callback", "continue", "verify-email-address"]) {
+      const { auth, response } = visit(`/en/sign-up/${step}`, false);
+      expect(await response).toBeUndefined();
+      expect(auth.protect).not.toHaveBeenCalled();
+    }
+  });
+
   it("still sends signed-out visitors on role pages to sign in", async () => {
     const { auth, response } = visit("/en/creator", false);
     await response;

@@ -1,9 +1,11 @@
-import { jaJP } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { BIZ_UDPGothic, Geist_Mono, Shippori_Mincho_B1 } from "next/font/google";
+import { DocumentLinksProvider } from "@/components/layout/document-links";
 import { SiteHeader } from "@/components/layout/site-header";
+import { documentsPublished } from "@/components/legal/documents";
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider";
+import { clerkLocalization } from "@/lib/i18n/clerk-localization";
 import { getLocale } from "@/lib/i18n/server";
 import { getActiveRegion } from "@/lib/region";
 import "../globals.css";
@@ -47,9 +49,6 @@ const CLERK_APPEARANCE = {
   },
 };
 
-// Clerk's own UI strings; a language without an entry falls back to Clerk's English.
-const CLERK_LOCALIZATION: Partial<Record<string, typeof jaJP>> = { ja: jaJP };
-
 export default async function RootLayout({ children }: LayoutProps<"/[lang]">) {
   const locale = await getLocale();
   const region = getActiveRegion();
@@ -62,16 +61,19 @@ export default async function RootLayout({ children }: LayoutProps<"/[lang]">) {
         {/* Clerk's docs: inside <body>, not around <html>, when Cache Components is on. */}
         <ClerkProvider
           signInUrl={`/${locale}/sign-in`}
-          localization={CLERK_LOCALIZATION[locale]}
+          signUpUrl={region.legal.accountsOpen ? `/${locale}/sign-up` : undefined}
+          localization={clerkLocalization(locale, region.minimumAge)}
           appearance={CLERK_APPEARANCE}
         >
           <ConvexClientProvider>
-            <SiteHeader
-              locale={locale}
-              regionName={region.name[locale] ?? region.id}
-              locales={region.locales}
-            />
-            {children}
+            <DocumentLinksProvider published={documentsPublished(region)}>
+              <SiteHeader
+                locale={locale}
+                regionName={region.name[locale] ?? region.id}
+                locales={region.locales}
+              />
+              {children}
+            </DocumentLinksProvider>
           </ConvexClientProvider>
         </ClerkProvider>
       </body>
