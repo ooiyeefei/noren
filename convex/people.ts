@@ -398,6 +398,18 @@ const DELETION_STEPS: readonly DeletionStep[] = [
   },
 ];
 
+async function holdsInterviewOrOwnership(ctx: QueryCtx, personId: Id<"person">): Promise<boolean> {
+  const interview = await ctx.db
+    .query("interview")
+    .withIndex("by_interviewerId", (q) => q.eq("interviewerId", personId))
+    .first();
+  const ownership = await ctx.db
+    .query("placeOwner")
+    .withIndex("by_personId", (q) => q.eq("personId", personId))
+    .first();
+  return interview !== null || ownership !== null;
+}
+
 /**
  * The person's row and collection change in one transaction, so the moment this commits their token
  * no longer finds them. The rest continues in `continueDeletion`.
@@ -451,15 +463,7 @@ export const deleteMine = mutation({
     }
     // A steward can make someone a plain user without touching what they hold, and interviews,
     // consents and ownership still depend on them, so they ask a steward like any other role.
-    const interview = await ctx.db
-      .query("interview")
-      .withIndex("by_interviewerId", (q) => q.eq("interviewerId", person._id))
-      .first();
-    const ownership = await ctx.db
-      .query("placeOwner")
-      .withIndex("by_personId", (q) => q.eq("personId", person._id))
-      .first();
-    if (interview !== null || ownership !== null) {
+    if (await holdsInterviewOrOwnership(ctx, person._id)) {
       throw appError("forbidden", "a steward deletes accounts that hold interviews or ownership");
     }
     await emptyPerson(ctx, person);
@@ -479,6 +483,7 @@ export const sweepAfterDeletion = internalMutation({
   handler: async (ctx, { tokenIdentifier }) => {
     const person = await findPerson(ctx, tokenIdentifier);
     if (person === null || person.role !== "user" || person.isMock) return null;
+    if (await holdsInterviewOrOwnership(ctx, person._id)) return null;
     await emptyPerson(ctx, person);
     return null;
   },
