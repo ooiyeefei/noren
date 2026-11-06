@@ -114,7 +114,7 @@ The mutation refuses a place that isn't in a live set, a place the caller can't 
 
 ## Account deletion
 
-`people.deleteMine` runs for `role === "user"` only. The person's row changes first, in the same transaction, and any remaining rows continue through a scheduled internal mutation.
+`people.deleteMine` runs for `role === "user"` only, and refuses a user who still holds an interview or a place, as a steward can change a role without touching those. The person's row changes first, in the same transaction, and any remaining rows continue through a scheduled internal mutation.
 
 | Record | What happens |
 |---|---|
@@ -125,11 +125,14 @@ The mutation refuses a place that isn't in a live set, a place the caller can't 
 | `placeCheck` by them | Deleted |
 | `note` by them | Deleted, along with its `noteTranslation` rows |
 | `place`, `pin`, `placeName` they made | Kept as facts about a place. The link to them now points at the empty row, so no name shows. The privacy notice says this |
-| `auditLog` | Kept. Entries point at the empty row, so they no longer identify anyone |
+| `auditLog` | Kept. Entries point at the empty row, and an entry about the person keeps only `role` and `isMock` from its `diff`, so a changed display name doesn't stay in it |
+| `mentionCandidate.hiddenBy` | Kept, pointing at the empty row. A member who added a place can take a found post off it |
 | `rateLimit` | Left to expire in place. Keys hold an id only |
+| `interview`, `consent`, `transcript`, `claim` (`authorId`, `reviewerId`), `placeOwner` (`personId`) | Never reached: `deleteMine` refuses while the person holds an interview or a place, so they ask a steward |
+| Fields only a steward's action fills: `person.verifiedBy`, `placeCheck.reviewedBy`, `placeOwner.verifiedBy`, `openTextSnippet.approvedBy`, `source.demoConsentBy`, `translationCheck.decidedBy`, `pageVersion.reviewedBy`, `mentionCandidate.collectedBy`, `placeStoryRun.requestedBy` | Never reached: a steward can't delete themselves this way |
 | Clerk user | Deleted by the route, after the steps above |
 
-The build step checks this table against every `v.id("person")` field in `convex/tables/`.
+`DELETION_DECISIONS` in `convex/people.test.ts` holds one decision for every `v.id("person")` field in the schema, and its test fails when a new field has none.
 
 ## First set: Shinchi
 
