@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useDraft } from "@/components/drafts/drafts";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { DISPLAY_NAME_LIMIT, cleanDisplayName } from "@/lib/domain/display-name";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
@@ -21,8 +22,9 @@ export function AccountName({
   save(displayName: string): Promise<unknown>;
 }): React.JSX.Element {
   const m = messagesFor(addStoryMessages, locale);
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(displayName);
+  // Kept together, so a reload in the middle of a change reopens it with what was typed.
+  const [edit, setEdit] = useDraft("account:name", { editing: false, name: displayName });
+  const { editing, name } = edit;
   const [problem, setProblem] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -36,7 +38,7 @@ export function AccountName({
     setError(null);
     try {
       await save(clean);
-      setEditing(false);
+      setEdit({ editing: false, name: clean });
     } catch (caught) {
       setError(caught);
     } finally {
@@ -54,7 +56,7 @@ export function AccountName({
             value={name}
             maxLength={DISPLAY_NAME_LIMIT}
             aria-invalid={problem || undefined}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => setEdit({ editing: true, name: event.target.value })}
             // Enter also ends a Japanese conversion, which must not save a half-typed name.
             onKeyDown={(event) => {
               if (event.key !== "Enter") return;
@@ -90,10 +92,9 @@ export function AccountName({
               disabled={pending}
               className={`${BUTTON} border border-input text-kon`}
               onClick={() => {
-                setEditing(false);
+                setEdit({ editing: false, name: displayName });
                 setProblem(false);
                 setError(null);
-                setName(displayName);
               }}
             >
               {m.cancel}
@@ -103,10 +104,7 @@ export function AccountName({
           <button
             type="button"
             className={`${BUTTON} border border-kon text-kon`}
-            onClick={() => {
-              setName(displayName);
-              setEditing(true);
-            }}
+            onClick={() => setEdit({ editing: true, name: displayName })}
           >
             {m.changeName}
           </button>

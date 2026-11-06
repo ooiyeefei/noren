@@ -173,7 +173,7 @@ describe("interview workspace view", () => {
         <ClaimProposal
           locale={locale}
           lang="ja"
-          initial={{
+          draft={{
             spanStart: 0,
             spanEnd: 3,
             quote: " a ",
@@ -181,6 +181,7 @@ describe("interview workspace view", () => {
             kind: "caution",
             cautionType: "access",
           }}
+          onChange={() => {}}
           vocabulary={base.region.cautionVocabulary}
           onSubmit={async () => {}}
           onCancel={() => {}}

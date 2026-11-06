@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useDraft } from "@/components/drafts/drafts";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { neighbourhoodName } from "@/components/explore/mission-bar";
 import type { LocationRead } from "@/lib/collection/location";
@@ -65,6 +66,8 @@ type Step =
   | { kind: "denied" | "unavailable" | "timeout" | "unsupported" }
   | { kind: "failed"; error: unknown };
 
+const SAME_VISIT_MS = 6 * 60 * 60 * 1000;
+
 const BUTTON =
   "inline-flex min-h-11 w-full items-center justify-center rounded-[10px] bg-kon px-5 py-2 font-bold text-white disabled:opacity-50";
 
@@ -117,7 +120,13 @@ export function CheckInCard({
 }) {
   const m = messagesFor(collectionMessages, locale);
   const [step, setStep] = useState<Step>({ kind: "ready" });
-  const [outcome, setOutcome] = useState<CheckInOutcome | null>(null);
+  // Kept through a reload on the same visit, so the line they were writing comes back with it.
+  const [outcome, setOutcome] = useDraft<CheckInOutcome | null>(
+    `checkin:${slug}:outcome`,
+    null,
+    1,
+    SAME_VISIT_MS,
+  );
   const busy = useRef(false);
   const name = neighbourhoodName(spot.setNames, locale);
   const panel = String(spot.panelIndex + 1);
@@ -154,6 +163,7 @@ export function CheckInCard({
         displayName={displayName}
         setHref={setHref}
         actions={actions}
+        draftName={`checkin:${slug}:line`}
       />
     );
   if (spot.visited)

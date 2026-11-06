@@ -8,6 +8,7 @@ import {
   TranslationPendingBadge,
   UnreviewedBadge,
 } from "@/components/badges";
+import { useDraft } from "@/components/drafts/drafts";
 import { errorText } from "@/components/layout/error-text";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -196,6 +197,9 @@ function ReadOnlyClaim({
   );
 }
 
+/** No edit open. The text is filled from the claim on opening, so a later change to it leaves no draft. */
+const EDIT_CLOSED = { editing: false, text: "" };
+
 export function ReviewCard({
   locale,
   region,
@@ -215,9 +219,9 @@ export function ReviewCard({
   const id = useId();
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
-  const [editing, setEditing] = useState(false);
+  // An open edit and its text come back after a reload.
+  const [edit, setEdit] = useDraft(`claim:${claim._id}`, EDIT_CLOSED);
   const [removing, setRemoving] = useState(false);
-  const [text, setText] = useState(claim.textOriginal);
   async function run(action: () => Promise<void>, done?: () => void) {
     if (pending || !ownerMayAct(claim)) return;
     setPending(true);
@@ -255,31 +259,28 @@ export function ReviewCard({
         className="h-auto min-h-11 rounded-[10px] text-base"
         variant="outline"
         disabled={pending}
-        onClick={() => {
-          setText(claim.textOriginal);
-          setEditing(true);
-        }}
+        onClick={() => setEdit({ editing: true, text: claim.textOriginal })}
       >
         {ui.edit}
       </Button>
-      {editing && (
+      {edit.editing && (
         <div className="space-y-3">
           <Label htmlFor={id}>{ui.edit}</Label>
           <Textarea
             id={id}
             lang={claim.langOriginal}
-            value={text}
+            value={edit.text}
             disabled={pending}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => setEdit({ editing: true, text: event.target.value })}
           />
           <div className="flex flex-wrap gap-3">
             <Button
               className="h-auto min-h-11 rounded-[10px] text-base"
-              disabled={pending || !text.trim()}
+              disabled={pending || !edit.text.trim()}
               onClick={() =>
                 void run(
-                  () => onEdit(claim._id, text),
-                  () => setEditing(false),
+                  () => onEdit(claim._id, edit.text),
+                  () => setEdit(EDIT_CLOSED),
                 )
               }
             >
@@ -289,7 +290,7 @@ export function ReviewCard({
               className="h-auto min-h-11 rounded-[10px] text-base"
               variant="outline"
               disabled={pending}
-              onClick={() => setEditing(false)}
+              onClick={() => setEdit(EDIT_CLOSED)}
             >
               {ui.cancel}
             </Button>

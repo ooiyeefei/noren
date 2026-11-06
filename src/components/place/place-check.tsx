@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { ChevronDown, CircleCheck, CircleHelp, Clock } from "lucide-react";
+import { useDraft } from "@/components/drafts/drafts";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { CHECK_PROBLEMS, type CheckProblem } from "@/lib/domain/constants";
 import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
@@ -19,12 +20,14 @@ export type PlaceCheckActions = {
 };
 
 const ICONS = { unconfirmed: CircleHelp, confirmed: CircleCheck, stale: Clock };
+const NO_REPORT = { reporting: false, problem: "" as CheckProblem | "", note: "" };
 const BUTTON =
   "inline-flex min-h-11 items-center justify-center rounded-[10px] px-5 py-2 font-bold disabled:opacity-50";
 
 /**
  * FR-030: the label says whether a person has checked the place; opening it shows where the
  * listing came from and lets a signed-in member say "Still here" or report something wrong.
+ * With a `draftName`, a report they started comes back after a reload.
  */
 export function PlaceCheck({
   locale,
@@ -32,6 +35,7 @@ export function PlaceCheck({
   fromOpenData = false,
   actions,
   now,
+  draftName,
 }: {
   locale: Locale;
   confirmedAt?: number;
@@ -39,6 +43,7 @@ export function PlaceCheck({
   fromOpenData?: boolean;
   actions?: PlaceCheckActions;
   now?: number;
+  draftName?: string;
 }) {
   const m = messagesFor(checkMessages, locale);
   const radioName = useId();
@@ -47,10 +52,9 @@ export function PlaceCheck({
   // One tap for a member at a place no one has checked. Once opened it stays under their control:
   // React leaves the attribute alone until this changes, and this never changes back.
   const [opened, setOpened] = useState(false);
-  if (!opened && actions?.signedIn && state === "unconfirmed") setOpened(true);
-  const [reporting, setReporting] = useState(false);
-  const [problem, setProblem] = useState<CheckProblem | "">("");
-  const [note, setNote] = useState("");
+  const [report, setReport] = useDraft(draftName, NO_REPORT);
+  const { reporting, problem, note } = report;
+  if (!opened && actions?.signedIn && (state === "unconfirmed" || reporting)) setOpened(true);
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState<"confirmed" | "reported" | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -64,11 +68,7 @@ export function PlaceCheck({
     try {
       await work();
       setDone(result);
-      if (result === "reported") {
-        setReporting(false);
-        setProblem("");
-        setNote("");
-      }
+      if (result === "reported") setReport(NO_REPORT);
     } catch (caught) {
       setError(caught);
     } finally {
@@ -142,7 +142,7 @@ export function PlaceCheck({
                   disabled={pending}
                   className={cn(BUTTON, "border border-input text-kon")}
                   onClick={() => {
-                    setReporting(true);
+                    setReport((current) => ({ ...current, reporting: true }));
                     setDone(null);
                   }}
                 >
@@ -167,7 +167,7 @@ export function PlaceCheck({
                         name={radioName}
                         value={key}
                         checked={problem === key}
-                        onChange={() => setProblem(key)}
+                        onChange={() => setReport((current) => ({ ...current, problem: key }))}
                         className="size-5"
                       />
                       {m[key]}
@@ -180,7 +180,9 @@ export function PlaceCheck({
                     value={note}
                     maxLength={500}
                     rows={3}
-                    onChange={(event) => setNote(event.target.value)}
+                    onChange={(event) =>
+                      setReport((current) => ({ ...current, note: event.target.value }))
+                    }
                     className="block w-full rounded-[10px] border border-input p-3 text-[16px]"
                   />
                 </label>
@@ -196,7 +198,7 @@ export function PlaceCheck({
                     type="button"
                     disabled={pending}
                     className={cn(BUTTON, "border border-input text-kon")}
-                    onClick={() => setReporting(false)}
+                    onClick={() => setReport((current) => ({ ...current, reporting: false }))}
                   >
                     {m.cancel}
                   </button>

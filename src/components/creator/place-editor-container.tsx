@@ -3,6 +3,7 @@
 import { use, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
+import { useDraft } from "@/components/drafts/drafts";
 import { PageContainer } from "@/components/layout/page-container";
 import { errorText } from "@/components/layout/error-text";
 import { useShownAs } from "@/components/place/use-shown-as";
@@ -93,6 +94,15 @@ function LoadPlace({
 }
 
 type PlaceDetail = NonNullable<ReturnType<typeof useQuery<typeof api.places.get>>>;
+/** One shape and key order for the place and the form, so a draft that matches it is dropped. */
+function sameShape({ kind, category, names, pin }: PlaceDraft): PlaceDraft {
+  return {
+    kind,
+    ...(category ? { category } : {}),
+    names: names.map(({ lang, script, value, isPrimary }) => ({ lang, script, value, isPrimary })),
+    pin: pin && { lat: pin.lat, lng: pin.lng },
+  };
+}
 function Editor({
   place,
   locale,
@@ -118,12 +128,8 @@ function Editor({
   const remove = useMutation(api.sources.remove);
   const createInterview = useMutation(api.interviews.create);
   const router = useRouter();
-  const [draft, setDraft] = useState<PlaceDraft>({
-    kind: place.kind,
-    category: place.category,
-    names: place.names,
-    pin: place.pin,
-  });
+  // Changes are kept until saved; a form that matches the place keeps nothing.
+  const [draft, setDraft] = useDraft(`place-editor:${place._id}:details`, sameShape(place));
   const [errors, setErrors] = useState<PlaceErrors>({});
   const emptySource: SourceDraft = {
     url: "",
@@ -133,7 +139,7 @@ function Editor({
     authorHandle: "",
     authorUrl: "",
   };
-  const [sourceDraft, setSourceDraft] = useState(emptySource);
+  const [sourceDraft, setSourceDraft] = useDraft(`place-editor:${place._id}:source`, emptySource);
   const [sourceError, setSourceError] = useState<keyof SourceDraft>();
   const [language, setLanguage] = useState(region.defaultLocale);
   const [pending, setPending] = useState<string>();
@@ -191,6 +197,8 @@ function Editor({
           placeId: place._id,
           ...(draft.category ? { category: draft.category } : { clear: true }),
         });
+      // The names as the place now has them, so the kept draft matches it and goes.
+      setDraft((old) => sameShape({ ...old, names }));
     });
   }
   function savePin() {
@@ -198,7 +206,10 @@ function Editor({
     setErrors(error ? { pin: error } : {});
     if (error || !draft.pin) return;
     const pin = draft.pin;
-    void run("pin", () => movePin({ placeId: place._id, ...pin }));
+    void run("pin", async () => {
+      await movePin({ placeId: place._id, ...pin });
+      setDraft(sameShape);
+    });
   }
   function addPost() {
     const preview = previewSource(sourceDraft.url, region.enabledSourceAdapters);

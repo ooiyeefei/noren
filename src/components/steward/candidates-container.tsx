@@ -2,6 +2,7 @@
 
 import { use, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useDraft } from "@/components/drafts/drafts";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { candidateMessages } from "@/lib/i18n/messages/candidates";
 import type { RegionConfig } from "@/lib/region/schema";
@@ -47,13 +48,24 @@ export function CandidatesContainer({
   const confirm = useMutation(api.osmSeed.confirmCandidate);
   const publish = useMutation(api.places.setVisibility);
   const dismiss = useMutation(api.osmSeed.dismissCandidate);
-  const [drafts, setDrafts] = useState<Record<string, CandidateDraft>>({});
+  const [drafts, setDrafts] = useDraft<Record<string, CandidateDraft>>(
+    `candidates:${region.id}`,
+    {},
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dismissId, setDismissId] = useState<string | null>(null);
   const [removed, setRemoved] = useState<string[]>([]);
   const [saved, setSaved] = useState<SavedCandidate[]>([]);
   const { state, run } = useStewardAction(locale);
   const m = messagesFor(candidateMessages, locale);
+  // A candidate saved or dismissed is done with, so its kept draft goes too.
+  function dropDraft(id: string) {
+    setDrafts((old) => {
+      const next = { ...old };
+      delete next[id];
+      return next;
+    });
+  }
   const candidates = [
     ...new Map(
       [...pagination.previous, ...(result?.page ?? [])].map((candidate) => [
@@ -114,6 +126,7 @@ export function CandidatesContainer({
             category: draft.category,
           });
           setRemoved((old) => [...old, id]);
+          dropDraft(id);
           setActiveId(null);
           setDismissId(null);
           setSaved((old) => [...old, { ...place, visibility: "draft" }]);
@@ -145,6 +158,7 @@ export function CandidatesContainer({
           if (dismissId !== id) return;
           await dismiss({ candidateId: id as Id<"seedOsmCandidate"> });
           setRemoved((old) => [...old, id]);
+          dropDraft(id);
           setDismissId(null);
           if (activeId === id) setActiveId(null);
           return m.dismissed;

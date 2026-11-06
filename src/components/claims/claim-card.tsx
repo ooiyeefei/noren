@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { AiAssistedBadge, DemoBadge } from "@/components/badges";
+import { useDraft } from "@/components/drafts/drafts";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,6 +25,9 @@ export type ClaimCardData = {
   isMock: boolean;
 };
 
+/** No edit open. The text is filled from the claim on opening, so a later change to it leaves no draft. */
+const EDIT_CLOSED = { editing: false, text: "" };
+
 export function ClaimCard(props: {
   locale: Locale;
   claim: ClaimCardData;
@@ -37,8 +41,8 @@ export function ClaimCard(props: {
   const m = messagesFor(interviewUiMessages, props.locale);
   const id = useId();
   const { claim } = props;
-  const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(claim.textOriginal);
+  // An open edit and its text come back after a reload.
+  const [edit, setEdit] = useDraft(`claim-card:${claim.id}`, EDIT_CLOSED);
   const [removing, setRemoving] = useState(false);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -88,24 +92,24 @@ export function ClaimCard(props: {
         )}
         {actionable && (
           <>
-            {editing && (
+            {edit.editing && (
               <div className="space-y-2">
                 <Label htmlFor={id}>{m.edit}</Label>
                 <Textarea
                   id={id}
                   lang={claim.langOriginal}
-                  value={text}
+                  value={edit.text}
                   disabled={busy}
-                  onChange={(event) => setText(event.target.value)}
+                  onChange={(event) => setEdit({ editing: true, text: event.target.value })}
                 />
                 <Button
                   className="h-auto min-h-11 rounded-[10px] px-4 py-2 text-base whitespace-normal"
                   type="button"
-                  disabled={busy || !text.trim()}
+                  disabled={busy || !edit.text.trim()}
                   onClick={() =>
                     void act(
-                      () => props.onEdit(text),
-                      () => setEditing(false),
+                      () => props.onEdit(edit.text),
+                      () => setEdit(EDIT_CLOSED),
                     )
                   }
                 >
@@ -116,7 +120,7 @@ export function ClaimCard(props: {
                   type="button"
                   variant="outline"
                   disabled={busy}
-                  onClick={() => setEditing(false)}
+                  onClick={() => setEdit(EDIT_CLOSED)}
                 >
                   {m.cancel}
                 </Button>
@@ -136,10 +140,7 @@ export function ClaimCard(props: {
                 type="button"
                 variant="outline"
                 disabled={busy}
-                onClick={() => {
-                  setText(claim.textOriginal);
-                  setEditing(true);
-                }}
+                onClick={() => setEdit({ editing: true, text: claim.textOriginal })}
               >
                 {m.edit}
               </Button>

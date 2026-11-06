@@ -14,7 +14,9 @@ import { validateProposal, type ProposalDraft, type WorkspaceRegion } from "./wo
 export function ClaimProposal(props: {
   locale: Locale;
   lang: string;
-  initial: ProposalDraft;
+  /** Held by the page, which unmounts this form on send or cancel and so is the one to drop the draft. */
+  draft: ProposalDraft;
+  onChange(draft: ProposalDraft): void;
   vocabulary: WorkspaceRegion["cautionVocabulary"];
   busy?: boolean;
   onSubmit(draft: ProposalDraft): Promise<void>;
@@ -23,7 +25,7 @@ export function ClaimProposal(props: {
   const m = messagesFor(interviewPageMessages, props.locale);
   const ui = messagesFor(interviewUiMessages, props.locale);
   const id = useId();
-  const [draft, setDraft] = useState(props.initial);
+  const { draft } = props;
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
   const busy = props.busy || pending;
@@ -52,7 +54,7 @@ export function ClaimProposal(props: {
       <h2>{m.proposalTitle}</h2>
       <p>{ui.whatYouSaid}</p>
       <blockquote lang={props.lang} className="whitespace-pre-wrap border-l-2 pl-3">
-        {props.initial.quote}
+        {draft.quote}
       </blockquote>
       <Label htmlFor={`${id}-kind`}>{m.kind}</Label>
       <select
@@ -60,7 +62,7 @@ export function ClaimProposal(props: {
         value={draft.kind}
         disabled={busy}
         onChange={(event) =>
-          setDraft({ ...draft, kind: event.target.value as ProposalDraft["kind"] })
+          props.onChange({ ...draft, kind: event.target.value as ProposalDraft["kind"] })
         }
       >
         {(["story", "fact", "caution"] as const).map((kind) => (
@@ -76,7 +78,7 @@ export function ClaimProposal(props: {
             id={`${id}-caution`}
             disabled={busy}
             value={draft.cautionType}
-            onChange={(event) => setDraft({ ...draft, cautionType: event.target.value })}
+            onChange={(event) => props.onChange({ ...draft, cautionType: event.target.value })}
           >
             <option value="">{m.chooseCaution}</option>
             {props.vocabulary.map((item) => (
@@ -93,7 +95,7 @@ export function ClaimProposal(props: {
         lang={props.lang}
         value={draft.textOriginal}
         disabled={busy}
-        onChange={(event) => setDraft({ ...draft, textOriginal: event.target.value })}
+        onChange={(event) => props.onChange({ ...draft, textOriginal: event.target.value })}
       />
       {error && <Alert variant="destructive">{error}</Alert>}
       <div className="flex flex-wrap gap-2">

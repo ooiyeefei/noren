@@ -47,6 +47,14 @@ vi.mock("react", async (importOriginal) => {
     useId: () => (hooks.current ? "story" : react.useId()),
   };
 });
+// Here a kept draft is plain state, on the harness above; keeping it is tested in drafts-storage.
+vi.mock("@/components/drafts/drafts", async () => {
+  const { useState } = await import("react");
+  return {
+    useDraft: <T,>(_name: unknown, empty: T) => useState(empty),
+    usePhotoDrafts: () => null,
+  };
+});
 afterEach(() => {
   hooks.current = undefined;
 });

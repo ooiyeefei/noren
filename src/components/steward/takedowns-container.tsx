@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useDraft } from "@/components/drafts/drafts";
 import { api } from "../../../convex/_generated/api";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { takedownsMessages } from "@/lib/i18n/messages/takedowns";
@@ -25,7 +26,7 @@ export function TakedownsContainer({ locale, windows }: { locale: Locale; window
     paginationOpts: { cursor: pagination.cursor, numItems: 25 },
   });
   const decide = useMutation(api.takedown.decide);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useDraft<Record<string, string>>("takedowns:outcomes", {});
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const [error, setError] = useState<string>();
@@ -86,7 +87,11 @@ export function TakedownsContainer({ locale, windows }: { locale: Locale; window
             outcome: outcome.trim(),
           });
           setPagination({ cursor: null, phase: 0, previous: [] });
-          setDrafts((old) => ({ ...old, [id]: "" }));
+          setDrafts((old) => {
+            const next = { ...old };
+            delete next[id];
+            return next;
+          });
           setSuccess(messagesFor(takedownsMessages, locale).saved);
         } catch (error) {
           setError(takedownError(error, locale));

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
+import { useDraft } from "@/components/drafts/drafts";
 import { api } from "../../../convex/_generated/api";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { takedownMessages } from "@/lib/i18n/messages/takedown";
@@ -11,9 +12,11 @@ import { takedownError, validateText } from "./takedown-logic";
 
 export function StatusContainer({ locale }: { locale: Locale }) {
   const query = useSearchParams();
-  const [code, setCode] = useState((query.get("code") ?? "").trim());
-  const [lookup, setLookup] = useState(code);
-  const [note, setNote] = useState("");
+  const linked = (query.get("code") ?? "").trim();
+  // A code from a link comes back with the link; one typed in is kept, with the appeal written for it.
+  const [code, setCode] = useDraft(linked ? null : "takedown-status:code", linked);
+  const [lookup, setLookup] = useDraft(linked ? null : "takedown-status:lookup", linked);
+  const [note, setNote] = useDraft(lookup ? `takedown-status:${lookup}:appeal` : null, "");
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const [pending, setPending] = useState(false);

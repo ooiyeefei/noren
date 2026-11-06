@@ -3,6 +3,7 @@
 import { Component, use, useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useDraft } from "@/components/drafts/drafts";
 import { errorText } from "@/components/layout/error-text";
 import { ErrorPage } from "@/components/layout/error-page";
 import { PageContainer } from "@/components/layout/page-container";
@@ -15,8 +16,10 @@ import { api } from "../../../convex/_generated/api";
 import { searchPlaces } from "./geo-search";
 import { CreatorHomeView } from "./creator-home-view";
 import { wizardHref, wizardStep, type WizardStep } from "./place-wizard";
-import { NewPlaceView, type SearchState, type SearchActions } from "./new-place-view";
+import { NO_MAPS_LINK, NewPlaceView, type SearchState, type SearchActions } from "./new-place-view";
 import { toCreateArgs, validatePlaceDraft, type PlaceDraft, type PlaceErrors } from "./place-form";
+
+const NO_PLACE: PlaceDraft = { kind: "business", names: [], pin: null };
 
 export class CreatorErrorBoundary extends Component<
   { locale: Locale; malformedAsNotFound?: boolean; children: ReactNode },
@@ -114,11 +117,11 @@ export function CreatorHomeContainer({
     router.push(next === 0 ? `/${locale}/creator` : wizardHref(locale, next), { scroll: false });
   }
   const m = messagesFor(creatorMessages, locale);
-  const [draft, setDraft] = useState<PlaceDraft>({
-    kind: "business",
-    names: [],
-    pin: null,
-  });
+  const draftName = `new-place:${region.id}`;
+  const [draft, setDraft] = useDraft(draftName, NO_PLACE);
+  // The Maps link field keeps its link under this name; it is cleared here once the place is added.
+  const mapsLinkDraft = `${draftName}:maps-link`;
+  const [, setMapsLink] = useDraft(mapsLinkDraft, NO_MAPS_LINK);
   const [errors, setErrors] = useState<PlaceErrors>({});
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
@@ -144,6 +147,8 @@ export function CreatorHomeContainer({
     setError(undefined);
     try {
       const result = await create({ ...toCreateArgs(draft, region.id), onMap });
+      setDraft(NO_PLACE);
+      setMapsLink(NO_MAPS_LINK);
       router.push(`/${locale}/creator/places/${result.placeId}`);
     } catch (error) {
       setError(errorText(error, locale));
@@ -174,6 +179,7 @@ export function CreatorHomeContainer({
         waits={waits}
         shownAs={shownAs}
         draft={draft}
+        mapsLinkDraft={mapsLinkDraft}
         onChange={(next) => {
           setDraft(next);
           setErrors({});

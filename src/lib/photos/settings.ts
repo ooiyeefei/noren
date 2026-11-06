@@ -21,6 +21,8 @@ export type PublicPhotoProps = {
   maxPerStory: number;
   maxEdgePixels: number;
   jpegQuality: number;
+  /** How long the server keeps a photo that no story took. */
+  unattachedHours: number;
 };
 
 const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
@@ -72,8 +74,14 @@ export function publicPhotoProps(
 ): PublicPhotoProps | null {
   const settings = activePhotoSettings(region, env);
   if (settings === null || !region.photos) return null;
-  const { maxPerStory, maxEdgePixels, jpegQuality } = region.photos;
-  return { baseUrl: settings.publicBaseUrl, maxPerStory, maxEdgePixels, jpegQuality };
+  const { maxPerStory, maxEdgePixels, jpegQuality, unattachedHours } = region.photos;
+  return {
+    baseUrl: settings.publicBaseUrl,
+    maxPerStory,
+    maxEdgePixels,
+    jpegQuality,
+    unattachedHours,
+  };
 }
 
 /** Where the browser posts an upload, for the content security policy. */

@@ -2,6 +2,7 @@
 
 import { Component, use, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useDraft } from "@/components/drafts/drafts";
 import { errorText } from "@/components/layout/error-text";
 import { ErrorPage } from "@/components/layout/error-page";
 import { PageContainer } from "@/components/layout/page-container";
@@ -78,7 +79,10 @@ export function StewardHomeContainer({
   const setKind = useMutation(api.places.setKind);
   const setVisibility = useMutation(api.places.setVisibility);
   const declineWaiting = useMutation(api.places.declineWaiting);
-  const [drafts, setDrafts] = useState<Record<string, VisibilityDraft>>({});
+  const [drafts, setDrafts] = useDraft<Record<string, VisibilityDraft>>(
+    `steward-home:${region.id}:visibility`,
+    {},
+  );
   const { state, run } = useStewardAction(locale);
   if (places === undefined)
     return <p role="status">{messagesFor(stewardMessages, locale).loading}</p>;

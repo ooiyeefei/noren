@@ -19,6 +19,8 @@ import { useShownAs } from "@/components/place/use-shown-as";
 import { useToday } from "./use-today";
 import type { PublicRegionProps } from "./mapping";
 
+const HOUR_MS = 60 * 60 * 1000;
+
 /** The form's photo ids came from Convex a moment ago, and stories.add checks each one again. */
 const writtenStory = ({ photoIds, ...args }: WrittenStoryArgs, placeId: Id<"place">) => ({
   ...args,
@@ -113,6 +115,8 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
             ? {
                 maxPerStory: canAddPhotos.maxPerStory,
                 waitsUntil: canAddPhotos.waitsUntil,
+                // Two hours short of the hourly sweep, so a kept upload is never attached as it goes.
+                keepUploadsForMs: Math.max(0, photoLimits.unattachedHours - 2) * HOUR_MS,
                 upload: (file) =>
                   uploadStoryPhoto(file, { placeId: place._id, limits: photoLimits }),
                 remove: (photoId) => removePhoto({ photoId: photoId as Id<"storyPhoto"> }),
