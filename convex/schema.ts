@@ -4,6 +4,7 @@ import { communityTables } from "./tables/community";
 import { interviewTables } from "./tables/interviews";
 import { placeTables } from "./tables/places";
 import { storyFinderTables } from "./tables/storyFinder";
+import { storyPhotoTables } from "./tables/storyPhotos";
 
 export default defineSchema({
   ...placeTables,
@@ -11,4 +12,5 @@ export default defineSchema({
   ...communityTables,
   ...storyFinderTables,
   ...collectionTables,
+  ...storyPhotoTables,
 });
