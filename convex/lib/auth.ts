@@ -38,6 +38,23 @@ export async function requirePerson(ctx: QueryCtx): Promise<Doc<"person">> {
 }
 
 /**
+ * Whether the person has seen the name shown beside what they share (FR-131). A name can come from a
+ * sign-in provider, so a member sees it before their first share. A steward is never asked: no
+ * deploy order may lock them out. A demo account's name is its label, which they did not choose.
+ */
+export function nameIsConfirmed(
+  person: Pick<Doc<"person">, "role" | "isMock" | "nameConfirmedAt">,
+): boolean {
+  return person.role === "steward" || person.isMock || person.nameConfirmedAt !== undefined;
+}
+
+export function requireConfirmedName(person: Doc<"person">): void {
+  if (!nameIsConfirmed(person)) {
+    throw appError("name_not_confirmed", "confirm the name shown beside what you share first");
+  }
+}
+
+/**
  * The caller must hold one of `roles`. Two rules from the contract are built in: a steward may do
  * everything a creator can, and `business_owner` always means the verified owner of `placeId`,
  * which is therefore required whenever `business_owner` is listed (a missing one is a programming

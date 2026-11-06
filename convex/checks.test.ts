@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import nagasaki from "../regions/nagasaki.json";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -246,4 +247,91 @@ it("a place someone makes by hand is confirmed by them; the backfill confirms on
   });
   expect((await placeOf(b, listed))?.confirmedAt).toBeUndefined();
   expect(await placeOf(b, created)).toMatchObject({ confirmedAt: made!.confirmedAt });
+});
+
+describe("daily limits on Still here and reports (FR-128)", () => {
+  const { check, report } = nagasaki.collection.newAccount.perDay;
+  async function places(b: Backend, createdBy: Id<"person">, count: number, slug: string) {
+    const ids = [];
+    for (let n = 0; n < count; n++)
+      ids.push(await addPlace(b, { createdBy, visibility: "public", slug: `${slug}-${n}` }));
+    return ids;
+  }
+
+  it("a new member's Still here is refused at its number and records nothing", async () => {
+    const { b, steward } = await setup();
+    const ids = await places(b, steward, check + 1, "limit");
+    for (const placeId of ids.slice(0, check))
+      await b.as("check-member").mutation(api.checks.confirm, { placeId });
+    const last = ids[check]!;
+    expect(
+      await errorCode(b.as("check-member").mutation(api.checks.confirm, { placeId: last })),
+    ).toBe("rate_limited");
+    expect(await checksOf(b, last)).toEqual([]);
+    expect((await placeOf(b, last))?.confirmedAt).toBeUndefined();
+  });
+
+  it("pressing Still here again the same day uses up nothing", async () => {
+    const { b, member, placeId } = await setup();
+    for (let n = 0; n < check + 2; n++)
+      await b.as("check-member").mutation(api.checks.confirm, { placeId });
+    const row = await b.run((ctx) =>
+      ctx.db
+        .query("rateLimit")
+        .withIndex("by_key", (q) => q.eq("key", `contribution:check:${member}`))
+        .unique(),
+    );
+    expect(row?.count).toBe(1);
+  });
+
+  it("a new member's report is refused at its number and adds nothing to the queue", async () => {
+    const { b, steward } = await setup();
+    const ids = await places(b, steward, report + 1, "report");
+    const send = (placeId: Id<"place">) =>
+      b.as("check-member").mutation(api.checks.report, { placeId, problem: "closed" });
+    for (const placeId of ids.slice(0, report)) await send(placeId);
+    expect(await errorCode(send(ids[report]!))).toBe("rate_limited");
+    expect(await checksOf(b, ids[report]!)).toEqual([]);
+  });
+
+  it("after 7 days a member has the higher limits, and a creator has them from the start", async () => {
+    const b = newBackend(modules);
+    await addPerson(b, "regular", "user", { joinedDaysAgo: 8 });
+    const creator = await addPerson(b, "fresh-creator", "creator");
+    const steward = await addPerson(b, "check-steward", "steward");
+    const ids = await places(b, steward, 21, "regular");
+    for (const name of ["regular", "fresh-creator"]) {
+      for (const placeId of ids.slice(0, 20))
+        await b.as(name).mutation(api.checks.report, { placeId, problem: "closed" });
+      expect(
+        await errorCode(
+          b.as(name).mutation(api.checks.report, { placeId: ids[20]!, problem: "closed" }),
+        ),
+      ).toBe("rate_limited");
+    }
+    for (const placeId of ids) await b.as("regular").mutation(api.checks.confirm, { placeId });
+    // The counter says how far it got, and the 100th Still here is the last one allowed.
+    const person = (await b.run((ctx) => ctx.db.query("person").take(1)))[0]!;
+    await b.run(async (ctx) => {
+      const row = await ctx.db
+        .query("rateLimit")
+        .withIndex("by_key", (q) => q.eq("key", `contribution:check:${person._id}`))
+        .unique();
+      await ctx.db.patch("rateLimit", row!._id, { count: 99 });
+    });
+    const more = await places(b, creator, 2, "more");
+    await b.as("regular").mutation(api.checks.confirm, { placeId: more[0]! });
+    expect(
+      await errorCode(b.as("regular").mutation(api.checks.confirm, { placeId: more[1]! })),
+    ).toBe("rate_limited");
+  });
+
+  it("a steward has no limit", async () => {
+    const { b, steward } = await setup();
+    const ids = await places(b, steward, 101, "steward");
+    for (const placeId of ids)
+      await b.as("check-steward").mutation(api.checks.confirm, { placeId });
+    for (const placeId of ids.slice(0, 21))
+      await b.as("check-steward").mutation(api.checks.report, { placeId, problem: "closed" });
+  });
 });

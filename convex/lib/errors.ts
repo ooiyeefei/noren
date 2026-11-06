@@ -12,6 +12,7 @@ export const ERROR_STATUS = {
   not_found: 404,
   conflict: 409,
   rate_limited: 429,
+  name_not_confirmed: 409,
   rule_violation: 409,
 } as const;
 

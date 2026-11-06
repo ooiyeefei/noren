@@ -142,6 +142,17 @@ const rows: Record<string, Row[]> = {
       allowed: members,
     },
     {
+      fn: "places.listWaiting",
+      call: (as) => as.query(api.places.listWaiting, { regionId: "nagasaki" }),
+      allowed: ["steward"],
+    },
+    {
+      fn: "places.declineWaiting on a place that isn't waiting",
+      call: (as, w) => as.mutation(api.places.declineWaiting, { placeId: w.P }),
+      allowed: [],
+      denied: { steward: "conflict" },
+    },
+    {
       fn: "places.create landmark",
       call: (as) => as.mutation(api.places.create, { ...input, kind: "landmark" }),
       allowed: ["steward"],
@@ -466,6 +477,16 @@ const rows: Record<string, Row[]> = {
       denied: { steward: "conflict" },
     },
     { fn: "people.current", call: (as) => as.query(api.people.current, {}), allowed: [...callers] },
+    {
+      fn: "people.setMyDisplayName",
+      call: (as) => as.mutation(api.people.setMyDisplayName, { displayName: "A chosen name" }),
+      allowed: members,
+    },
+    {
+      fn: "people.confirmMyDisplayName",
+      call: (as) => as.mutation(api.people.confirmMyDisplayName, {}),
+      allowed: members,
+    },
   ],
 };
 

@@ -1,6 +1,8 @@
+import { isNewAccount } from "../../src/lib/region/new-account";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { appError } from "./errors";
+import { regionConfig } from "./region";
 
 /** Counters share the caller's transaction, including Convex's conflict retries. */
 export async function consumeRateLimit(
@@ -25,20 +27,45 @@ export async function consumeRateLimit(
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // A preview runs on each pasted link; a draft is one model call.
-const CONTRIBUTIONS_PER_DAY = { place: 20, post: 50, story: 50, preview: 200, draft: 30 } as const;
+const CONTRIBUTIONS_PER_DAY = {
+  place: 20,
+  post: 50,
+  story: 50,
+  preview: 200,
+  draft: 30,
+  check: 100,
+  report: 20,
+} as const;
 
-/** Any signed-in member may add places and posts; a daily cap stops one account flooding the map. */
+/** Whether this person's account is still in its first days, in this region's reckoning. */
+export function isNewMember(person: Doc<"person">, regionId: string, now: number): boolean {
+  return isNewAccount(
+    { role: person.role, joinedAt: person._creationTime },
+    regionConfig(regionId),
+    now,
+  );
+}
+
+/**
+ * Any signed-in member may add places and posts; a daily cap stops one account flooding the map. An
+ * account in its first days has the region's lower caps (FR-128). The count carries over when the
+ * higher cap starts, because both use the same key.
+ */
 export async function limitContribution(
   ctx: MutationCtx,
   person: Doc<"person">,
   kind: keyof typeof CONTRIBUTIONS_PER_DAY,
+  regionId: string,
 ): Promise<void> {
   if (person.role === "steward") return;
+  const now = Date.now();
   const result = await consumeRateLimit(ctx, {
     key: `contribution:${kind}:${person._id}`,
-    limit: CONTRIBUTIONS_PER_DAY[kind],
+    limit: isNewMember(person, regionId, now)
+      ? regionConfig(regionId).collection.newAccount.perDay[kind]
+      : CONTRIBUTIONS_PER_DAY[kind],
     windowMs: DAY_MS,
-    now: Date.now(),
+    now,
   });
   if (!result.ok) throw appError("rate_limited", `too many ${kind}s added today`);
 }

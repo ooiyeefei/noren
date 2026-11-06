@@ -7,6 +7,7 @@ import {
   canManagePlace,
   isOpenListing,
   isVerifiedOwner,
+  isWaitingPlace,
   placeHasOwner,
   placeKind,
   publicStoriesAllowed,
@@ -14,13 +15,13 @@ import {
   type Viewer,
 } from "./lib/access";
 import { writeAudit } from "./lib/audit";
-import { currentPerson, requirePerson, requireRole } from "./lib/auth";
+import { currentPerson, requireConfirmedName, requirePerson, requireRole } from "./lib/auth";
 import { transitionClaim } from "./lib/claimEffects";
 import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
 import { readHasPublishedPage, readMapNames, readMapPin } from "./lib/mapCopies";
 import { withMock } from "./lib/mock";
-import { limitContribution } from "./lib/rateLimit";
+import { isNewMember, limitContribution } from "./lib/rateLimit";
 import {
   isCategoryKey,
   isInsideRegion,
@@ -53,6 +54,8 @@ const placeSummary = v.object({
   pin: v.union(pinView, v.null()),
   /** When a person last confirmed the place in person; unset is "Not yet confirmed" (FR-030). */
   confirmedAt: v.optional(v.number()),
+  /** A member shared it and a steward has yet to publish it (FR-129). */
+  waitingForSteward: v.optional(v.literal(true)),
 });
 const mapPlace = placeSummary.extend({ hasStory: v.boolean() });
 const placeDetail = placeSummary.extend({
@@ -151,6 +154,7 @@ async function summary(ctx: QueryCtx, place: Doc<"place">): Promise<Infer<typeof
     names: names.map(({ lang, script, value, isPrimary }) => ({ lang, script, value, isPrimary })),
     pin: pin === null ? null : { lat: pin.lat, lng: pin.lng },
     confirmedAt: place.confirmedAt,
+    ...(isWaitingPlace(place) ? { waitingForSteward: true as const } : {}),
   };
 }
 
@@ -319,6 +323,59 @@ export const listAll = query({
   },
 });
 
+/** How many waiting places a steward sees at once; deciding one brings up the next. */
+const WAITING_LIMIT = 100;
+
+/** New members' places waiting for a steward, oldest first (FR-129, R11). */
+export const listWaiting = query({
+  args: { regionId: v.string() },
+  returns: v.array(placeSummary.extend({ addedBy: v.string(), sharedAt: v.number() })),
+  handler: async (ctx, { regionId }) => {
+    await requireRole(ctx, ["steward"]);
+    const places = await ctx.db
+      .query("place")
+      .withIndex("by_regionId_and_visibility_and_sharedAt", (q) =>
+        q.eq("regionId", regionId).eq("visibility", "draft").gt("sharedAt", 0),
+      )
+      .filter((q) => q.eq(q.field("hiddenReason"), undefined))
+      .take(WAITING_LIMIT);
+    return await Promise.all(
+      places.map(async (place) => ({
+        ...(await summary(ctx, place)),
+        addedBy: (await ctx.db.get("person", place.createdBy))?.displayName ?? "",
+        sharedAt: place.sharedAt ?? place._creationTime,
+      })),
+    );
+  },
+});
+
+/**
+ * A steward turns a waiting place down. It stays a draft its maker can still open, and leaves the
+ * list; `setVisibility` can still publish it later.
+ */
+export const declineWaiting = mutation({
+  args: { placeId: v.id("place") },
+  returns: v.null(),
+  handler: async (ctx, { placeId }) => {
+    const steward = await requireRole(ctx, ["steward"]);
+    const place = await ctx.db.get("place", placeId);
+    if (place === null) throw appError("not_found", "place not found");
+    if (!isWaitingPlace(place)) {
+      throw appError("conflict", "this place is not waiting for a steward");
+    }
+    await ctx.db.patch("place", placeId, { hiddenReason: "not_for_visitors" });
+    await writeAudit(ctx, {
+      actorKind: "person",
+      actorPersonId: steward._id,
+      action: "place.decline_waiting",
+      targetType: "place",
+      targetId: placeId,
+      diff: { hiddenReason: "not_for_visitors" },
+    });
+    return null;
+  },
+});
+
 export const create = mutation({
   args: {
     regionId: v.string(),
@@ -329,14 +386,16 @@ export const create = mutation({
     /**
      * Put the place on the public map now (FR-032): its names, pin and category are public facts the
      * person checked there, like a listing from open data. Stories about the business still wait for
-     * its owner. Without it the place starts as a draft, as a creator's business page does.
+     * its owner. Without it the place starts as a draft, as a creator's business page does. A new
+     * member's place waits for a steward instead (FR-129), which `waiting` reports.
      */
     onMap: v.optional(v.boolean()),
   },
-  returns: v.object({ placeId: v.id("place"), slug: v.string() }),
+  returns: v.object({ placeId: v.id("place"), slug: v.string(), waiting: v.boolean() }),
   handler: async (ctx, args) => {
     // Any signed-in member who has been there may add a missing place (FR-032).
     const person = await requirePerson(ctx);
+    requireConfirmedName(person);
     if (args.kind === "landmark" && person.role !== "steward") {
       throw appError("forbidden", "only a steward may mark a place as a landmark");
     }
@@ -349,7 +408,8 @@ export const create = mutation({
         "a place goes on the map with a category, as a real business, from a real account",
       );
     }
-    await limitContribution(ctx, person, "place");
+    await limitContribution(ctx, person, "place", args.regionId);
+    const waiting = args.onMap === true && isNewMember(person, args.regionId, Date.now());
     const slug = await uniqueSlug(ctx, args.regionId, slugBase(names));
     const placeId = await ctx.db.insert(
       "place",
@@ -358,7 +418,7 @@ export const create = mutation({
         kind: args.kind,
         category: args.category,
         slug,
-        visibility: args.onMap ? ("public" as const) : ("draft" as const),
+        visibility: args.onMap && !waiting ? ("public" as const) : ("draft" as const),
         hasPublishedPage: false,
         // The add form says the place is shown with the member's name; adding it is the agreement.
         ...(args.onMap ? { sharedAt: Date.now() } : {}),
@@ -384,7 +444,7 @@ export const create = mutation({
       targetType: "place",
       targetId: placeId,
     });
-    return { placeId, slug };
+    return { placeId, slug, waiting };
   },
 });
 

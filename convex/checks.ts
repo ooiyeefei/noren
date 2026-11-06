@@ -7,6 +7,7 @@ import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { readMapNames } from "./lib/mapCopies";
+import { limitContribution } from "./lib/rateLimit";
 import { checkOutcomeValidator, checkProblemValidator, scriptValidator } from "./lib/validators";
 
 // FR-030 and constitution principle II: a listing from open data is "Not yet confirmed" until a
@@ -23,6 +24,7 @@ export const confirm = mutation({
     const now = Date.now();
     // Pressing twice in a day records one confirmation.
     if (place.confirmedBy === person._id && now - (place.confirmedAt ?? 0) < DAY_MS) return null;
+    await limitContribution(ctx, person, "check", place.regionId);
     await ctx.db.insert("placeCheck", {
       placeId,
       regionId: place.regionId,
@@ -51,6 +53,7 @@ export const report = mutation({
     if (note !== undefined && note.length > 500) {
       throw appError("invalid_input", "a note is at most 500 characters");
     }
+    await limitContribution(ctx, person, "report", place.regionId);
     // One open report per person and place: sending again replaces what it says.
     const open = (
       await ctx.db

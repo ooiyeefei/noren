@@ -7,9 +7,9 @@ const modules = import.meta.glob("./**/*.ts");
 
 async function world() {
   const b = newBackend(modules);
+  await addPerson(b, "user", "user", { joinedDaysAgo: 30 });
   const steward = await addPerson(b, "steward", "steward");
   const editor = await addPerson(b, "editor", "creator");
-  await addPerson(b, "user", "user");
   await addPerson(b, "other", "user");
   await addPerson(b, "mock", "user", { isMock: true });
   const placeId = await addPlace(b, { createdBy: editor, visibility: "public" });
@@ -134,6 +134,52 @@ describe("stories written in Noren", () => {
     for (let i = 0; i < 50; i++) await write("user");
     expect(await errorCode(write("user"))).toBe("rate_limited");
     for (let i = 0; i < 51; i++) await write("steward");
+  });
+});
+
+describe("the name goes first (FR-131)", () => {
+  const story = { body: "A story", lang: "en" };
+
+  it.each(["user", "creator", "business_owner"] as const)(
+    "refuses an unconfirmed %s and stores nothing, then lets them share once confirmed",
+    async (role) => {
+      const { b, placeId } = await world();
+      await addPerson(b, "unconfirmed", role, { nameConfirmed: false });
+      expect(
+        await errorCode(b.as("unconfirmed").mutation(api.stories.add, { placeId, ...story })),
+      ).toBe("name_not_confirmed");
+      expect(await b.t.query(api.stories.listForPlace, { placeId })).toEqual([]);
+      await b.as("unconfirmed").mutation(api.people.confirmMyDisplayName, {});
+      await b.as("unconfirmed").mutation(api.stories.add, { placeId, ...story });
+      expect(await b.t.query(api.stories.listForPlace, { placeId })).toHaveLength(1);
+    },
+  );
+
+  it("a chosen name is what the story shows", async () => {
+    const { b, placeId } = await world();
+    await addPerson(b, "unconfirmed", "user", { nameConfirmed: false });
+    await b.as("unconfirmed").mutation(api.people.setMyDisplayName, { displayName: "Lantern fan" });
+    await b.as("unconfirmed").mutation(api.stories.add, { placeId, ...story });
+    expect((await b.t.query(api.stories.listForPlace, { placeId }))[0]?.authorName).toBe(
+      "Lantern fan",
+    );
+  });
+
+  it("never refuses a steward, whatever the deploy order, or a demo account", async () => {
+    const { b, placeId } = await world();
+    await addPerson(b, "unconfirmed-steward", "steward", { nameConfirmed: false });
+    await addPerson(b, "unconfirmed-demo", "user", { nameConfirmed: false, isMock: true });
+    await b.as("unconfirmed-steward").mutation(api.stories.add, { placeId, ...story });
+    await b.as("unconfirmed-demo").mutation(api.stories.add, { placeId, ...story });
+  });
+
+  it("a new member's story goes live at once, up to 5 a day", async () => {
+    const { b, placeId } = await world();
+    await addPerson(b, "newcomer", "user");
+    const write = () => b.as("newcomer").mutation(api.stories.add, { placeId, ...story });
+    for (let i = 0; i < 5; i++) await write();
+    expect(await errorCode(write())).toBe("rate_limited");
+    expect(await b.t.query(api.stories.listForPlace, { placeId })).toHaveLength(5);
   });
 });
 

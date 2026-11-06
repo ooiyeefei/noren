@@ -88,6 +88,7 @@ describe("public takedown", () => {
     });
     expect(await b.run((ctx) => ctx.db.get("place", placeId))).toMatchObject({
       visibility: "draft",
+      hiddenReason: "reported",
     });
     expect(
       await b.t.query(api.places.getBySlug, { regionId: "nagasaki", slug: "mock-shop" }),
