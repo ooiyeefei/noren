@@ -10,7 +10,7 @@ The browser shrinks a picture to a JPEG and uploads it straight to S3 under a pe
 
 ## Constitution Check
 
-Against version 2.3.0.
+Against version 2.4.0.
 
 | Principle | Result | How |
 |---|---|---|
@@ -21,9 +21,9 @@ Against version 2.3.0.
 | V. AI is an editor | Pass | No model sees a photo. The story agent reads text only. |
 | VI. Original language first | Pass | No words are added to a story. |
 | VII. Region is configuration | Pass | Every number and the caution key live in the region file. No credentials in the repository. |
-| Privacy, first bullet | **Strained** | See below. |
+| Privacy, first bullet | Pass | Version 2.4.0 names photos: shown with the member's name, location data removed, faces asked first, removal on request through the takedown workflow, and the file deleted on removal or account deletion. |
 
-**Needs an owner decision before `enabled: true`.** The bullet lists what a public demo may show: "a place a member adds, a story a member writes and a public post a member links", then says "No other real person's data is shown." A photo is not on that list, and a photo can show a bystander's face. The form's request to ask first is a mitigation, not a rule that holds. The bullet needs a MINOR amendment that names photos, says what happens to a person shown without asking, and states the takedown path. Nothing is amended here, and shipping switched off breaks nothing.
+**Decided 6 Nov 2026.** The privacy bullet said "No other real person's data is shown", and a photo can show a bystander. The owner approved adding photos, and version 2.4.0 says how a person shown in one gets it removed.
 
 **The privacy notice names Amazon Web Services** (S3 in Tokyo, CloudFront worldwide) only while photos are on, because T057 names services as the code uses them that day.
 
@@ -72,8 +72,8 @@ The content security policy is built in `next.config.ts`, so these must be in Ve
 
 ## Turning it on
 
-1. Owner decides the constitution question. The privacy notice's photos section appears by itself once `enabled` is true, so the same change sets a new `documentsVersion`, and the lawyer reads that section first.
-2. Owner runs `scripts/setup-photo-bucket.sh <aws-profile> <account-id>`.
-3. Owner adds the settings above, then deletes the file holding the secret.
+1. Done 6 Nov 2026: constitution 2.4.0. The privacy notice's photos section appears by itself once `enabled` is true, so the same change sets a new `documentsVersion`, and the lawyer reads that section first.
+2. Done 6 Nov 2026: `scripts/setup-photo-bucket.sh` ran with the owner's AWS profile. The bucket was tested with the limited user's key: upload, refused content type, read, write, refused write outside the two folders, no public bucket access, and real deletion.
+3. Done 6 Nov 2026: the settings are on Vercel production and Convex production, and the secret file is deleted.
 4. Set `photos.enabled: true`, deploy Convex and the site.
 5. Live UAT on a real iPhone: upload, read the served file's metadata, remove, check the bucket.
