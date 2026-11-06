@@ -2,6 +2,7 @@
 
 import { use, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useDraft } from "@/components/drafts/drafts";
 import { PageContainer } from "@/components/layout/page-container";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { stewardMessages } from "@/lib/i18n/messages/steward";
@@ -119,9 +120,12 @@ function Admin({
   const releaseTranslation = useMutation(api.translationChecks.release);
   const checkAgain = useMutation(api.translationChecks.checkAgain);
   const compose = useMutation(api.pages.compose);
-  const [ownerId, setOwnerId] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
-  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [ownerId, setOwnerId] = useDraft(`place-admin:${placeId}:owner`, "");
+  const [selected, setSelected] = useDraft<string[]>(`place-admin:${placeId}:dispute`, []);
+  const [translations, setTranslations] = useDraft<Record<string, string>>(
+    `place-admin:${placeId}:translations`,
+    {},
+  );
   const [composeResult, setComposeResult] = useState<ComposeResult>();
   const { state, run } = useStewardAction(locale);
   const m = messagesFor(stewardMessages, locale);

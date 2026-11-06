@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useDraft, usePhotoDrafts } from "@/components/drafts/drafts";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
@@ -48,25 +49,29 @@ const EMPTY: StoryDraft = { url: "", note: "", title: "", author: "", body: "" }
 /**
  * FR-032, FR-033: any signed-in member shares a story about the place, either written here or as a
  * link to a post on the service they already use. Either way it is shown with their name.
+ * With a `draftName`, an unshared story and its photos come back after a reload.
  */
 export function AddStory({
   locale,
   region,
   actions,
+  draftName,
 }: {
   locale: Locale;
   region: StoryRegion;
   actions?: AddStoryActions;
+  draftName?: string;
 }) {
   const m = messagesFor(addStoryMessages, locale);
   const id = useId();
-  const [mode, setMode] = useState<Mode | null>(null);
-  const [draft, setDraft] = useState<StoryDraft>(EMPTY);
+  const [mode, setMode] = useDraft<Mode | null>(draftName && `${draftName}:mode`, null);
+  const [draft, setDraft] = useDraft<StoryDraft>(draftName && `${draftName}:text`, EMPTY);
   const [problem, setProblem] = useState<StoryProblem>();
   const [pending, setPending] = useState(false);
   const [added, setAdded] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [photos, setPhotos] = useState<PhotoDraft>(NO_PHOTOS);
+  const keptPhotos = usePhotoDrafts(draftName);
   const busy = useRef(false);
   const reader = useLinkRead({ locale, region, actions, draft, setDraft });
   if (actions?.signedIn === undefined) return null;
@@ -107,6 +112,8 @@ export function AddStory({
       await prepared.run();
       setDraft(EMPTY);
       setMode(null);
+      // The shared story holds them now; kept, they would come back in the next one.
+      void keptPhotos?.store.save(keptPhotos.key, []);
       setAdded(true);
     } catch (caught) {
       setError(caught);
@@ -288,7 +295,12 @@ export function AddStory({
               </>
             )}
             {mode === "write" && actions.photos && (
-              <PhotoPicker locale={locale} actions={actions.photos} onChange={setPhotos} />
+              <PhotoPicker
+                locale={locale}
+                actions={actions.photos}
+                onChange={setPhotos}
+                draftName={draftName}
+              />
             )}
             {actions.shownAs && (
               <ShownAs locale={locale} hintId={`${id}-name`} actions={actions.shownAs} />
@@ -313,6 +325,8 @@ export function AddStory({
                   setMode(null);
                   setProblem(undefined);
                   setError(null);
+                  // Closing the form has always let its photos go; the words stay for next time.
+                  void keptPhotos?.store.save(keptPhotos.key, []);
                 }}
               >
                 {m.cancel}

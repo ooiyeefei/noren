@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { useDraft } from "@/components/drafts/drafts";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { neighbourhoodName } from "@/components/explore/mission-bar";
 import {
@@ -36,16 +37,18 @@ function LineForm({
   displayName,
   write,
   shownAs,
+  draftName,
 }: {
   locale: Locale;
   region: StoryRegion;
   displayName?: string;
   write: CheckInResultActions["writeLine"];
   shownAs?: ShownAsActions;
+  draftName?: string;
 }) {
   const m = messagesFor(collectionMessages, locale);
   const id = useId();
-  const [body, setBody] = useState("");
+  const [body, setBody] = useDraft(draftName, "");
   const [pending, setPending] = useState(false);
   const [shared, setShared] = useState(false);
   const [problem, setProblem] = useState(false);
@@ -60,6 +63,7 @@ function LineForm({
     setError(null);
     try {
       await write(prepared.args);
+      setBody("");
       setShared(true);
     } catch (caught) {
       setError(caught);
@@ -193,6 +197,7 @@ export function CheckInResult({
   displayName,
   setHref,
   actions,
+  draftName,
 }: {
   locale: Locale;
   region: PublicRegionProps;
@@ -204,6 +209,8 @@ export function CheckInResult({
   displayName?: string;
   setHref: string;
   actions: CheckInResultActions;
+  /** Keeps the member's unsent line through a reload. */
+  draftName?: string;
 }) {
   const m = messagesFor(collectionMessages, locale);
   const picked = spot.pickedLine;
@@ -238,6 +245,7 @@ export function CheckInResult({
         displayName={displayName}
         write={actions.writeLine}
         shownAs={actions.shownAs}
+        draftName={draftName}
       />
       <StillHere locale={locale} press={actions.stillHere} />
       {outcome.finished ? (

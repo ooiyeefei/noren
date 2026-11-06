@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { categoryOptions } from "@/components/public/category";
 import { normalisePoint } from "@/components/map/map-helpers";
 import { PlaceMap } from "@/components/map/place-map";
+import { useDraft } from "@/components/drafts/drafts";
 import { ShownAs, type ShownAsActions } from "@/components/place/shown-as";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -162,30 +163,39 @@ export function MapsLinkFeedback({
   );
 }
 
+/** A pasted Maps link and the spot read from it, kept until the place is added. */
+export type MapsLinkDraft = {
+  url: string;
+  spot: { pin: NonNullable<PlaceDraft["pin"]>; exact: boolean } | null;
+};
+export const NO_MAPS_LINK: MapsLinkDraft = { url: "", spot: null };
+
 function MapsLinkField({
   locale,
   pin,
+  draftName,
   onSuggestion,
   onPin,
 }: {
   locale: Locale;
   pin: PlaceDraft["pin"];
+  draftName?: string;
   onSuggestion(suggestion: MapsSuggestion): void;
   onPin(pin: NonNullable<PlaceDraft["pin"]>): void;
 }) {
   const m = messagesFor(creatorMessages, locale);
   const id = useId();
-  const [url, setUrl] = useState("");
+  const [link, setLink] = useDraft(draftName, NO_MAPS_LINK);
+  const { url, spot } = link;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
-  const [spot, setSpot] = useState<{ pin: NonNullable<PlaceDraft["pin"]>; exact: boolean }>();
   const inFlight = useRef(false);
   async function fill() {
     if (inFlight.current) return;
     inFlight.current = true;
     setPending(true);
     setError(undefined);
-    setSpot(undefined);
+    setLink((old) => ({ ...old, spot: null }));
     try {
       const response = await fetch(`/api/geo/maps-link?${new URLSearchParams({ url })}`, {
         cache: "no-store",
@@ -213,7 +223,8 @@ function MapsLinkField({
       }
       onSuggestion(suggestion);
       // Anything but a clear yes is treated as an area, so the one-tap pin is never offered by mistake.
-      setSpot({ pin: normalisePoint(suggestion), exact: suggestion.exact === true });
+      const spot = { pin: normalisePoint(suggestion), exact: suggestion.exact === true };
+      setLink((old) => ({ ...old, spot }));
     } catch {
       setError(m.mapsLinkFailure);
     } finally {
@@ -231,7 +242,7 @@ function MapsLinkField({
         maxLength={500}
         value={url}
         disabled={pending}
-        onChange={(event) => setUrl(event.target.value)}
+        onChange={(event) => setLink({ ...link, url: event.target.value })}
       />
       <Button
         className="min-h-11 rounded-[10px] px-4 whitespace-normal"
@@ -481,11 +492,19 @@ export function PlacePinSearch({
   searchActions,
   errors,
   onChange,
+  mapsLinkDraft,
   active = true,
   prefillNames = false,
 }: Pick<
   NewPlaceViewProps,
-  "locale" | "region" | "draft" | "search" | "searchActions" | "errors" | "onChange"
+  | "locale"
+  | "region"
+  | "draft"
+  | "search"
+  | "searchActions"
+  | "errors"
+  | "onChange"
+  | "mapsLinkDraft"
 > & {
   active?: boolean;
   prefillNames?: boolean;
@@ -511,6 +530,7 @@ export function PlacePinSearch({
       <MapsLinkField
         locale={locale}
         pin={draft.pin}
+        draftName={mapsLinkDraft}
         onSuggestion={(suggestion) => {
           if (prefillNames)
             latest.current.onChange(prefillMapsResult(latest.current.draft, suggestion));
@@ -568,6 +588,8 @@ export type NewPlaceViewProps = {
   /** Set until the member has seen the name their place goes out under (FR-131). */
   shownAs?: ShownAsActions;
   draft: PlaceDraft;
+  /** Where the Maps link field keeps what was pasted into it; unset keeps nothing. */
+  mapsLinkDraft?: string;
   errors?: PlaceErrors;
   pending?: boolean;
   error?: string;
@@ -586,6 +608,7 @@ export function NewPlaceView({
   waits = false,
   shownAs,
   draft,
+  mapsLinkDraft,
   errors,
   pending,
   error,
@@ -623,6 +646,7 @@ export function NewPlaceView({
             searchActions={searchActions}
             errors={errors}
             onChange={onChange}
+            mapsLinkDraft={mapsLinkDraft}
             active={active && step === 1}
             prefillNames
           />

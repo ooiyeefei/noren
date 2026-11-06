@@ -9,6 +9,16 @@ import { ClaimCard, type ClaimCardData } from "@/components/claims/claim-card";
 import { quoteAt, quoteMatches, transcriptText } from "@/lib/claims/transcript-text";
 import { interviewUiMessages } from "@/lib/i18n/messages/interview-ui";
 
+// A draft the form finds kept, when set; keeping it is tested in drafts-storage.
+const kept = vi.hoisted(() => ({ value: undefined as unknown }));
+vi.mock("@/components/drafts/drafts", async () => {
+  const { useState } = await import("react");
+  return {
+    useDraft: <T,>(name: unknown, empty: T) =>
+      useState(name && kept.value !== undefined ? (kept.value as T) : empty),
+  };
+});
+
 const noop = async () => {};
 const consentProps = {
   locale: "en",
@@ -266,6 +276,35 @@ describe("components", () => {
       />,
     );
     expect(locked).not.toContain(interviewUiMessages.en.repeatedHint);
+  });
+  it("brings back corrections made on this text, and drops ones made on other text", () => {
+    const editor = (readOnly = false) =>
+      renderToStaticMarkup(
+        <TranscriptEditor
+          locale="en"
+          segments={segments}
+          lang="ja"
+          draftName="interview:mock:transcript"
+          readOnly={readOnly}
+          onSave={noop}
+        />,
+      );
+    try {
+      kept.value = {
+        source: JSON.stringify(segments),
+        segments: [{ ...segments[0]!, text: "直した話" }, segments[1]!],
+      };
+      expect(editor()).toContain(">直した話</textarea>");
+      expect(editor()).toContain(interviewUiMessages.en.unsavedChanges);
+      // A read-only transcript shows only what is saved.
+      expect(editor(true)).not.toContain("直した話");
+      kept.value = { source: "[]", segments: [{ start: 0, end: 1, text: "古い下書き" }] };
+      expect(editor()).not.toContain("古い下書き");
+      expect(editor()).toContain(">最初の話</textarea>");
+      expect(editor()).not.toContain(interviewUiMessages.en.unsavedChanges);
+    } finally {
+      kept.value = undefined;
+    }
   });
   it("allows saving an unchanged transcript as corrected", () => {
     const html = renderToStaticMarkup(

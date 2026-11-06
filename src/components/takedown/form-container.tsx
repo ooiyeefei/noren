@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
+import { useDraft } from "@/components/drafts/drafts";
 import { api } from "../../../convex/_generated/api";
 import type { Locale } from "@/lib/i18n";
 import { FormView } from "./form-view";
@@ -17,13 +18,16 @@ import {
 
 export function FormContainer({ locale, decideDays }: { locale: Locale; decideDays: number }) {
   const query = useSearchParams();
-  const [draft, setDraft] = useState<FormDraft>({
-    pageUrl: pageFromQuery(query),
+  const page = pageFromQuery(query);
+  const empty: FormDraft = {
+    pageUrl: page,
     details: "",
     privacyOrMinor: false,
     contact: "",
     website: "",
-  });
+  };
+  // Kept per linked page, so a request started for one place never fills the form for another.
+  const [draft, setDraft] = useDraft(page ? `takedown:form:${page}` : "takedown:form", empty);
   const [result, setResult] = useState<SubmitResult>();
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
@@ -49,6 +53,7 @@ export function FormContainer({ locale, decideDays }: { locale: Locale; decideDa
         setPending(true);
         try {
           setResult(await submit(submitArguments(draft, locale)));
+          setDraft(empty);
         } catch (error) {
           setError(takedownError(error, locale));
         } finally {

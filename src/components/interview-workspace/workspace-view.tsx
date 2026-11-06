@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { AiAssistedBadge, DemoBadge } from "@/components/badges";
+import { useDraft } from "@/components/drafts/drafts";
 import { AudioCapture } from "@/components/interview/audio-capture";
 import { ConsentForm, type ConsentSubmission } from "@/components/interview/consent-form";
 import { TranscriptEditor, type EditableSegment } from "@/components/interview/transcript-editor";
@@ -68,10 +69,12 @@ export function WorkspaceView(props: WorkspaceViewProps) {
   const panels = workspacePanels(view, props.role);
   const id = useId();
   const [consentLang, setConsentLang] = useState(view.language);
-  const [typing, setTyping] = useState(false);
-  const [proposal, setProposal] = useState<{ transcriptId: string; draft: ProposalDraft } | null>(
-    null,
-  );
+  // A transcript being typed, and a statement being proposed, come back after a reload.
+  const [typing, setTyping] = useDraft(`interview:${view._id}:typing`, false);
+  const [proposal, setProposal] = useDraft<{
+    transcriptId: string;
+    draft: ProposalDraft;
+  } | null>(`interview:${view._id}:proposal`, null);
   const [withdrawing, setWithdrawing] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<unknown>();
@@ -188,10 +191,14 @@ export function WorkspaceView(props: WorkspaceViewProps) {
               speakers={[speakers.ownerSpeaker, speakers.interviewerSpeaker]}
               readOnly={panels.editor === "readonly"}
               saving={busy}
+              draftName={`interview:${view._id}:transcript`}
               onSave={(segments) =>
                 act(
                   () => props.onSave(segments),
-                  () => setProposal(null),
+                  () => {
+                    setProposal(null);
+                    setTyping(false);
+                  },
                 )
               }
               onProposeSpan={
@@ -227,7 +234,8 @@ export function WorkspaceView(props: WorkspaceViewProps) {
             locale={locale}
             lang={transcript!.lang}
             vocabulary={region.cautionVocabulary}
-            initial={visibleProposal.draft}
+            draft={visibleProposal.draft}
+            onChange={(draft) => setProposal({ ...visibleProposal, draft })}
             busy={busy}
             onSubmit={(draft) =>
               act(

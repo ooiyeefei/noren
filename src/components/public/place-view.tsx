@@ -169,6 +169,7 @@ export function PlaceView({
               confirmedAt={place.confirmedAt}
               fromOpenData={place.dataSources.length > 0}
               actions={checks}
+              draftName={`check:${place._id}`}
             />
           )}
           {/* It shows where the person acted: a story's stamp appears beside the story form. */}
@@ -227,7 +228,14 @@ export function PlaceView({
             ) : (
               <>
                 {feed.length === 0 && <p className="text-[17px]">{ui.noStories}</p>}
-                {!place.isMock && <AddStory locale={locale} region={region} actions={story} />}
+                {!place.isMock && (
+                  <AddStory
+                    locale={locale}
+                    region={region}
+                    actions={story}
+                    draftName={`story:${place._id}`}
+                  />
+                )}
                 <div aria-live="polite">{stamp?.pressedFrom === "story" && stampHere("story")}</div>
                 {feed.some(
                   (entry) => entry.kind === "post" && entry.source.embed.kind !== "link",

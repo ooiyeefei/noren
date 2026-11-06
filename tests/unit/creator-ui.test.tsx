@@ -58,6 +58,11 @@ vi.mock("react", async (importOriginal) => {
     },
   };
 });
+// Here a kept draft is plain state, on the harness above; keeping it is tested in drafts-storage.
+vi.mock("@/components/drafts/drafts", async () => {
+  const { useState } = await import("react");
+  return { useDraft: <T,>(_name: unknown, empty: T) => useState(empty) };
+});
 function mountView<P>(view: (props: P) => ReactNode, props: P) {
   const state = { values: [] as unknown[], cursor: 0 };
   return () => {

@@ -126,6 +126,7 @@ describe("what the page may know", () => {
       maxPerStory: 4,
       maxEdgePixels: 2048,
       jpegQuality: region.photos.jpegQuality,
+      unattachedHours: region.photos.unattachedHours,
     });
     const text = JSON.stringify(props);
     expect(text).not.toContain(env.PHOTOS_S3_SECRET_ACCESS_KEY);

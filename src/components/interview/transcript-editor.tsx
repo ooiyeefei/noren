@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useDraft } from "@/components/drafts/drafts";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -47,20 +48,31 @@ export function TranscriptEditor(props: {
   readOnly?: boolean;
   saving?: boolean;
   speakers?: readonly string[];
+  /** With a name, corrections not yet saved come back after a reload. */
+  draftName?: string;
   onSave(segments: EditableSegment[]): Promise<void>;
   onProposeSpan?(span: Span): void;
 }): React.JSX.Element {
   const m = messagesFor(interviewUiMessages, props.locale);
   const id = useId();
   const sourceKey = JSON.stringify(props.segments);
+  const fresh = () => ({
+    source: sourceKey,
+    segments: props.segments.map((segment) => ({ ...segment })),
+  });
   const [source, setSource] = useState(sourceKey);
-  const [draft, setDraft] = useState(() => props.segments.map((segment) => ({ ...segment })));
+  // The draft keeps the text it was made from, so one made on other text, before a reload or a
+  // save, gives way to the text as it is now.
+  const [edit, setEdit] = useDraft(props.readOnly ? null : props.draftName, fresh());
+  const draft = edit.segments;
+  const setDraft = (change: (current: EditableSegment[]) => EditableSegment[]) =>
+    setEdit((current) => ({ ...current, segments: change(current.segments) }));
   const [selection, setSelection] = useState<Span | null>(null);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
-  if (source !== sourceKey) {
+  if (source !== sourceKey || edit.source !== sourceKey) {
     setSource(sourceKey);
-    setDraft(props.segments.map((segment) => ({ ...segment })));
+    setEdit(fresh());
     setSelection(null);
   }
   const dirty = JSON.stringify(draft) !== sourceKey;

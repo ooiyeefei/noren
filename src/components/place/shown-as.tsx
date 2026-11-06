@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useDraft } from "@/components/drafts/drafts";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { DISPLAY_NAME_LIMIT, cleanDisplayName } from "@/lib/domain/display-name";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
@@ -32,8 +33,9 @@ export function ShownAs({
   actions: ShownAsActions;
 }) {
   const m = messagesFor(addStoryMessages, locale);
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(actions.displayName);
+  // Kept together, so a reload in the middle of a change reopens it with what was typed.
+  const [edit, setEdit] = useDraft("shown-as:name", { editing: false, name: actions.displayName });
+  const { editing, name } = edit;
   const [problem, setProblem] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -55,7 +57,7 @@ export function ShownAs({
   function keep() {
     // A sign-in provider's name can break the rule, and then the server would refuse it.
     if (cleanDisplayName(actions.displayName) === null) {
-      setEditing(true);
+      setEdit({ ...edit, editing: true });
       setProblem(true);
       return;
     }
@@ -64,7 +66,11 @@ export function ShownAs({
   function save() {
     const clean = cleanDisplayName(name);
     setProblem(clean === null);
-    if (clean !== null) void send(() => actions.save(clean));
+    if (clean === null) return;
+    void send(async () => {
+      await actions.save(clean);
+      setEdit({ editing: false, name: clean });
+    });
   }
   return (
     <div data-shown-as="" className="space-y-2 rounded-[10px] bg-kamenozoki/60 p-4">
@@ -76,7 +82,7 @@ export function ShownAs({
             value={name}
             maxLength={DISPLAY_NAME_LIMIT}
             aria-invalid={problem || undefined}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => setEdit({ editing: true, name: event.target.value })}
             // This sits inside the story form, whose own submit must not run. Enter also ends a
             // Japanese conversion, which must not save a half-typed name.
             onKeyDown={(event) => {
@@ -115,10 +121,9 @@ export function ShownAs({
               disabled={pending}
               className={`${BUTTON} border border-input text-kon`}
               onClick={() => {
-                setEditing(false);
+                setEdit({ editing: false, name: actions.displayName });
                 setProblem(false);
                 setError(null);
-                setName(actions.displayName);
               }}
             >
               {m.cancel}
@@ -138,7 +143,7 @@ export function ShownAs({
               type="button"
               disabled={pending}
               className={`${BUTTON} border border-kon text-kon`}
-              onClick={() => setEditing(true)}
+              onClick={() => setEdit({ ...edit, editing: true })}
             >
               {m.changeName}
             </button>

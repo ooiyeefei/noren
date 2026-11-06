@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { usePhotoDrafts } from "@/components/drafts/drafts";
+import { canReuseUpload } from "@/lib/drafts/photo-store";
 import { cn } from "@/lib/utils";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { photoMessages } from "@/lib/i18n/messages/photos";
@@ -19,9 +21,15 @@ export type PhotoPickerActions = {
   maxPerStory: number;
   /** Until when this member's photos wait for a steward; null when they never do. */
   waitsUntil: number | null;
-  upload(file: File): Promise<UploadedPhoto>;
+  /** How long an upload the page kept can still be attached; older ones are sent again. */
+  keepUploadsForMs?: number;
+  upload(file: Blob): Promise<UploadedPhoto>;
   remove(photoId: string): Promise<unknown>;
 };
+
+/** A photo the server turned down, or one the browser can't read, would only fail again. */
+const keepable = (item: PickedPhoto) =>
+  item.problem !== "rejected" && item.problem !== "unreadable";
 
 const PROBLEM_TEXT = {
   unreadable: "unreadable",
@@ -33,15 +41,18 @@ const PROBLEM_TEXT = {
 /**
  * Lets a member add photos to the story they are writing. Each photo uploads as soon as it is picked,
  * so Share only has to attach them. Whatever is picked and never shared is removed by a cron.
+ * With a `draftName`, the picked files are kept on the device too, so a reload brings them back.
  */
 export function PhotoPicker({
   locale,
   actions,
   onChange,
+  draftName,
 }: {
   locale: Locale;
   actions: PhotoPickerActions;
   onChange: (draft: PhotoDraft) => void;
+  draftName?: string;
 }) {
   const m = messagesFor(photoMessages, locale);
   const id = useId();
@@ -51,6 +62,11 @@ export function PhotoPicker({
   const nextId = useRef(0);
   const dropped = useRef(new Set<number>());
   const previews = useRef(new Set<string>());
+  const picked = useRef(new Map<number, Blob>());
+  const uploadedAt = useRef(new Map<number, number>());
+  const kept = usePhotoDrafts(draftName);
+  // The key whose kept photos are already on screen; saving waits for it, or it would wipe them.
+  const [restored, setRestored] = useState<string | null>(null);
 
   useEffect(() => {
     onChange(photoDraft(items));
@@ -70,7 +86,7 @@ export function PhotoPicker({
       current.map((item) => (item.id === itemId ? { ...item, ...fields } : item)),
     );
 
-  async function send(itemId: number, file: File) {
+  async function send(itemId: number, file: Blob) {
     try {
       const { photoId } = await actions.upload(file);
       // Taken out while it was uploading, so it must not stay behind on the server either.
@@ -95,6 +111,7 @@ export function PhotoPicker({
       const preview = URL.createObjectURL(file);
       previews.current.add(preview);
       const item: PickedPhoto = { id: nextId.current++, preview, state: "working" };
+      picked.current.set(item.id, file);
       return { item, file };
     });
     setItems((current) => [...current, ...added.map(({ item }) => item)]);
@@ -103,12 +120,60 @@ export function PhotoPicker({
 
   function takeOut(item: PickedPhoto) {
     dropped.current.add(item.id);
+    picked.current.delete(item.id);
     URL.revokeObjectURL(item.preview);
     previews.current.delete(item.preview);
     setItems((current) => current.filter(({ id: other }) => other !== item.id));
     // The cron removes it within a day if this fails, so the member need not hear about it.
     if (item.photoId !== undefined) void actions.remove(item.photoId).catch(() => undefined);
   }
+
+  useEffect(() => {
+    if (kept === null || restored === kept.key) return;
+    let live = true;
+    void kept.store.load(kept.key).then((photos) => {
+      if (!live) return;
+      const now = Date.now();
+      const back = photos.map((photo) => {
+        const preview = URL.createObjectURL(photo.file);
+        previews.current.add(preview);
+        const itemId = nextId.current++;
+        picked.current.set(itemId, photo.file);
+        const reuse = canReuseUpload(photo, now, actions.keepUploadsForMs ?? 0);
+        if (reuse) uploadedAt.current.set(itemId, photo.uploadedAt!);
+        const item: PickedPhoto = reuse
+          ? { id: itemId, preview, state: "ready", photoId: photo.photoId }
+          : { id: itemId, preview, state: "working" };
+        return { item, file: photo.file, reuse };
+      });
+      setItems((current) => [...back.map(({ item }) => item), ...current]);
+      setRestored(kept.key);
+      // Sent again: the reload cut the upload off, or the server has let the old one go.
+      for (const { item, file, reuse } of back) if (!reuse) void send(item.id, file);
+    });
+    return () => {
+      live = false;
+    };
+    // send reads only refs and the upload action, so a newer one changes nothing here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kept, restored]);
+  useEffect(() => {
+    if (kept === null || restored !== kept.key) return;
+    // Saved straight after an upload lands, so this is when the server took it, to the second.
+    const now = Date.now();
+    void kept.store.save(
+      kept.key,
+      items.flatMap((item) => {
+        const file = picked.current.get(item.id);
+        if (!file || !keepable(item)) return [];
+        if (item.photoId === undefined) return [{ id: item.id, file }];
+        if (!uploadedAt.current.has(item.id)) uploadedAt.current.set(item.id, now);
+        return [
+          { id: item.id, file, photoId: item.photoId, uploadedAt: uploadedAt.current.get(item.id) },
+        ];
+      }),
+    );
+  }, [items, kept, restored]);
 
   const waits = actions.waitsUntil !== null && startedAt < actions.waitsUntil;
   const full = items.length >= actions.maxPerStory;
