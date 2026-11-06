@@ -8,6 +8,7 @@ export const creatorMessages = defineMessages({
     guideInterview: "店主にインタビューする",
     draftStatus: "下書き",
     publicStatus: "公開中",
+    waitingStatus: "スチュワードの確認待ち",
     addPosts: "投稿を追加する",
     nextInterview: "インタビューを始める",
     open: "開く",
@@ -57,6 +58,9 @@ export const creatorMessages = defineMessages({
       "すぐに公開の地図に載り、今日現地で確認された場所として表示されます。行ったことのある場所だけを追加してください。",
     draftHint:
       "デモ用アカウントで追加した場所は下書きとして保存され、あなたとスチュワードだけが見られます。",
+    waitingHint:
+      "新しいメンバーが追加した場所は、先にスチュワードが確認します。承認されるまで公開の地図には載らず、あなたとスチュワードだけが見られます。行ったことのある場所だけを追加してください。",
+    waitingNote: "この場所はスチュワードの確認を待っています。承認されると公開の地図に載ります。",
     mapsLink: "Google マップのリンクを貼り付け",
     fillFromLink: "リンクから入力",
     fillingFromLink: "リンクを確認中…",
@@ -107,6 +111,7 @@ export const creatorMessages = defineMessages({
     noResults: "候補はありません。地図に直接ピンを置けます。",
     create: "地図に追加",
     createDraft: "場所を保存",
+    createWaiting: "スチュワードに送る",
     pending: "保存中…",
     saved: "保存しました。",
     saveNames: "名前を保存",
@@ -166,6 +171,7 @@ export const creatorMessages = defineMessages({
     guideInterview: "Interview the owner",
     draftStatus: "Draft",
     publicStatus: "Public",
+    waitingStatus: "Waiting for a steward",
     addPosts: "Add posts",
     nextInterview: "Start an interview",
     open: "Open",
@@ -215,6 +221,10 @@ export const creatorMessages = defineMessages({
       "It goes on the public map straight away, shown as confirmed in person today. Add only places you have been to.",
     draftHint:
       "A place added from a demo account is saved as a draft that only you and stewards can see.",
+    waitingHint:
+      "A steward checks a new member's place first. It stays off the public map until they approve it, and until then only you and stewards can see it. Add only places you have been to.",
+    waitingNote:
+      "This place is waiting for a steward. It goes on the public map once they approve it.",
     mapsLink: "Paste a Google Maps link",
     fillFromLink: "Fill from link",
     fillingFromLink: "Checking link…",
@@ -265,6 +275,7 @@ export const creatorMessages = defineMessages({
     noResults: "No suggestions. You can place a pin directly on the map.",
     create: "Add to the map",
     createDraft: "Save the place",
+    createWaiting: "Send to a steward",
     pending: "Saving…",
     saved: "Saved.",
     saveNames: "Save names",

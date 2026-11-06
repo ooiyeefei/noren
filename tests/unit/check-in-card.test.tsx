@@ -10,6 +10,7 @@ import {
 } from "@/components/collection/check-in-card";
 import { CheckInResult } from "@/components/collection/check-in-result";
 import { Noren } from "@/components/collection/noren";
+import { addStoryMessages } from "@/lib/i18n/messages/add-story";
 import type { SetLike } from "@/components/collection/next-panel-card";
 import { region } from "../fixtures/public-ui";
 
@@ -306,6 +307,22 @@ describe("CheckInResult", () => {
       "Shown publicly with your name. You can remove it any time.",
     );
     expect(result()).toMatch(/aria-describedby="[^"]*-public"/);
+  });
+
+  it("shows the name first and holds the line until it is settled, since it is a share too", () => {
+    const m = addStoryMessages.en;
+    const shownAs = { displayName: "Hana", confirm: async () => null, save: async () => null };
+    const held = result({ actions: actions({ shownAs }) });
+    expect(held).toContain(`>${m.useThisName}</button>`);
+    expect(held).toContain(`>${m.changeName}</button>`);
+    expect(held).toMatch(
+      /<button type="button" disabled=""[^>]*>Add it to this place&#x27;s page</,
+    );
+    const open = result();
+    expect(open).not.toContain(m.useThisName);
+    expect(open).not.toMatch(
+      /<button type="button" disabled=""[^>]*>Add it to this place&#x27;s page</,
+    );
   });
 
   it("can take focus at its heading, since the press removes the button", () => {

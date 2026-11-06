@@ -14,6 +14,7 @@ import { checkMessages } from "@/lib/i18n/messages/checks";
 import { collectionMessages } from "@/lib/i18n/messages/collection";
 import type { RegionConfig } from "@/lib/region/schema";
 import { visibilityArgs, visibilityChoices, type PlaceRow } from "./steward-logic";
+import { WaitingPlaces, type WaitingRow } from "./waiting-places";
 
 export type VisibilityDraft = {
   visibility: Visibility;
@@ -100,6 +101,10 @@ export type StewardHomeProps = ActionState & {
   onDraft: (id: string, draft: VisibilityDraft) => void;
   onKind: (id: string, kind: PlaceKind) => void;
   onVisibility: (id: string, draft: VisibilityDraft) => void;
+  /** New members' places waiting for a decision; undefined while they load. */
+  waiting?: readonly WaitingRow[];
+  onPublishWaiting?: (id: string) => void;
+  onDeclineWaiting?: (id: string) => void;
 };
 export function StewardHomeView(props: StewardHomeProps) {
   const { locale, region, rows, drafts, onDraft, onKind, onVisibility, pending } = props;
@@ -115,6 +120,15 @@ export function StewardHomeView(props: StewardHomeProps) {
           {m.createPlace}
         </Link>
         <StewardFeedback {...props} />
+        {props.waiting && props.onPublishWaiting && props.onDeclineWaiting && (
+          <WaitingPlaces
+            locale={locale}
+            rows={props.waiting}
+            pending={pending}
+            onPublish={props.onPublishWaiting}
+            onDecline={props.onDeclineWaiting}
+          />
+        )}
         <section className="space-y-4">
           <h2 className="min-w-0 text-[22px] font-bold break-words">{m.places}</h2>
           <div className="max-w-prose space-y-2 rounded-[10px] bg-kamenozoki p-4">

@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { errorText } from "@/components/layout/error-text";
+import { useShownAs } from "@/components/place/use-shown-as";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { creatorMessages } from "@/lib/i18n/messages/creator";
 import type { RegionConfig } from "@/lib/region";
@@ -103,6 +104,7 @@ function Editor({
 }) {
   const posts = useQuery(api.sources.listForPlace, { placeId: place._id });
   const person = useQuery(api.people.current, {});
+  const shownAs = useShownAs(person);
   // Owner interviews are creators' work; a member who added the place links posts instead.
   const canInterview = person?.role === "creator" || person?.role === "steward";
   const interviews = useQuery(
@@ -238,7 +240,14 @@ function Editor({
     <PlaceEditorView
       locale={locale}
       region={region}
-      place={{ id: place._id, slug: place.slug, canEdit: place.canEdit, isMock: place.isMock }}
+      place={{
+        id: place._id,
+        slug: place.slug,
+        canEdit: place.canEdit,
+        isMock: place.isMock,
+        waitingForSteward: place.waitingForSteward,
+      }}
+      shownAs={shownAs}
       draft={draft}
       onChange={setDraft}
       errors={errors}

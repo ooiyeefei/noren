@@ -4,6 +4,15 @@ export const stewardMessages = defineMessages({
   ja: {
     candidateNameHint: "少なくとも1つの主な名前を選び、空の名前は削除してください。",
     home: "運営管理",
+    waitingTitle: "確認待ちの場所",
+    waitingIntro:
+      "新しいメンバーが追加した場所です。あなたが公開するまで公開の地図には載りません。先にピンの位置を確認してください。",
+    waitingEmpty: "確認待ちの場所はありません。",
+    waitingAddedBy: "{name} さんが {date} に追加",
+    waitingPublish: "公開の地図に載せる",
+    waitingDecline: "地図に載せない",
+    waitingPublished: "公開の地図に載せました。",
+    waitingDeclined: "地図に載せないことにしました。",
     places: "地域の場所",
     openText: "オープンテキスト",
     people: "参加者",
@@ -149,6 +158,15 @@ export const stewardMessages = defineMessages({
   en: {
     candidateNameHint: "Choose at least one primary name and remove any empty names.",
     home: "Steward",
+    waitingTitle: "Places waiting for you",
+    waitingIntro:
+      "New members added these places. They stay off the public map until you publish them. Check the pin first.",
+    waitingEmpty: "No places are waiting.",
+    waitingAddedBy: "Added by {name} on {date}",
+    waitingPublish: "Put on the public map",
+    waitingDecline: "Keep off the map",
+    waitingPublished: "Now on the public map.",
+    waitingDeclined: "Kept off the map.",
     places: "Places in the region",
     openText: "Open text",
     people: "People",

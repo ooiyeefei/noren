@@ -13,6 +13,7 @@ import { PublicQueryBoundary } from "./home-container";
 import { PublicLoading } from "./home-view";
 import { readLocation } from "@/lib/collection/location";
 import { PlaceView, pressedAfter, type PlaceCollection, type PressedFrom } from "./place-view";
+import { useShownAs } from "@/components/place/use-shown-as";
 import { useToday } from "./use-today";
 import type { PublicRegionProps } from "./mapping";
 
@@ -52,6 +53,7 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
     spot ? { regionId: region.regionId, neighbourhoodId: spot.neighbourhoodId } : "skip",
   );
   const person = useQuery(api.people.current, isAuthenticated ? {} : "skip");
+  const shownAs = useShownAs(person);
   const [pressedFrom, setPressedFrom] = useState<PressedFrom>(null);
   // Said before the work is done, so the stamp arrives already pressing rather than flashing first.
   const pressing = async <T,>(from: NonNullable<PressedFrom>, work: () => Promise<T>) => {
@@ -90,6 +92,7 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
         signedIn: isLoading ? undefined : isAuthenticated,
         add: (args) => pressing("story", () => addSource({ ...args, placeId: place._id })),
         write: (args) => pressing("story", () => writeStory({ ...args, placeId: place._id })),
+        shownAs,
         preview: (url) => previewLink({ placeId: place._id, url }),
         draftNote: (args) => draftNote({ ...args, placeId: place._id, mine: true }),
         remove: ({ kind, id }) =>
@@ -109,6 +112,7 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
             locate: () => readLocation(navigator.geolocation),
             checkIn: () => pressing("checkIn", () => checkIn({ placeId: place._id })),
             writeLine: (args) => writeStory({ ...args, placeId: place._id }),
+            shownAs,
             stillHere: () => confirm({ placeId: place._id }),
           },
         }

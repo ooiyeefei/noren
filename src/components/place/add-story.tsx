@@ -20,6 +20,7 @@ import {
   type WrittenStoryArgs,
 } from "./add-story-form";
 import { LinkPreview, useLinkRead, type LinkReadActions } from "./link-read";
+import { ShownAs, type ShownAsActions } from "./shown-as";
 
 /** What the page can do with a story; the container wires these to Convex. */
 export type AddStoryActions = LinkReadActions & {
@@ -29,6 +30,8 @@ export type AddStoryActions = LinkReadActions & {
   add(args: StoryArgs): Promise<unknown>;
   /** Keeps a story the member writes here. */
   write(args: WrittenStoryArgs): Promise<unknown>;
+  /** Set until the member has seen the name their story goes out under (FR-131). */
+  shownAs?: ShownAsActions;
 };
 
 type Mode = "write" | "link";
@@ -87,7 +90,7 @@ export function AddStory({
   async function submit(current: Mode, send: AddStoryActions) {
     const prepared = prepare(current, send);
     setProblem(prepared.ok ? undefined : prepared.problem);
-    if (!prepared.ok || busy.current) return;
+    if (!prepared.ok || busy.current || send.shownAs) return;
     busy.current = true;
     setPending(true);
     setError(null);
@@ -275,6 +278,9 @@ export function AddStory({
                 </label>
               </>
             )}
+            {actions.shownAs && (
+              <ShownAs locale={locale} hintId={`${id}-name`} actions={actions.shownAs} />
+            )}
             {/* Sharing is the agreement to show it; saying so beside the button is the consent. */}
             <p id={`${id}-public`} className="text-[15px]">
               {m.shownPublicly}
@@ -282,7 +288,8 @@ export function AddStory({
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                aria-describedby={`${id}-public`}
+                disabled={!!actions.shownAs}
+                aria-describedby={actions.shownAs ? `${id}-public ${id}-name` : `${id}-public`}
                 className={cn(BUTTON, "bg-kon text-white")}
               >
                 {pending ? m.sharing : m.share}

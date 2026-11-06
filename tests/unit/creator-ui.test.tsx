@@ -14,6 +14,7 @@ import type { MapsSuggestion } from "@/lib/geo/maps-link";
 import { CreatorHomeView } from "@/components/creator/creator-home-view";
 import { PlaceEditorView, type PlaceEditorViewProps } from "@/components/creator/place-editor-view";
 import { loadRegions } from "@/lib/region";
+import { addStoryMessages } from "@/lib/i18n/messages/add-story";
 import { creatorMessages } from "@/lib/i18n/messages/creator";
 import { useMutation, useQuery } from "convex/react";
 import { getFunctionName } from "convex/server";
@@ -855,6 +856,101 @@ it.each(["ja", "en"] as const)(
   },
 );
 
+it.each(["ja", "en"] as const)(
+  "promises the map at once only to those it is true for; a new member is told it waits (%s)",
+  (locale) => {
+    const m = creatorMessages[locale];
+    const chosen = { ...newProps.draft, category: "cafe" };
+    const view = (fields: Partial<NewPlaceViewProps>) =>
+      renderToStaticMarkup(
+        <NewPlaceView {...newProps} locale={locale} step={3} draft={chosen} {...fields} />,
+      );
+    const waiting = view({ onMap: true, waits: true });
+    const waitingHint = m.waitingHint.replaceAll("'", "&#x27;");
+    expect(waiting).toContain(waitingHint);
+    expect(waiting).toContain(`>${m.createWaiting}</button>`);
+    expect(waiting).not.toContain(m.businessHint);
+    expect(waiting).not.toContain(`>${m.create}</button>`);
+    const straight = view({ onMap: true, waits: false });
+    expect(straight).toContain(m.businessHint);
+    expect(straight).not.toContain(waitingHint);
+    // A demo account's place is a draft, whatever else is true of the account.
+    const demo = view({ onMap: false, waits: true });
+    expect(demo).toContain(m.draftHint);
+    expect(demo).not.toContain(waitingHint);
+    expect(demo).not.toContain(m.businessHint);
+  },
+);
+
+it("the last wizard step shows the name first and holds the button until it is settled", () => {
+  const m = creatorMessages.en;
+  const shownAs = { displayName: "Fictional Walker", confirm: vi.fn(), save: vi.fn() };
+  const chosen = { ...newProps.draft, category: "cafe" };
+  const view = (step: 1 | 2 | 3, fields: Partial<NewPlaceViewProps> = {}) =>
+    renderToStaticMarkup(
+      <NewPlaceView {...newProps} locale="en" onMap step={step} draft={chosen} {...fields} />,
+    );
+  const held = view(3, { shownAs });
+  expect(held).toContain(addStoryMessages.en.useThisName);
+  expect(held).toMatch(
+    new RegExp(`disabled=""[^>]*aria-describedby="[^"]+-name"[^>]*>${m.create}<`),
+  );
+  expect(view(1, { shownAs })).not.toContain(addStoryMessages.en.useThisName);
+  const open = view(3);
+  expect(open).not.toContain(addStoryMessages.en.useThisName);
+  expect(open).not.toMatch(new RegExp(`disabled=""[^>]*>${m.create}</button>`));
+});
+
+it("a member's list and the editor say a place is waiting for a steward", () => {
+  const m = creatorMessages.en;
+  const place = {
+    _id: "mock-place",
+    slug: "mock-place",
+    names: newProps.draft.names,
+    visibility: "draft" as const,
+    isMock: false,
+  };
+  const list = (fields: { waitingForSteward?: boolean }) =>
+    renderToStaticMarkup(
+      <CreatorHomeView
+        locale="en"
+        region={region}
+        places={[{ ...place, ...fields }]}
+        adding={false}
+      />,
+    );
+  expect(list({ waitingForSteward: true })).toContain(m.waitingStatus);
+  expect(list({ waitingForSteward: true })).not.toContain(`>${m.draftStatus}<`);
+  expect(list({})).toContain(`>${m.draftStatus}<`);
+  expect(list({})).not.toContain(m.waitingStatus);
+  const editor = (fields: { waitingForSteward?: boolean }) =>
+    renderToStaticMarkup(
+      <PlaceEditorView {...editorProps} place={{ ...editorProps.place, ...fields }} />,
+    );
+  expect(editor({ waitingForSteward: true })).toContain(m.waitingNote);
+  expect(editor({})).not.toContain(m.waitingNote);
+});
+
+it("the editor's post form shows the name first and holds the button until it is settled", () => {
+  const props = {
+    ...editorProps,
+    sourceDraft: { ...editorProps.sourceDraft, url: "https://www.youtube.com/watch?v=abcdefghijk" },
+  };
+  const addPost = creatorMessages.en.addPost;
+  const shownAs = { displayName: "Fictional Walker", confirm: vi.fn(), save: vi.fn() };
+  const open = (fields: Partial<PlaceEditorViewProps>) => {
+    const render = mountView(PlaceEditorView, { ...props, ...fields });
+    click(render(), creatorMessages.en.openPostForm);
+    return renderToStaticMarkup(render());
+  };
+  const held = open({ shownAs });
+  expect(held).toContain(addStoryMessages.en.useThisName);
+  expect(held).toMatch(new RegExp(`type="submit" disabled=""[^>]*>${addPost}</button>`));
+  const free = open({});
+  expect(free).not.toContain(addStoryMessages.en.useThisName);
+  expect(free).not.toMatch(new RegExp(`type="submit" disabled=""[^>]*>${addPost}</button>`));
+});
+
 describe("adding a place from the wizard", () => {
   const open = { ...region, legal: { ...region.legal, launchPackComplete: true } };
   async function addPlace(person: { role: string; isMock: boolean }, inRegion = open) {
@@ -947,6 +1043,61 @@ describe("adding a place from the wizard", () => {
   });
   it("keeps a demo account's place off the map", async () => {
     expect(await addPlace({ role: "user", isMock: true })).toMatchObject({ onMap: false });
+  });
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  function wizardFor(person: Record<string, unknown>) {
+    const create = vi.fn<(...args: unknown[]) => Promise<null>>().mockResolvedValue(null);
+    vi.mocked(useQuery).mockImplementation((...args: Parameters<typeof useQuery>) =>
+      getFunctionName(args[0]) === "people:current"
+        ? { _id: "mock-person", displayName: "Fictional Walker", isMock: false, ...person }
+        : [],
+    );
+    vi.mocked(useMutation).mockImplementation(
+      (reference) =>
+        Object.assign((...args: unknown[]) => create(getFunctionName(reference), ...args), {
+          withOptimisticUpdate: vi.fn(),
+        }) as never,
+    );
+    const render = mountView(
+      () =>
+        CreatorHomeContainer({
+          params: Object.assign(Promise.resolve({ lang: "en" }), {
+            status: "fulfilled",
+            value: { lang: "en" },
+          }),
+          locale: "en",
+          region,
+        }),
+      {},
+    );
+    return { props: element<NewPlaceViewProps>(render(), NewPlaceView).props, create };
+  }
+
+  it("words the form by who is adding: only a member in their first 7 days waits", () => {
+    const now = Date.now();
+    const waits = (role: string, joinedAt?: number) => wizardFor({ role, joinedAt }).props.waits;
+    expect(waits("user", now - 6 * DAY_MS)).toBe(true);
+    expect(waits("user", now - 8 * DAY_MS)).toBe(false);
+    for (const role of ["creator", "business_owner", "steward"])
+      expect(waits(role, now)).toBe(false);
+    // A page newer than the server: the server still puts it straight on the map.
+    expect(waits("user", undefined)).toBe(false);
+    expect(wizardFor({ role: "user", isMock: true, joinedAt: now }).props.waits).toBe(false);
+  });
+
+  it("offers the name control until the server says it is confirmed, and wires it to the caller's own name", async () => {
+    const { props, create } = wizardFor({ role: "user", nameConfirmed: false });
+    expect(props.shownAs?.displayName).toBe("Fictional Walker");
+    await props.shownAs?.confirm();
+    expect(create).toHaveBeenLastCalledWith("people:confirmMyDisplayName", {});
+    await props.shownAs?.save("Lantern fan");
+    expect(create).toHaveBeenLastCalledWith("people:setMyDisplayName", {
+      displayName: "Lantern fan",
+    });
+    expect(wizardFor({ role: "user", nameConfirmed: true }).props.shownAs).toBeUndefined();
+    // A page newer than the server, or a steward: nothing is asked, so nobody is locked out.
+    expect(wizardFor({ role: "steward" }).props.shownAs).toBeUndefined();
   });
 });
 
