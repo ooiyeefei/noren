@@ -75,5 +75,5 @@ The content security policy is built in `next.config.ts`, so these must be in Ve
 1. Done 6 Nov 2026: constitution 2.4.0. The privacy notice's photos section appears by itself once `enabled` is true, so the same change sets a new `documentsVersion`, and the lawyer reads that section first.
 2. Done 6 Nov 2026: `scripts/setup-photo-bucket.sh` ran with the owner's AWS profile. The bucket was tested with the limited user's key: upload, refused content type, read, write, refused write outside the two folders, no public bucket access, and real deletion.
 3. Done 6 Nov 2026: the settings are on Vercel production and Convex production, and the secret file is deleted.
-4. Set `photos.enabled: true`, deploy Convex and the site.
+4. Done 6 Nov 2026: `photos.enabled: true`, Convex and the site deployed.
 5. Live UAT on a real iPhone: upload, read the served file's metadata, remove, check the bucket.

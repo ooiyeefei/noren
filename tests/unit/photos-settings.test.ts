@@ -27,8 +27,8 @@ function parse(change: (region: { photos: Record<string, unknown> }) => void) {
 }
 
 describe("the region's photos block", () => {
-  it("ships switched off", () => {
-    expect(region.photos.enabled).toBe(false);
+  it("is on in Nagasaki, as the owner decided on 6 Nov 2026", () => {
+    expect(region.photos.enabled).toBe(true);
   });
 
   it("holds the numbers the owner decided", () => {

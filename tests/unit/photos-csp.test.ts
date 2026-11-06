@@ -35,9 +35,9 @@ describe("the content security policy and photos", () => {
     expect(cspHeaderFromEnv(env, { enforce: false, region: on }).value).toBe(plain);
   });
 
-  it("the policy that ships today is unchanged", () => {
+  it("the policy that ships today names the photo storage, because photos are on", () => {
     expect(cspHeaderFromEnv({ ...env, ...storage }, { enforce: false, region }).value).toBe(
-      cspHeaderFromEnv(env, { enforce: false, region: off }).value,
+      cspHeaderFromEnv({ ...env, ...storage }, { enforce: false, region: on }).value,
     );
   });
 
