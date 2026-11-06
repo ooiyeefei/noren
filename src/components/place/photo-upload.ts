@@ -1,4 +1,4 @@
-import { shrinkPhoto } from "./shrink";
+import { shrinkPhoto } from "./photo-shrink";
 
 /** Runs in the browser, and needs no setting beyond what the page was given. */
 

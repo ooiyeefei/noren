@@ -344,11 +344,13 @@ describe("the steward's waiting section", () => {
   });
 
   it("warns only when a deletion is failing", () => {
-    const warning = "could not be deleted from storage yet";
+    const warning = "still in storage after repeated tries";
     expect(render(<WaitingPhotosView {...props()} />)).not.toContain(warning);
-    expect(render(<WaitingPhotosView {...props({ removalsFailing: 3 })} />)).toContain(
-      `3 removed photos ${warning}`,
-    );
+    for (const count of [1, 3]) {
+      expect(render(<WaitingPhotosView {...props({ removalsFailing: count })} />)).toContain(
+        `${warning}: ${count}.`,
+      );
+    }
   });
 
   it("the buttons wait while something is pending", () => {

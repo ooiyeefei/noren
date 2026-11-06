@@ -68,6 +68,7 @@ function run(profile = "fictional-profile", confirm = ACCOUNT, fakeAccount = ACC
     env: {
       PATH: `${path.join(dir, "bin")}:${process.env.PATH ?? ""}`,
       HOME: dir,
+      NODE_ENV: "test",
       FAKE_AWS_STATE: state,
       FAKE_ACCOUNT: fakeAccount,
       FAKE_ACCESS_KEY: ACCESS_KEY,

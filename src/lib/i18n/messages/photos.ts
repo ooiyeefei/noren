@@ -39,7 +39,7 @@ export const photoMessages = defineMessages({
     reject: "Remove",
     rejectedDone: "Photo removed.",
     removalsFailing:
-      "{count} removed photos could not be deleted from storage yet. Noren keeps trying. Check the storage settings.",
+      "Removed photos still in storage after repeated tries: {count}. Noren keeps trying. Check the storage settings.",
   },
   ja: {
     photos: "写真（任意）",
@@ -78,6 +78,6 @@ export const photoMessages = defineMessages({
     reject: "削除する",
     rejectedDone: "写真を削除しました。",
     removalsFailing:
-      "削除した写真のうち{count}件を、まだ保存先から消せていません。Noren は再試行を続けます。保存先の設定を確認してください。",
+      "削除したのに、何度試しても保存先に残っている写真：{count}件。Noren は再試行を続けます。保存先の設定を確認してください。",
   },
 });

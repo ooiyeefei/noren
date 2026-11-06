@@ -4,7 +4,6 @@ import { useId, useRef, useState } from "react";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
-import { NO_PHOTOS, type PhotoDraft } from "@/lib/photos/upload";
 import { cn } from "@/lib/utils";
 import {
   AUTHOR_LIMIT,
@@ -22,6 +21,7 @@ import {
 } from "./add-story-form";
 import { LinkPreview, useLinkRead, type LinkReadActions } from "./link-read";
 import { PhotoPicker, type PhotoPickerActions } from "./photo-picker";
+import { NO_PHOTOS, type PhotoDraft } from "./photo-upload";
 import { ShownAs, type ShownAsActions } from "./shown-as";
 
 /** What the page can do with a story; the container wires these to Convex. */
