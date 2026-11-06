@@ -32,11 +32,11 @@ const canonicalVideo = "https://www.youtube.com/watch?v=abcdefghijk";
 
 async function world() {
   const b = newBackend(modules);
+  await addPerson(b, "user", "user", { joinedDaysAgo: 30 });
   const creator = await addPerson(b, "creator", "creator");
   const other = await addPerson(b, "other", "creator");
   const steward = await addPerson(b, "steward", "steward");
   const owner = await addPerson(b, "owner", "business_owner");
-  await addPerson(b, "user", "user");
   await addPerson(b, "mock", "creator", { isMock: true });
   const placeId = await addPlace(b, {
     createdBy: creator,
@@ -717,5 +717,53 @@ describe("a post a member links from Instagram or Facebook", () => {
     expect(shown.every(({ sharedBy }) => sharedBy === "Test Person (member)")).toBe(true);
     expect(shown[0]!.embed).toMatchObject({ kind: "blockquote" });
     expect(shown[1]!.embed).toMatchObject({ kind: "iframe" });
+  });
+});
+
+describe("the name goes first (FR-131)", () => {
+  const link = (placeId: Id<"place">) => ({
+    placeId,
+    url: "https://example.com/fictional-walk",
+    title: "A fictional walk",
+  });
+
+  it.each(["user", "creator", "business_owner"] as const)(
+    "refuses an unconfirmed %s and stores nothing, then lets them share once confirmed",
+    async (role) => {
+      const { b, steward } = await world();
+      const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
+      await addPerson(b, "unconfirmed", role, { nameConfirmed: false });
+      expect(await errorCode(b.as("unconfirmed").mutation(api.sources.add, link(placeId)))).toBe(
+        "name_not_confirmed",
+      );
+      expect(await b.t.query(api.sources.listForPlace, { placeId })).toEqual([]);
+      await b.as("unconfirmed").mutation(api.people.confirmMyDisplayName, {});
+      await b.as("unconfirmed").mutation(api.sources.add, link(placeId));
+    },
+  );
+
+  it("never refuses a steward or a demo account", async () => {
+    const { b, steward } = await world();
+    const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
+    await addPerson(b, "unconfirmed-steward", "steward", { nameConfirmed: false });
+    await addPerson(b, "unconfirmed-demo", "user", { nameConfirmed: false, isMock: true });
+    await b.as("unconfirmed-steward").mutation(api.sources.add, link(placeId));
+    await b.as("unconfirmed-demo").mutation(api.sources.add, {
+      ...link(placeId),
+      url: "https://example.com/fictional-walk-2",
+    });
+  });
+
+  it("a new member links at most 5 posts a day", async () => {
+    const { b, steward } = await world();
+    const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
+    await addPerson(b, "newcomer", "user");
+    const add = (n: number) =>
+      b.as("newcomer").mutation(api.sources.add, {
+        ...link(placeId),
+        url: `https://example.com/fictional-walk-${n}`,
+      });
+    for (let n = 0; n < 5; n++) await add(n);
+    expect(await errorCode(add(5))).toBe("rate_limited");
   });
 });

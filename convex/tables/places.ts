@@ -24,6 +24,8 @@ export const placeTables = {
     clerkUserId: v.string(),
     role: roleValidator,
     displayName: v.string(),
+    /** When the person last saw and kept the name shown beside what they share (FR-131). */
+    nameConfirmedAt: v.optional(v.number()),
     publicProfileUrl: v.optional(v.string()),
     verifiedAt: v.optional(v.number()),
     verifiedBy: v.optional(v.id("person")),
@@ -91,12 +93,14 @@ export const placeTables = {
     hiddenReason: v.optional(v.union(v.literal("not_for_visitors"), v.literal("reported"))),
     /**
      * When a member who had been there added the place to the map and agreed to show it (FR-032).
-     * Such a place may be public before launch, like an open-data listing.
+     * Such a place may be public before launch, like an open-data listing. A new member's place is
+     * a draft with this set until a steward publishes it (FR-129).
      */
     sharedAt: v.optional(v.number()),
   })
     .index("by_regionId_and_slug", ["regionId", "slug"])
     .index("by_regionId_and_visibility", ["regionId", "visibility"])
+    .index("by_regionId_and_visibility_and_sharedAt", ["regionId", "visibility", "sharedAt"])
     .index("by_createdBy", ["createdBy"])
     .index("by_regionId_and_neighbourhood_and_visibility", [
       "regionId",

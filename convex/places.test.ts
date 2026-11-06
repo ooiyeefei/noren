@@ -33,11 +33,11 @@ const input = { regionId: "nagasaki", kind: "business" as const, names, pin };
 
 async function setup(options: { isMock?: boolean } = {}) {
   const b = newBackend(modules);
+  const user = await addPerson(b, "user", "user", { joinedDaysAgo: 30 });
   const creator = await addPerson(b, "creator", "creator", options);
   const other = await addPerson(b, "other", "creator");
   const steward = await addPerson(b, "steward", "steward");
   const owner = await addPerson(b, "owner", "business_owner");
-  const user = await addPerson(b, "user", "user");
   const create = () => b.as("creator").mutation(api.places.create, input);
   const audits = (action: string) =>
     b.run(async (ctx) =>
@@ -1084,5 +1084,176 @@ describe("place slugs", () => {
       await ctx.db.delete("place", third!._id);
     });
     expect(await b.run((ctx) => uniqueSlug(ctx, "nagasaki", "mock"))).toBe("mock-3");
+  });
+});
+
+describe("a new member's place waits for a steward (FR-129)", () => {
+  const onMap = { ...input, category: "cafe", onMap: true };
+  async function members() {
+    const b = await setup();
+    await addPerson(b, "newcomer", "user");
+    return b;
+  }
+  const publicMap = async (b: Awaited<ReturnType<typeof members>>) =>
+    (await b.t.query(api.places.listForMap, { regionId: "nagasaki" })).map((p) => p._id);
+
+  it("stores it as a draft with their agreement, off the public map, and says so", async () => {
+    const b = await members();
+    const { placeId, slug, waiting } = await b.as("newcomer").mutation(api.places.create, onMap);
+    expect(waiting).toBe(true);
+    expect(await b.run((ctx) => ctx.db.get("place", placeId))).toMatchObject({
+      visibility: "draft",
+      sharedAt: expect.any(Number),
+      confirmedAt: expect.any(Number),
+    });
+    expect(await publicMap(b)).toEqual([]);
+    expect(await b.t.query(api.places.getBySlug, { regionId: "nagasaki", slug })).toBeNull();
+    // Its maker can open it, and is told it is waiting.
+    expect(await b.as("newcomer").query(api.places.get, { placeId })).toMatchObject({
+      visibility: "draft",
+      waitingForSteward: true,
+    });
+    expect(
+      (await b.as("newcomer").query(api.places.listMine, { regionId: "nagasaki" }))[0]
+        ?.waitingForSteward,
+    ).toBe(true);
+  });
+
+  it("a steward can then publish it through setVisibility, before launch too", async () => {
+    const b = await members();
+    expect(regionPolicy("nagasaki").realBusinessesDraftOnly).toBe(true);
+    const { placeId } = await b.as("newcomer").mutation(api.places.create, onMap);
+    await b.as("steward").mutation(api.places.setVisibility, { placeId, visibility: "public" });
+    expect(await publicMap(b)).toEqual([placeId]);
+    const published = await b.t.query(api.places.get, { placeId });
+    expect(published?.visibility).toBe("public");
+    expect(published?.waitingForSteward).toBeUndefined();
+    expect(await b.as("steward").query(api.places.listWaiting, { regionId: "nagasaki" })).toEqual(
+      [],
+    );
+  });
+
+  it.each(["user", "creator", "steward"] as const)(
+    "%s keeps today's behaviour: on the map at once",
+    async (who) => {
+      const b = await members();
+      const { placeId, waiting } = await b.as(who).mutation(api.places.create, onMap);
+      expect(waiting).toBe(false);
+      expect(await publicMap(b)).toEqual([placeId]);
+    },
+  );
+
+  it("a new creator or business owner is vouched for, so nothing waits", async () => {
+    const b = await members();
+    await addPerson(b, "new-owner", "business_owner");
+    expect((await b.as("new-owner").mutation(api.places.create, onMap)).waiting).toBe(false);
+    expect((await b.as("creator").mutation(api.places.create, onMap)).waiting).toBe(false);
+  });
+
+  it("a place the member did not ask to put on the map is a plain draft, not waiting", async () => {
+    const b = await members();
+    const { placeId, waiting } = await b.as("newcomer").mutation(api.places.create, input);
+    expect(waiting).toBe(false);
+    expect((await b.run((ctx) => ctx.db.get("place", placeId)))?.sharedAt).toBeUndefined();
+    expect(await b.as("steward").query(api.places.listWaiting, { regionId: "nagasaki" })).toEqual(
+      [],
+    );
+  });
+
+  it("a new member adds at most 3 places a day", async () => {
+    const b = await members();
+    for (let i = 0; i < 3; i++) await b.as("newcomer").mutation(api.places.create, onMap);
+    expect(await errorCode(b.as("newcomer").mutation(api.places.create, onMap))).toBe(
+      "rate_limited",
+    );
+  });
+
+  it("listWaiting shows stewards alone what waits, oldest first, with who added it", async () => {
+    const b = await members();
+    const first = await b.as("newcomer").mutation(api.places.create, onMap);
+    const second = await b.as("newcomer").mutation(api.places.create, onMap);
+    await b.as("newcomer").mutation(api.places.create, input);
+    await b.as("creator").mutation(api.places.create, onMap);
+    const waiting = await b.as("steward").query(api.places.listWaiting, { regionId: "nagasaki" });
+    expect(waiting.map((place) => place._id)).toEqual([first.placeId, second.placeId]);
+    expect(waiting[0]).toMatchObject({
+      addedBy: "Test Person (newcomer)",
+      sharedAt: expect.any(Number),
+      category: "cafe",
+    });
+    for (const who of ["newcomer", "creator", "owner"])
+      expect(
+        await errorCode(b.as(who).query(api.places.listWaiting, { regionId: "nagasaki" })),
+      ).toBe("forbidden");
+    expect(await errorCode(b.t.query(api.places.listWaiting, { regionId: "nagasaki" }))).toBe(
+      "unauthenticated",
+    );
+  });
+
+  it("a steward can turn a place down: it leaves the list, stays off the map, and can come back", async () => {
+    const b = await members();
+    const { placeId } = await b.as("newcomer").mutation(api.places.create, onMap);
+    expect(await errorCode(b.as("newcomer").mutation(api.places.declineWaiting, { placeId }))).toBe(
+      "forbidden",
+    );
+    await b.as("steward").mutation(api.places.declineWaiting, { placeId });
+    expect(await b.as("steward").query(api.places.listWaiting, { regionId: "nagasaki" })).toEqual(
+      [],
+    );
+    expect(await publicMap(b)).toEqual([]);
+    expect(await b.audits("place.decline_waiting")).toHaveLength(1);
+    const seen = await b.as("newcomer").query(api.places.get, { placeId });
+    expect(seen?.visibility).toBe("draft");
+    expect(seen?.waitingForSteward).toBeUndefined();
+    expect(await errorCode(b.as("steward").mutation(api.places.declineWaiting, { placeId }))).toBe(
+      "conflict",
+    );
+    await b.as("steward").mutation(api.places.setVisibility, { placeId, visibility: "public" });
+    expect(await publicMap(b)).toEqual([placeId]);
+  });
+
+  it("a member's place hidden by a privacy request is not offered for publishing", async () => {
+    const b = await members();
+    const { placeId, slug } = await b.as("user").mutation(api.places.create, onMap);
+    await b.t.mutation(api.takedown.submit, {
+      pageUrl: `/ja/places/${slug}`,
+      details: "This fictional page shows my private address.",
+      privacyOrMinor: true,
+      locale: "ja",
+    });
+    expect(await b.run((ctx) => ctx.db.get("place", placeId))).toMatchObject({
+      visibility: "draft",
+      sharedAt: expect.any(Number),
+      hiddenReason: "reported",
+    });
+    expect(await b.as("steward").query(api.places.listWaiting, { regionId: "nagasaki" })).toEqual(
+      [],
+    );
+  });
+});
+
+describe("the name goes first (FR-131)", () => {
+  const onMap = { ...input, category: "cafe", onMap: true };
+
+  it.each(["user", "creator", "business_owner"] as const)(
+    "refuses an unconfirmed %s and stores nothing",
+    async (role) => {
+      const b = await setup();
+      await addPerson(b, "unconfirmed", role, { nameConfirmed: false });
+      expect(await errorCode(b.as("unconfirmed").mutation(api.places.create, onMap))).toBe(
+        "name_not_confirmed",
+      );
+      expect(await b.run((ctx) => ctx.db.query("place").take(1))).toEqual([]);
+      await b.as("unconfirmed").mutation(api.people.confirmMyDisplayName, {});
+      await b.as("unconfirmed").mutation(api.places.create, onMap);
+    },
+  );
+
+  it("never refuses a steward or a demo account", async () => {
+    const b = await setup();
+    await addPerson(b, "unconfirmed-steward", "steward", { nameConfirmed: false });
+    await addPerson(b, "unconfirmed-demo", "user", { nameConfirmed: false, isMock: true });
+    await b.as("unconfirmed-steward").mutation(api.places.create, onMap);
+    await b.as("unconfirmed-demo").mutation(api.places.create, input);
   });
 });

@@ -41,21 +41,41 @@ export function newBackend(
 
 export type Backend = ReturnType<typeof newBackend>;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A person who has already confirmed their name, unless told otherwise. `joinedDaysAgo` sets the
+ * clock back for the insert, because Convex sets `_creationTime` itself. It also never lets a row
+ * be older than the one before it, so a person joined earlier must be added before any other row.
+ */
 export async function addPerson(
   b: Backend,
   name: string,
   role: Role,
-  options: { isMock?: boolean } = {},
+  options: { isMock?: boolean; joinedDaysAgo?: number; nameConfirmed?: boolean } = {},
 ): Promise<Id<"person">> {
-  return await b.run((ctx) =>
-    ctx.db.insert("person", {
-      tokenIdentifier: `${ISSUER}|${name}`,
-      clerkUserId: name,
-      role,
-      displayName: `Test Person (${name})`,
-      isMock: options.isMock ?? false,
-    }),
-  );
+  const clock = Date.now;
+  const earlier = (options.joinedDaysAgo ?? 0) * DAY_MS;
+  const joined = clock() - earlier;
+  if (earlier > 0) Date.now = () => clock() - earlier;
+  try {
+    const id = await b.run((ctx) =>
+      ctx.db.insert("person", {
+        tokenIdentifier: `${ISSUER}|${name}`,
+        clerkUserId: name,
+        role,
+        displayName: `Test Person (${name})`,
+        isMock: options.isMock ?? false,
+        ...(options.nameConfirmed === false ? {} : { nameConfirmedAt: joined }),
+      }),
+    );
+    const person = await b.run((ctx) => ctx.db.get("person", id));
+    if (earlier > 0 && person!._creationTime > joined + 1000)
+      throw new Error(`addPerson: add ${name} before any other row, or it can't be backdated`);
+    return id;
+  } finally {
+    Date.now = clock;
+  }
 }
 
 export async function addPlace(

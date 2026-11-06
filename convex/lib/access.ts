@@ -60,6 +60,15 @@ export function isPubliclyReadablePlace(
   return (place.visibility === "public" && place.isMock === false) || isPublicDemoPlace(place);
 }
 
+/** A place a member shared that is off the map with no reason given: it waits for a steward (R11). */
+export function isWaitingPlace(
+  place: Pick<Doc<"place">, "visibility" | "sharedAt" | "hiddenReason">,
+): boolean {
+  return (
+    place.visibility === "draft" && place.sharedAt !== undefined && place.hiddenReason === undefined
+  );
+}
+
 export async function isVerifiedOwner(
   ctx: QueryCtx,
   personId: Id<"person">,

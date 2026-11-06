@@ -146,7 +146,12 @@ export const submit = mutation({
         : {}),
     });
     if (hidden && place !== null) {
-      await ctx.db.patch("place", place._id, { visibility: "draft", demoPublicBasis: undefined });
+      // The reason keeps a member's place out of the waiting list, one press from going back up.
+      await ctx.db.patch("place", place._id, {
+        visibility: "draft",
+        demoPublicBasis: undefined,
+        hiddenReason: "reported",
+      });
       await writeAudit(ctx, {
         actorKind: "system",
         action: "takedown.auto_hide",

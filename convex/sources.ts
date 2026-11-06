@@ -11,7 +11,7 @@ import {
   type Viewer,
 } from "./lib/access";
 import { writeAudit } from "./lib/audit";
-import { currentPerson, requirePerson, requireRole } from "./lib/auth";
+import { currentPerson, requireConfirmedName, requirePerson, requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
@@ -173,6 +173,7 @@ export const add = mutation({
   handler: async (ctx, args) => {
     // Any signed-in member may link a post about a place they can read (FR-032).
     const person = await requirePerson(ctx);
+    requireConfirmedName(person);
     const place = await loadReadablePlace(ctx, person, args.placeId);
     const region = regionConfig(place.regionId);
     const described = describeSource(args.url, region.enabledSourceAdapters);
@@ -214,7 +215,7 @@ export const add = mutation({
       )
       .first();
     if (existing !== null) throw appError("conflict", "this URL is already attached to the place");
-    await limitContribution(ctx, person, "post");
+    await limitContribution(ctx, person, "post", place.regionId);
     const sourceId = await ctx.db.insert(
       "source",
       withMock(person, {
@@ -254,7 +255,7 @@ export const beginLinkRead = internalMutation({
   handler: async (ctx, { placeId, kind }) => {
     const person = await requirePerson(ctx);
     const place = await loadReadablePlace(ctx, person, placeId);
-    await limitContribution(ctx, person, kind);
+    await limitContribution(ctx, person, kind, place.regionId);
     const region = regionConfig(place.regionId);
     const names = place.mapNames ?? (await readMapNames(ctx, place._id));
     return {

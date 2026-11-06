@@ -9,7 +9,7 @@ import {
   loadReadablePlace,
 } from "./lib/access";
 import { writeAudit } from "./lib/audit";
-import { currentPerson, requirePerson } from "./lib/auth";
+import { currentPerson, requireConfirmedName, requirePerson } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { excerptTranslations, hasNoCard } from "./lib/foundPosts";
 import { mutation } from "./lib/gate";
@@ -47,13 +47,14 @@ export const add = mutation({
   returns: v.id("story"),
   handler: async (ctx, { placeId, body, lang }) => {
     const person = await requirePerson(ctx);
+    requireConfirmedName(person);
     const place = await loadReadablePlace(ctx, person, placeId);
     const text = body.trim();
     if (!text || text.length > BODY_LIMIT)
       throw appError("invalid_input", `a story is 1 to ${BODY_LIMIT} characters`);
     if (!isRegionLocale(regionConfig(place.regionId), lang))
       throw appError("invalid_input", "lang must be a region locale");
-    await limitContribution(ctx, person, "story");
+    await limitContribution(ctx, person, "story", place.regionId);
     return await ctx.db.insert(
       "story",
       withMock(person, {
