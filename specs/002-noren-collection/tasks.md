@@ -140,7 +140,8 @@ Before writing any Convex code, read `convex/_generated/ai/guidelines.md`. All m
 - [X] T042 **OWNER ACTION**: The owner approves merging. Then commit with `-F`, rebase on the latest `origin/main`, open a PR and rebase-merge it, using `GH_TOKEN=$(gh auth token --user ooiyeefei)` for that command
 - [X] T043 Deploy Convex first and Vercel second, because the new place page fails without the new functions. Then run `collection.createSet` for Shinchi with the slugs in data-model.md, and upload the art with `scripts/upload-set-art.mts --prod`
 - [X] T044 As the real steward, pick lines and set Shinchi live, then run the live UAT in quickstart.md stage 1 and read the server logs
-- [ ] T045 **OWNER ACTION**: Walk test in Shinchi on the owner's iPhone, using the steps in quickstart.md. Android is still to be tested by someone else. Record the results in `specs/002-noren-collection/validation-log.md`, and tune `checkInMetres` or pins if first-press success falls short
+- [X] T045 **OWNER ACTION**: Walk test in Shinchi on the owner's iPhone, using the steps in quickstart.md. Android is still to be tested by someone else. Record the results in `specs/002-noren-collection/validation-log.md`, and tune `checkInMetres` or pins if first-press success falls short
+  - Done 6 Nov 2026 in Shimabara Castle Town instead of Shinchi: Inohara and Shimabara Castle, two panels dyed on the first live check-ins. See validation-log.md.
 
 **Checkpoint**: SC-101 to SC-104 are met, which opens the way to Phase 9.
 
@@ -184,7 +185,8 @@ Before writing any Convex code, read `convex/_generated/ai/guidelines.md`. All m
 
 - [X] T057 [US6] Draft the terms and privacy notice in `src/lib/i18n/messages/legal-documents.ts`, in Japanese and English, naming every service outside Japan that holds or processes account data as the code uses them that day, and stating what deletion removes and that places a person added stay without their name
 - [X] T058 [US6] Create `src/app/[lang]/terms/page.tsx` and `src/app/[lang]/privacy/page.tsx`, answering 404 while `documentsVersion` is null, and add footer links in `src/components/layout/site-footer.tsx` under the same condition
-- [ ] T059 **OWNER ACTION**: The owner and a lawyer read both documents, a person reviews all new Japanese copy, and then `documentsVersion` is set in `regions/nagasaki.json`
+- [X] T059 **OWNER ACTION**: The owner and a lawyer read both documents, a person reviews all new Japanese copy, and then `documentsVersion` is set in `regions/nagasaki.json`
+  - The owner approved both documents on 6 Nov 2026 without a lawyer's read, and no second person has reviewed the Japanese. `documentsVersion` is `2026-11-06`.
 
 ### Sign-up and deletion
 
@@ -197,7 +199,8 @@ Before writing any Convex code, read `convex/_generated/ai/guidelines.md`. All m
 
 ### Release
 
-- [ ] T066 Run all checks, then ship Phase 9 switched off through a PR once the owner approves merging, and deploy
+- [X] T066 Run all checks, then ship Phase 9 switched off through a PR once the owner approves merging, and deploy
+  - Merged in PR #84 at the owner's word on 6 Nov 2026 and deployed.
 - [ ] T067 **OWNER ACTION**: In the Clerk dashboard, in the order in quickstart.md: check the plan limit and protections, turn on legal consent with `/terms` and `/privacy`, block disposable addresses and subaddresses, keep self-deletion off, choose sign-up methods, and set access to Public
 - [ ] T068 Deploy with `accountsOpen: true` and run the live UAT in quickstart.md stage 3 with a fictional test name, recording results in `specs/002-noren-collection/validation-log.md`
 

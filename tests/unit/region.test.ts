@@ -156,10 +156,10 @@ describe("region policy", () => {
     expect(region.legal.launchPackComplete).toBe(false);
   });
 
-  it("ships with accounts closed", () => {
+  it("ships with accounts closed and the documents the owner approved", () => {
     const { legal } = loadRegions().get("nagasaki")!;
     expect(legal.accountsOpen).toBe(false);
-    expect(legal.documentsVersion).toBeNull();
+    expect(legal.documentsVersion).toBe("2026-11-06");
   });
 
   it("opening accounts ends invite-only and changes no other launch rule", () => {

@@ -47,6 +47,8 @@ Before the owner's first visits as a real user. Scripted browser runs on product
 
 The owner walks on an iPhone with a field guide. Results go here.
 
+The owner reported the walk done at Inohara and Shimabara Castle (T045, walked in Shimabara Castle Town rather than Shinchi). Their record holds two visits on 2026-11-06, panels 1 and 2 of the Castle Town set: the first passing check-ins on production. The owner reported no problems.
+
 ## The owner's first stories in Shimabara, 6 Nov 2026 JST
 
 At the owner's request, from their own notes, on their account:
