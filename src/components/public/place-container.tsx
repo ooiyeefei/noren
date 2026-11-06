@@ -18,6 +18,7 @@ import { PlaceView, pressedAfter, type PlaceCollection, type PressedFrom } from 
 import { useShownAs } from "@/components/place/use-shown-as";
 import { useToday } from "./use-today";
 import type { PublicRegionProps } from "./mapping";
+import { readPlaceTab, type PlaceTabState } from "@/lib/place/tabs";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -30,18 +31,26 @@ const writtenStory = ({ photoIds, ...args }: WrittenStoryArgs, placeId: Id<"plac
 
 type Props = {
   params: Promise<{ lang: string; slug: string }>;
+  /** `?tab=` and `&write=1` (contract C1). */
+  searchParams: Promise<{ tab?: string | string[]; write?: string | string[] }>;
   locale: Locale;
   region: PublicRegionProps;
 };
-export function PlaceContainer({ params, locale, region }: Props) {
+export function PlaceContainer({ params, searchParams, locale, region }: Props) {
   const { slug } = use(params);
+  const address = readPlaceTab(use(searchParams));
   return (
     <PublicQueryBoundary key={`${locale}/${region.regionId}/${slug}`} locale={locale}>
-      <PlaceQuery slug={slug} locale={locale} region={region} />
+      <PlaceQuery slug={slug} locale={locale} region={region} address={address} />
     </PublicQueryBoundary>
   );
 }
-function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: string }) {
+function PlaceQuery({
+  slug,
+  locale,
+  region,
+  address,
+}: Omit<Props, "params" | "searchParams"> & { slug: string; address: PlaceTabState }) {
   const place = useQuery(api.places.getBySlug, { regionId: region.regionId, slug });
   const args = place ? { placeId: place._id } : "skip";
   const sources = useQuery(api.sources.listForPlace, args);
@@ -161,6 +170,8 @@ function PlaceQuery({ slug, locale, region }: Omit<Props, "params"> & { slug: st
       mission={mission}
       collection={collection}
       stamp={stamp && { stampedAt: stamp.stampedAt, pressedFrom }}
+      initialTab={address.tab}
+      initialWrite={address.write}
     />
   );
 }

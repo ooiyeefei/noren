@@ -47,7 +47,7 @@ export function NorenHeader({
   const nameLength = Array.from(clothName.text).length;
   const vertical = Boolean(japanese) && nameLength <= 28;
   return (
-    <header className="min-w-0 space-y-4">
+    <header className="min-w-0 space-y-2 sm:space-y-4">
       <style>{`
         @keyframes noren-drop {
           from { transform: translateY(-100%); }
@@ -61,21 +61,21 @@ export function NorenHeader({
           .noren-cloth { animation: noren-drop 420ms ease-out both, noren-settle 180ms ease-out 420ms forwards; }
         }
       `}</style>
-      <div className="noren-cloth relative isolate h-[240px] w-full origin-top bg-kon text-white [--slit-height:72px] sm:h-[280px] sm:[--slit-height:84px]">
+      <div className="noren-cloth relative isolate h-[132px] w-full origin-top bg-kon text-white [--slit-height:30px] sm:h-[240px] sm:[--slit-height:72px]">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">
           <span className="absolute bottom-0 left-1/3 h-[var(--slit-height)] w-[6px] -translate-x-1/2 bg-background" />
           <span className="absolute bottom-0 left-2/3 h-[var(--slit-height)] w-[6px] -translate-x-1/2 bg-background" />
         </div>
-        <div className="relative flex h-full min-w-0 items-center justify-center px-6 pt-5 pb-[calc(var(--slit-height)+12px)]">
+        <div className="relative flex h-full min-w-0 items-center justify-center px-6 pt-3 pb-[calc(var(--slit-height)+6px)] sm:pt-5 sm:pb-[calc(var(--slit-height)+12px)]">
           <ClothName
             lang={clothName.lang}
             aria-label={clothName.text}
             className={
               vertical
                 ? nameLength > 14
-                  ? "h-full max-w-full shrink-0 font-display text-[26px] leading-[1.2] font-extrabold [overflow-wrap:anywhere] [writing-mode:vertical-rl] sm:text-[34px]"
-                  : "h-full max-w-full shrink-0 font-display text-[32px] leading-[1.2] font-extrabold [overflow-wrap:anywhere] [writing-mode:vertical-rl] sm:text-[40px]"
-                : "line-clamp-3 min-w-0 max-w-full font-display text-center text-[32px] leading-[1.2] font-bold [overflow-wrap:anywhere]"
+                  ? "h-full max-w-full shrink-0 font-display text-[20px] leading-[1.2] font-extrabold [overflow-wrap:anywhere] [writing-mode:vertical-rl] sm:text-[34px]"
+                  : "h-full max-w-full shrink-0 font-display text-[24px] leading-[1.2] font-extrabold [overflow-wrap:anywhere] [writing-mode:vertical-rl] sm:text-[40px]"
+                : "line-clamp-2 min-w-0 max-w-full font-display text-center text-[24px] leading-[1.2] font-bold sm:line-clamp-3 sm:text-[32px] [overflow-wrap:anywhere]"
             }
           >
             {clothName.text}
@@ -85,7 +85,7 @@ export function NorenHeader({
       {otherName && (
         <OtherName
           lang={otherName.lang}
-          className="font-display text-[28px] leading-normal font-bold [overflow-wrap:anywhere]"
+          className="font-display text-[24px] leading-snug font-bold [overflow-wrap:anywhere] sm:text-[28px] sm:leading-normal"
         >
           {otherName.text}
         </OtherName>

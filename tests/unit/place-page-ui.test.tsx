@@ -90,19 +90,23 @@ for (const locale of ["ja", "en"] as const) {
     expect(html.match(/<h1\b/g)).toHaveLength(1);
     expect(html).toContain('id="main" tabindex="-1"');
     expect(html).toContain("max-w-[720px]");
-    expect(html).toContain("h-[240px]");
+    expect(html).toContain("h-[132px]");
     const positions = [
       html.indexOf('data-badge="story"'),
       html.indexOf("google.com/maps/dir/"),
+      html.indexOf('role="tablist"'),
       html.indexOf("<article"),
       html.indexOf('id="stories-heading"'),
-      html.indexOf('id="where-heading"'),
+      html.indexOf('id="about-heading"'),
       html.indexOf("takedown?page="),
     ];
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
     expect(html).toContain(placePageMessages[locale].removal);
-    const noPin = detail({ place: { ...place, pin: null } });
+    // The map belongs to Visit and is built only once that tab is open.
+    expect(html).not.toContain('id="where-heading"');
+    expect(detail({ initialTab: "visit" })).toContain('id="where-heading"');
+    const noPin = detail({ place: { ...place, pin: null }, initialTab: "visit" });
     expect(noPin).not.toContain('id="where-heading"');
     expect(noPin).not.toContain("google.com/maps/dir/");
     for (const page of [null, undefined])
@@ -110,7 +114,7 @@ for (const locale of ["ja", "en"] as const) {
   });
   it(`labels the map and its caption with the place's display name (${locale})`, () => {
     const name = locale === "ja" ? "デモ喫茶" : "Demo Cafe";
-    const html = detail();
+    const html = detail({ initialTab: "visit" });
     expect(html).toContain(`<section lang="${locale}" aria-label="${name}"`);
     expect(html).toContain(`<p class="font-medium">${name}</p>`);
     expect(html).not.toContain(`>${placeUiMessages[locale].mapLabel}<`);
@@ -202,7 +206,8 @@ it("centres the place map on its pin at street zoom", () => {
     }
     if (!isValidElement<{ children?: ReactNode }>(node)) return;
     if (node.type === PlaceMap) maps.push(node.props as React.ComponentProps<typeof PlaceMap>);
-    visit(node.props.children);
+    // The map is a prop of the tabs (built on first visit), not only a child.
+    Object.values(node.props as object).forEach(visit);
   };
   visit(PlaceView({ locale: "en", region, place, page: null, sources: [] }));
   expect(maps).toHaveLength(1);

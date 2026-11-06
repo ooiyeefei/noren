@@ -62,8 +62,9 @@ for (const locale of ["en", "ja"] as const) {
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain("prefers-reduced-motion: no-preference");
     expect(html).toContain("420ms ease-out");
-    expect(html).toContain("h-[240px]");
-    expect(html).toContain("sm:h-[280px]");
+    // A short cloth on a phone, a roomier one from 640px up.
+    expect(html).toContain("h-[132px]");
+    expect(html).toContain("sm:h-[240px]");
     expect(html).not.toContain("min-h-[");
     const slits = html.match(/<span class="absolute bottom-0[^\"]*"/g)!;
     expect(slits).toHaveLength(2);
@@ -75,12 +76,11 @@ for (const locale of ["en", "ja"] as const) {
       expect(slit).toContain("bg-background");
       expect(slit).not.toContain("sm:");
     }
-    // Both breakpoints reserve the same slit height plus a 12px lettering gap.
-    expect(html).toContain("[--slit-height:72px]");
-    expect(html).toContain("sm:[--slit-height:84px]");
-    expect(72 / 240).toBe(0.3);
-    expect(84 / 280).toBe(0.3);
-    expect(html).toContain("pt-5 pb-[calc(var(--slit-height)+12px)]");
+    // Each breakpoint reserves its slit height plus a gap for the lettering.
+    expect(html).toContain("[--slit-height:30px]");
+    expect(html).toContain("sm:[--slit-height:72px]");
+    expect(html).toContain("pt-3 pb-[calc(var(--slit-height)+6px)]");
+    expect(html).toContain("sm:pt-5 sm:pb-[calc(var(--slit-height)+12px)]");
     expect(html).toContain(placePageMessages[locale].regionName);
     expect(html).not.toContain("·");
   });
@@ -111,9 +111,9 @@ for (const locale of ["en", "ja"] as const) {
   });
   it(`wraps 12-, 20- and 30-code-point names within the fixed phone cloth (${locale})`, () => {
     for (const [name, phoneFont, desktopFont, vertical] of [
-      ["デモ喫茶 のれん（架空）", 32, 40, true],
-      ["店".repeat(20), 26, 34, true],
-      ["店".repeat(30), 32, null, false],
+      ["デモ喫茶 のれん（架空）", 24, 40, true],
+      ["店".repeat(20), 20, 34, true],
+      ["店".repeat(30), 24, null, false],
     ] as const) {
       const html = header({
         place: { ...place, names: [{ lang: "ja", script: "kanji", value: name, isPrimary: true }] },
@@ -129,23 +129,23 @@ for (const locale of ["en", "ja"] as const) {
         expect(classes).toContain("h-full");
         expect(classes).toContain(`sm:text-[${desktopFont}px]`);
         // At 360px, page gutters and cloth padding leave 280px for columns.
-        const charactersPerColumn = Math.floor((240 - 20 - 72 - 12) / phoneFont);
+        const charactersPerColumn = Math.floor((132 - 12 - 30 - 6) / phoneFont);
         const columnWidth = phoneFont * 1.2;
         expect(
           Math.ceil(Array.from(name).length / charactersPerColumn) * columnWidth,
         ).toBeLessThanOrEqual(280);
       } else {
-        expect(classes).toContain("line-clamp-3");
+        expect(classes).toContain("line-clamp-2");
         expect(classes).toContain("min-w-0");
       }
     }
   });
   it(`uses code points at the 14/15 and 28/29 tier boundaries (${locale})`, () => {
     for (const [length, size, vertical] of [
-      [14, 32, true],
-      [15, 26, true],
-      [28, 26, true],
-      [29, 32, false],
+      [14, 24, true],
+      [15, 20, true],
+      [28, 20, true],
+      [29, 24, false],
     ] as const) {
       const name = "𠮷".repeat(length);
       const html = header({

@@ -42,11 +42,11 @@ export function PlaceActions({
     }
   }
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-3">
+    <div className="space-y-2 sm:space-y-3">
+      <div className="flex gap-3">
         {pin && (
           <a
-            className="inline-flex h-11 items-center justify-center rounded-[10px] bg-kon px-5 font-bold text-white"
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-[10px] bg-kon px-5 font-bold text-white sm:flex-none"
             href={`https://www.google.com/maps/dir/?api=1&destination=${pin.lat.toFixed(6)},${pin.lng.toFixed(6)}`}
             target="_blank"
             rel="noopener noreferrer"
@@ -56,13 +56,13 @@ export function PlaceActions({
         )}
         <button
           type="button"
-          className="inline-flex h-11 items-center justify-center rounded-[10px] border border-input px-5 font-bold text-kon"
+          className="inline-flex h-11 flex-1 items-center justify-center rounded-[10px] border border-input px-5 font-bold text-kon sm:flex-none"
           onClick={share}
         >
           {m.share}
         </button>
       </div>
-      <div role="status" aria-live="polite" className="text-[15px]">
+      <div role="status" aria-live="polite" className="text-[15px] empty:hidden">
         {status === "copied" && m.copied}
         {status === "failed" && (
           <>
