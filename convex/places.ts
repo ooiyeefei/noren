@@ -331,13 +331,17 @@ export const listWaiting = query({
   args: { regionId: v.string() },
   returns: v.array(placeSummary.extend({ addedBy: v.string(), sharedAt: v.number() })),
   handler: async (ctx, { regionId }) => {
-    await requireRole(ctx, ["steward"]);
+    const steward = await requireRole(ctx, ["steward"]);
+    // These are real members' places, and the steward page must still open for a demo steward.
+    if (steward.isMock) return [];
     const places = await ctx.db
       .query("place")
-      .withIndex("by_regionId_and_visibility_and_sharedAt", (q) =>
-        q.eq("regionId", regionId).eq("visibility", "draft").gt("sharedAt", 0),
+      .withIndex("by_regionId_and_awaitingSteward_and_sharedAt", (q) =>
+        q.eq("regionId", regionId).eq("awaitingSteward", true),
       )
-      .filter((q) => q.eq(q.field("hiddenReason"), undefined))
+      .filter((q) =>
+        q.and(q.eq(q.field("visibility"), "draft"), q.eq(q.field("hiddenReason"), undefined)),
+      )
       .take(WAITING_LIMIT);
     return await Promise.all(
       places.map(async (place) => ({
@@ -358,12 +362,16 @@ export const declineWaiting = mutation({
   returns: v.null(),
   handler: async (ctx, { placeId }) => {
     const steward = await requireRole(ctx, ["steward"]);
+    if (steward.isMock) throw appError("forbidden", "a demo steward can't decide on real places");
     const place = await ctx.db.get("place", placeId);
     if (place === null) throw appError("not_found", "place not found");
     if (!isWaitingPlace(place)) {
       throw appError("conflict", "this place is not waiting for a steward");
     }
-    await ctx.db.patch("place", placeId, { hiddenReason: "not_for_visitors" });
+    await ctx.db.patch("place", placeId, {
+      hiddenReason: "not_for_visitors",
+      awaitingSteward: undefined,
+    });
     await writeAudit(ctx, {
       actorKind: "person",
       actorPersonId: steward._id,
@@ -422,6 +430,7 @@ export const create = mutation({
         hasPublishedPage: false,
         // The add form says the place is shown with the member's name; adding it is the agreement.
         ...(args.onMap ? { sharedAt: Date.now() } : {}),
+        ...(waiting ? { awaitingSteward: true as const } : {}),
         createdBy: person._id,
         // The person who placed the pin is the first to confirm the place (FR-030).
         confirmedAt: Date.now(),
@@ -600,6 +609,7 @@ export const setVisibility = mutation({
       visibility,
       demoPublicBasis,
       hiddenReason: visibility === "draft" ? place.hiddenReason : undefined,
+      awaitingSteward: undefined,
     });
     await writeAudit(ctx, {
       actorKind: "person",

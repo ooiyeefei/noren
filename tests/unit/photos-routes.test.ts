@@ -275,13 +275,16 @@ describe("the finish route", () => {
     expect(vi.mocked(console.error).mock.calls.join(" ")).toContain("SlowDown");
   });
 
-  it("deletes the new file when the row went away meanwhile", async () => {
-    const s = setup();
-    s.store.read.mockResolvedValueOnce({ ok: true, bytes: await realJpeg() });
-    s.convex.complete.mockRejectedValueOnce(appError("not_found"));
-    expect(await codeOf(await s.finish())).toBe("not_found");
-    expect(s.store.remove).toHaveBeenCalledWith(FINAL);
-  });
+  it.each(["not_found", "unauthenticated"])(
+    "deletes the new file when the row or its member went away meanwhile (%s)",
+    async (code) => {
+      const s = setup();
+      s.store.read.mockResolvedValueOnce({ ok: true, bytes: await realJpeg() });
+      s.convex.complete.mockRejectedValueOnce(appError(code));
+      expect(await codeOf(await s.finish())).toBe(code);
+      expect(s.store.remove).toHaveBeenCalledWith(FINAL);
+    },
+  );
 
   it("keeps the new file on any other failure, because the row still owns it", async () => {
     const s = setup();

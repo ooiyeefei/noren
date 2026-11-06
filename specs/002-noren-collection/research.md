@@ -77,13 +77,13 @@ Every Convex function using `requirePerson` and every signed-in route was checke
 
 ## R11. A new member's place waits using what already exists
 
-- **Decision**: In `places.create`, a new member's `onMap` place is stored with `visibility: "draft"` and still gets `sharedAt`, which records their agreement to be named. `places.setVisibility` already allows a real place out of draft when `sharedAt` is set (`convex/places.ts:495`), so a steward's normal publish works. The waiting list is drafts with `sharedAt` set and no `hiddenReason`.
+- **Decision**: In `places.create`, a new member's `onMap` place is stored with `visibility: "draft"` and still gets `sharedAt`, which records their agreement to be named. `places.setVisibility` already allows a real place out of draft when `sharedAt` is set (`convex/places.ts:495`), so a steward's normal publish works. It also gets `awaitingSteward: true`, and the waiting list is those rows. `sharedAt` and a missing `hiddenReason` can't tell it apart, because a place a steward hid, or an older takedown, looks the same and would sit one press from going back on the map.
 - **Alternatives**: A new `pendingApproval` status would touch every visibility check for no gain.
 
 ## R12. Account deletion runs on the server, Noren first
 
 - **Decision**: `POST /api/account/delete` checks the session, calls `people.deleteMine` with the person's Convex token through `src/lib/convex/server.ts`, then calls `clerkClient().users.deleteUser(userId)`. Clerk's "Allow users to delete their accounts" stays off, so this is the only way to delete.
-- **Rationale**: Noren's step needs the token, so it must run first. Doing both in one request means closing the tab can't leave it half done. If the Clerk step fails, the person is told and can press again, and an empty new `person` row is harmless.
+- **Rationale**: Noren's step needs the token, so it must run first. Doing both in one request means closing the tab can't leave it half done. If the Clerk step fails, the person is told and can press again, which empties any new `person` row a page load made. The route runs `deleteMine` once more after Clerk's step, for a row made in another tab just before the sign-in closed.
 - **What happens to each record**: see [data-model.md](./data-model.md#account-deletion).
 - **Role limit**: Self-service is for `user` only. Interviews, consents and ownership depend on the other roles, so they ask a steward (FR-130).
 
@@ -108,7 +108,7 @@ Every Convex function using `requirePerson` and every signed-in route was checke
 
 1. Collection, with invited accounts only. Walk test in Shinchi.
 2. The proposal page can ship at any point, because it touches no data.
-3. Protections, documents, sign-up page and deletion ship switched off.
+3. Documents, the sign-up page and photos ship switched off. Protections and deletion go live with that deploy, for invited members, because SC-108 needs them working before sign-up opens. A steward is exempt from the limits and can't delete their own account this way.
 4. The owner turns on Clerk's consent setting and the two blocks.
 5. The owner switches Clerk's access setting to Public, then `accountsOpen` is deployed as true.
 

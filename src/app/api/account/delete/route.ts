@@ -27,7 +27,7 @@ const alreadyGone = (error: unknown) =>
  * If the Clerk step fails, Noren's step can't be rolled back. The person's row is empty, the rest of
  * their rows are going through `people.continueDeletion`, and their Clerk user and session still
  * work. So they are signed in with nothing in Noren: `people.current` is null until a page load's
- * `ensureCurrent` makes a new empty row. This answers 502 clerk_failed and the page offers the button
+ * `ensureCurrent` makes a new row. This answers 502 clerk_failed and the page offers the button
  * again. Pressing again is safe, because `people.deleteMine` finds no row, or empties the new one,
  * and then the Clerk step runs again. If they never press again, Clerk keeps their sign-in details,
  * and anything they do after signing in belongs to a new Noren account with none of the old data.
@@ -38,10 +38,11 @@ export async function POST(request: Request): Promise<Response> {
     return jsonError("forbidden", "this request came from another site");
   }
   let userId: string | null;
+  let token: string | null;
   try {
     ({ userId } = await auth());
     if (!userId) return jsonError("unauthenticated", "sign in to continue");
-    const token = await convexToken();
+    token = await convexToken();
     if (token === null) return jsonError("unauthenticated", "sign in to continue");
     await fetchMutation(api.people.deleteMine, {}, { token });
   } catch (error) {
@@ -65,6 +66,14 @@ export async function POST(request: Request): Promise<Response> {
         { status: 502, headers: HEADERS },
       );
     }
+  }
+  // A page loaded in another tab meanwhile would have made a new row with their name, through
+  // `ensureCurrent`, and with the sign-in closed nothing else would ever remove it. The token still
+  // works until it expires. With no such row this does nothing.
+  try {
+    await fetchMutation(api.people.deleteMine, {}, { token });
+  } catch (error) {
+    console.error(`account deletion: the last check failed (${describeError(error)})`);
   }
   return Response.json({ ok: true }, { headers: HEADERS });
 }

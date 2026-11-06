@@ -926,7 +926,7 @@ describe("people.deleteMine", () => {
     });
   });
 
-  it("leaves rate limit rows to expire, and they hold an id only", async () => {
+  it("leaves rate limit rows in place, and they hold an id only", async () => {
     const { b, leaving, member, placeId } = await world();
     await leaving.mutation(api.stories.add, { placeId, body: "A fictional story.", lang: "en" });
 
@@ -973,6 +973,19 @@ describe("people.deleteMine", () => {
     it("refuses someone who is signed out", async () => {
       const { b } = await world();
       expect(await errorCode(b.t.mutation(api.people.deleteMine, {}))).toBe("unauthenticated");
+    });
+
+    it("refuses a demo account and changes nothing", async () => {
+      const { b, leaving, member } = await world();
+      await b.run((ctx) => ctx.db.patch("person", member, { isMock: true }));
+
+      expect(await errorCode(leaving.mutation(api.people.deleteMine, {}))).toBe("forbidden");
+      await finish(b);
+
+      expect(await b.run((ctx) => ctx.db.get("person", member))).toMatchObject({
+        displayName: NAME,
+        clerkUserId: SUBJECT,
+      });
     });
 
     it.each(["creator", "business_owner", "steward"] as const)(
@@ -1046,6 +1059,35 @@ describe("people.deleteMine", () => {
       expect(people.some(({ clerkUserId }) => clerkUserId === SUBJECT)).toBe(false);
       const collections = await b.run((ctx) => ctx.db.query("personCollection").take(10));
       expect(collections.filter(({ personId }) => personId === fresh)).toEqual([]);
+    });
+  });
+
+  describe("people.deletePerson, which an operator runs for someone else", () => {
+    it("deletes an account its owner can't, keeps what depends on them, and leaves a record", async () => {
+      const { b, leaving, member, placeId } = await world();
+      await leaving.mutation(api.stories.add, { placeId, body: "A fictional story.", lang: "en" });
+      await b.run(async (ctx) => {
+        await ctx.db.patch("person", member, { role: "creator" });
+      });
+
+      await b.t.mutation(internal.people.deletePerson, { personId: member });
+      await finish(b);
+
+      const person = await b.run((ctx) => ctx.db.get("person", member));
+      expect(person).toMatchObject({ displayName: "Former member", role: "creator" });
+      expect(person?.clerkUserId).toBe(`deleted:${member}`);
+      expect(await b.t.query(api.stories.listForPlace, { placeId })).toEqual([]);
+      const log = await b.run((ctx) => ctx.db.query("auditLog").take(50));
+      expect(log.map(({ action }) => action)).toContain("person.delete_by_operator");
+      expect(JSON.stringify(log)).not.toContain(NAME);
+    });
+
+    it("says so when there is no such person", async () => {
+      const { b, other } = await world();
+      await b.run((ctx) => ctx.db.delete("person", other));
+      expect(await errorCode(b.t.mutation(internal.people.deletePerson, { personId: other }))).toBe(
+        "not_found",
+      );
     });
   });
 

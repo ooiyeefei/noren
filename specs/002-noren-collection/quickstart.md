@@ -84,6 +84,14 @@ Read every screen of `/[lang]/for-local-teams` in both languages (SC-106). Each 
 
 Then deploy with `accountsOpen: true`.
 
+### Deleting an account for someone
+
+The documents promise this for an account reported as under age, and for a creator, shop owner or steward who asks. A steward does it from the command line, because there is no screen for it yet:
+
+1. Look at what they hold. Interviews, consents and ownership stay, and point at the empty row.
+2. Run `npx convex run --prod people:deletePerson '{"personId": "..."}'`.
+3. Delete the user in Clerk's dashboard. Only that ends their sign-in.
+
 ### Live UAT after opening
 
 Use a fictional test name and a test address.

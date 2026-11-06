@@ -126,6 +126,7 @@ export const remove = mutation({
   returns: v.null(),
   handler: async (ctx, { photoId }) => {
     const person = await requirePerson(ctx);
+    if (person.isMock) throw appError("forbidden", "a demo account can't remove real photos");
     const photo = await ctx.db.get("storyPhoto", photoId);
     if (photo === null) throw appError("not_found", "photo not found");
     const mine = photo.uploaderPersonId === person._id;
@@ -183,7 +184,9 @@ export const listWaiting = query({
     removalsFailing: v.number(),
   }),
   handler: async (ctx) => {
-    await requireRealSteward(ctx);
+    const steward = await requireRole(ctx, ["steward"]);
+    // These are real members' photos, and the steward page must still open for a demo steward.
+    if (steward.isMock) return { photos: [], removalsFailing: 0 };
     const rows = await ctx.db
       .query("storyPhoto")
       .withIndex("by_status", (q) => q.eq("status", "waiting"))

@@ -516,15 +516,21 @@ describe("a new member's photos wait", () => {
     expect((await photoRow(b, photoId))!.status).toBe("waiting");
   });
 
-  it("a demo steward can't approve a real member's photo, or see it", async () => {
+  it("a demo steward can't approve or remove a real member's photo, or see it", async () => {
     const { b, placeId, photoId } = await waiting();
     await addPerson(b, "demoSteward", "steward", { isMock: true });
     expect(
       await errorCode(b.as("demoSteward").mutation(api.storyPhotos.approve, { photoId })),
     ).toBe("forbidden");
-    expect(await errorCode(b.as("demoSteward").query(api.storyPhotos.listWaiting, {}))).toBe(
+    expect(await errorCode(b.as("demoSteward").mutation(api.storyPhotos.remove, { photoId }))).toBe(
       "forbidden",
     );
+    expect(await photoRow(b, photoId)).not.toBeNull();
+    // An empty list and no error, because a refusal here would take down the whole steward page.
+    expect(await b.as("demoSteward").query(api.storyPhotos.listWaiting, {})).toEqual({
+      photos: [],
+      removalsFailing: 0,
+    });
     expect(await photosOnPage(b, placeId, "demoSteward")).toEqual([]);
   });
 

@@ -60,12 +60,14 @@ export function isPubliclyReadablePlace(
   return (place.visibility === "public" && place.isMock === false) || isPublicDemoPlace(place);
 }
 
-/** A place a member shared that is off the map with no reason given: it waits for a steward (R11). */
+/** A new member's place that a steward has yet to decide on (FR-129, R11). */
 export function isWaitingPlace(
-  place: Pick<Doc<"place">, "visibility" | "sharedAt" | "hiddenReason">,
+  place: Pick<Doc<"place">, "visibility" | "awaitingSteward" | "hiddenReason">,
 ): boolean {
   return (
-    place.visibility === "draft" && place.sharedAt !== undefined && place.hiddenReason === undefined
+    place.visibility === "draft" &&
+    place.awaitingSteward === true &&
+    place.hiddenReason === undefined
   );
 }
 

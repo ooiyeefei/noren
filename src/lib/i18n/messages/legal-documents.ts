@@ -312,7 +312,7 @@ export const legalDocuments: Readonly<
           ],
           closing: [
             "非表示にするもの：共有したリンクは、すべてのページから消えます。リンクの記録と添えた一文は、非表示のままデータベースに残ります。",
-            "残るもの：追加した場所とそのピン、名前は、場所についての事実として残り、あなたの名前は出ません。運営担当者の操作の記録は残りますが、空の行を指すので、あなたを特定しません。1日あたりの回数はアカウントの ID だけを持ち、やがて期限が切れます。",
+            "残るもの：追加した場所とそのピン、名前は、場所についての事実として残り、あなたの名前は出ません。運営担当者の操作の記録は残りますが、空の行を指すので、あなたを特定しません。1日あたりの回数の記録も残りますが、アカウントの ID しか持ちません。",
             "もう一度ログインしても、何も戻りません。",
           ],
         },
@@ -617,7 +617,7 @@ export const legalDocuments: Readonly<
           ],
           closing: [
             "These are hidden: the links you shared come off every page. The record of each link, with the line you wrote, stays hidden in the database.",
-            "These stay: places you added, with their pins and names, stay as facts about a place, and your name does not show. The record of what stewards did stays, and it points at the empty row, so it no longer identifies you. Daily counts hold only an account ID, and they expire.",
+            "These stay: places you added, with their pins and names, stay as facts about a place, and your name does not show. The record of what stewards did stays, and it points at the empty row, so it no longer identifies you. Daily counts stay too, and they hold only an account ID.",
             "Signing in again brings nothing back.",
           ],
         },

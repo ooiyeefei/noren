@@ -1190,6 +1190,41 @@ describe("a new member's place waits for a steward (FR-129)", () => {
     );
   });
 
+  it("a place hidden later never reads as waiting, though it still has their agreement", async () => {
+    const b = await members();
+    const { placeId } = await b.as("newcomer").mutation(api.places.create, onMap);
+    await b.as("steward").mutation(api.places.setVisibility, { placeId, visibility: "public" });
+    await b.as("steward").mutation(api.places.setVisibility, { placeId, visibility: "draft" });
+
+    const stored = await b.run((ctx) => ctx.db.get("place", placeId));
+    expect(stored).toMatchObject({ visibility: "draft", sharedAt: expect.any(Number) });
+    expect(stored?.hiddenReason).toBeUndefined();
+    expect(await b.as("steward").query(api.places.listWaiting, { regionId: "nagasaki" })).toEqual(
+      [],
+    );
+    expect((await b.as("newcomer").query(api.places.get, { placeId }))?.waitingForSteward).toBe(
+      undefined,
+    );
+    expect(await errorCode(b.as("steward").mutation(api.places.declineWaiting, { placeId }))).toBe(
+      "conflict",
+    );
+  });
+
+  it("a demo steward sees no real member's waiting place and can't decide on one", async () => {
+    const b = await members();
+    await addPerson(b, "demoSteward", "steward", { isMock: true });
+    const { placeId } = await b.as("newcomer").mutation(api.places.create, onMap);
+    expect(
+      await b.as("demoSteward").query(api.places.listWaiting, { regionId: "nagasaki" }),
+    ).toEqual([]);
+    expect(
+      await errorCode(b.as("demoSteward").mutation(api.places.declineWaiting, { placeId })),
+    ).toBe("forbidden");
+    expect(
+      (await b.as("steward").query(api.places.listWaiting, { regionId: "nagasaki" }))[0]?._id,
+    ).toBe(placeId);
+  });
+
   it("a steward can turn a place down: it leaves the list, stays off the map, and can come back", async () => {
     const b = await members();
     const { placeId } = await b.as("newcomer").mutation(api.places.create, onMap);
