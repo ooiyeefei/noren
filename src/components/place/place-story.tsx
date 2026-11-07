@@ -44,7 +44,10 @@ export function PlaceStory({ locale, story }: { locale: Locale; story: PlaceStor
     timeZone: "UTC",
   });
   return (
-    <section className="space-y-3 border-t border-line pt-6" aria-labelledby="place-story-heading">
+    <section
+      className="space-y-3 border-t border-line pt-6 first:border-t-0 first:pt-0"
+      aria-labelledby="place-story-heading"
+    >
       <h2 id="place-story-heading" className="font-sans text-[22px] font-bold">
         {ui.agentStory}
       </h2>
