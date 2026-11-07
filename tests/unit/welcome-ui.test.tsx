@@ -67,7 +67,9 @@ for (const locale of ["ja", "en"] as const) {
 
     it("the page follows the region's switch", async () => {
       state.locale = locale;
-      state.region = config;
+      const closed: RegionConfig = structuredClone(config);
+      closed.legal.accountsOpen = false;
+      state.region = closed;
       expect(text(render(await WelcomePage()))).toContain(m.membersNote);
       const opened: RegionConfig = structuredClone(config);
       opened.legal.accountsOpen = true;

@@ -180,8 +180,8 @@ describe("public mapping", () => {
       sourceAdapters: ["youtube", "link_card"],
       locales: config.locales,
       checkIn: { checkInMetres: 50, accuracyAllowanceMetres: 30 },
-      accountsOpen: false,
-      shareToNoren: false,
+      accountsOpen: true,
+      shareToNoren: true,
     });
     expect(region.scriptOrigins).toEqual(scriptHostsFor(config.enabledSourceAdapters));
     expect(region.frameOrigins).toEqual(frameHostsFor(config.enabledSourceAdapters));

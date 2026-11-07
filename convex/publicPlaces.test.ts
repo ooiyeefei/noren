@@ -146,7 +146,7 @@ describe("real place publication", () => {
     await addOsmRef(b, placeId);
     expect(region.regionPolicy("nagasaki")).toMatchObject({
       realBusinessesDraftOnly: true,
-      inviteOnly: true,
+      inviteOnly: false,
       noindex: true,
       allowPilotVisibility: false,
     });

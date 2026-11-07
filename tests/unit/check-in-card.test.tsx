@@ -43,6 +43,8 @@ vi.mock("react", async (importOriginal) => {
     },
   };
 });
+// Speech input needs a Convex client, and has its own tests in voice-input.test.tsx.
+vi.mock("@/components/voice/voice-input", () => ({ VoiceInput: () => null }));
 // Here a kept draft is plain state, on the harness above; keeping it is tested in drafts-storage.
 vi.mock("@/components/drafts/drafts", async () => {
   const { useState } = await import("react");
@@ -178,7 +180,12 @@ describe("CheckInCard", () => {
   });
 
   it("asks a signed-out person to sign in and returns them to the same place", () => {
-    const html = render(card({ actions: actions({ signedIn: false }) }));
+    const html = render(
+      card({
+        region: { ...region, accountsOpen: false },
+        actions: actions({ signedIn: false }),
+      }),
+    );
     expect(html).not.toContain("data-im-here");
     expect(html).toContain("/en/sign-in?redirect_url=%2Fen%2Fplaces%2Fa-shop");
     expect(html).toContain("invite-only");
@@ -187,8 +194,8 @@ describe("CheckInCard", () => {
   describe("signed out, once accounts are open", () => {
     const open = { ...region, accountsOpen: true };
 
-    it("the shipped region is closed, so the card above is the one people see today", () => {
-      expect(region.accountsOpen).toBe(false);
+    it("the shipped region is open, so this is the card people see today", () => {
+      expect(region.accountsOpen).toBe(true);
     });
 
     it.each([
@@ -228,7 +235,12 @@ describe("CheckInCard", () => {
   });
 
   it("has no sign-up link while accounts are closed", () => {
-    const html = render(card({ actions: actions({ signedIn: false }) }));
+    const html = render(
+      card({
+        region: { ...region, accountsOpen: false },
+        actions: actions({ signedIn: false }),
+      }),
+    );
     expect(html).not.toContain("/sign-up");
   });
 

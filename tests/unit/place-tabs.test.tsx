@@ -1,11 +1,14 @@
 import { renderToStaticMarkup as render } from "react-dom/server";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { AddStory } from "@/components/place/add-story";
 import { PlaceTabs } from "@/components/place/place-tabs";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { PlaceView } from "@/components/public/place-view";
 import { landmark, region } from "../fixtures/public-ui";
+
+// Speech input needs a Convex client, and has its own tests in voice-input.test.tsx.
+vi.mock("@/components/voice/voice-input", () => ({ VoiceInput: () => null }));
 
 const tabs = (props: Partial<Parameters<typeof PlaceTabs>[0]> = {}, locale: "en" | "ja" = "en") =>
   render(

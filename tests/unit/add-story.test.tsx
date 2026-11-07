@@ -63,6 +63,8 @@ vi.mock("react", async (importOriginal) => {
     useId: () => (hooks.current ? "story" : react.useId()),
   };
 });
+// Speech input needs a Convex client, and has its own tests in voice-input.test.tsx.
+vi.mock("@/components/voice/voice-input", () => ({ VoiceInput: () => null }));
 // Here a kept draft is plain state, on the harness above; keeping it is tested in drafts-storage.
 vi.mock("@/components/drafts/drafts", async () => {
   const { useState } = await import("react");

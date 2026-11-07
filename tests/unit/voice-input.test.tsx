@@ -40,6 +40,16 @@ vi.mock("react", async (original) => ({
 vi.mock("@/lib/audio/speech-wav", () => ({
   toSpeechWav: async () => new Blob(["fictional wav"], { type: "audio/wav" }),
 }));
+vi.mock("@/lib/region/registry", async (original) => {
+  const actual = await original<typeof import("@/lib/region/registry")>();
+  return {
+    ...actual,
+    activeRegionConfig: () => ({
+      ...actual.activeRegionConfig(),
+      voice: { enabled: false, maxSeconds: 120 },
+    }),
+  };
+});
 function all(node: ReactNode): ReactElement<Record<string, unknown>>[] {
   if (!isValidElement<Record<string, unknown>>(node)) return [];
   return [node, ...Children.toArray(node.props.children as ReactNode).flatMap(all)];
