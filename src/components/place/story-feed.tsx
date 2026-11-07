@@ -9,12 +9,22 @@ import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { StoryPhotos } from "./story-photos";
 
+type Removable = { kind: StoryFeedEntry["kind"]; id: string };
+
 export type StoryFeedActions = {
-  remove(entry: Pick<StoryFeedEntry, "kind" | "id">): Promise<unknown>;
+  remove(entry: Removable): Promise<unknown>;
   removePhoto?(photoId: string): Promise<unknown>;
 };
 
 const LINK = "inline-flex min-h-11 items-center underline";
+
+function dated(locale: Locale, when: number) {
+  return (
+    <time dateTime={new Date(when).toISOString()}>
+      {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(when)}
+    </time>
+  );
+}
 
 /** FR-033: what people who have been here shared, each with the name of the member who shared it. */
 export function StoryFeed({
@@ -39,7 +49,7 @@ export function StoryFeed({
   const [removed, setRemoved] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const busy = useRef(false);
-  async function remove(entry: StoryFeedEntry, send: StoryFeedActions) {
+  async function remove(entry: Removable, send: StoryFeedActions) {
     if (busy.current) return;
     busy.current = true;
     setPending(true);
@@ -55,8 +65,8 @@ export function StoryFeed({
       setPending(false);
     }
   }
-  const removeControl = (entry: StoryFeedEntry) => {
-    if (!entry.canRemove || !actions) return null;
+  const removeControl = (entry: Removable, canRemove: boolean) => {
+    if (!canRemove || !actions) return null;
     if (confirming !== entry.id)
       return (
         <button
@@ -94,33 +104,33 @@ export function StoryFeed({
         {entries.map((entry) => (
           <li key={`${entry.kind}:${entry.id}`}>
             {entry.kind === "written" ? (
-              <article lang={entry.story.lang} className="space-y-3 rounded-lg border p-4">
-                <p className="text-[18px] leading-[1.8] whitespace-pre-wrap">{entry.story.body}</p>
-                {photoBaseUrl && !!entry.story.photos?.length && (
-                  <StoryPhotos
-                    locale={locale}
-                    photos={entry.story.photos}
-                    baseUrl={photoBaseUrl}
-                    authorName={entry.story.authorName}
-                    remove={actions?.removePhoto}
-                  />
+              <article className="space-y-3 rounded-lg border p-4">
+                {entry.authorName && (
+                  <p className="font-bold">{format(ui.writtenBy, { name: entry.authorName })}</p>
                 )}
-                <footer
-                  lang={locale}
-                  className="flex flex-wrap items-center gap-x-3 text-[15px] text-muted-foreground"
-                >
-                  {entry.story.authorName && (
-                    <span>{format(ui.writtenBy, { name: entry.story.authorName })}</span>
-                  )}
-                  <time dateTime={new Date(entry.addedAt).toISOString()}>
-                    {new Intl.DateTimeFormat(locale, {
-                      dateStyle: "medium",
-                      timeZone: "UTC",
-                    }).format(entry.addedAt)}
-                  </time>
-                  {entry.story.isMock && <DemoBadge locale={locale} />}
-                  {removeControl(entry)}
-                </footer>
+                <ol className="space-y-3 divide-y divide-line">
+                  {entry.moments.map((moment) => (
+                    <li key={moment._id} className="space-y-2 pt-3 first:pt-0">
+                      <p className="flex flex-wrap items-center gap-x-3 text-[15px] text-muted-foreground">
+                        {dated(locale, moment.addedAt)}
+                        {moment.isMock && <DemoBadge locale={locale} />}
+                        {removeControl({ kind: "written", id: moment._id }, moment.canRemove)}
+                      </p>
+                      <p lang={moment.lang} className="text-[18px] leading-[1.8] whitespace-pre-wrap">
+                        {moment.body}
+                      </p>
+                      {photoBaseUrl && !!moment.photos?.length && (
+                        <StoryPhotos
+                          locale={locale}
+                          photos={moment.photos}
+                          baseUrl={photoBaseUrl}
+                          authorName={moment.authorName}
+                          remove={actions?.removePhoto}
+                        />
+                      )}
+                    </li>
+                  ))}
+                </ol>
               </article>
             ) : (
               <EmbedView
@@ -133,7 +143,12 @@ export function StoryFeed({
                 {(entry.sharedBy || (entry.canRemove && actions)) && (
                   <footer className="flex flex-wrap items-center gap-x-3 border-t pt-3 text-[15px] text-muted-foreground">
                     {entry.sharedBy && <span>{format(ui.sharedBy, { name: entry.sharedBy })}</span>}
-                    {removeControl(entry)}
+                    {/* The link form asks for no posted date, so this is the date a reader gets. */}
+                    {entry.sharedBy &&
+                      entry.source.postedAt === undefined &&
+                      entry.addedAt > 0 &&
+                      dated(locale, entry.addedAt)}
+                    {removeControl(entry, entry.canRemove)}
                   </footer>
                 )}
               </EmbedView>

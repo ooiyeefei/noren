@@ -33,12 +33,24 @@ const LATEST_SCAN = 40;
 const LATEST_LIMIT = 8;
 /** Found posts arrive in batches; at most this many show, so members' own stories stay in view. */
 const LATEST_FOUND_LIMIT = 4;
+/**
+ * A place page shows up to this many stories, reading further back than that so one regular can't
+ * push everyone else off the page, and at most this many of any one person's.
+ */
+const PLACE_SCAN = 200;
+const PLACE_LIMIT = 50;
+const PLACE_PER_PERSON = 20;
 
 const storyView = v.object({
   _id: v.id("story"),
   body: v.string(),
   lang: v.string(),
   authorName: v.string(),
+  /**
+   * Which of this place's stories share a writer: the id of that writer's earliest story here among
+   * those returned. It says nothing about the person, and nothing that holds at another place.
+   */
+  authorKey: v.string(),
   addedAt: v.number(),
   isMock: v.boolean(),
   addedByMe: v.boolean(),
@@ -95,18 +107,34 @@ export const listForPlace = query({
       .query("story")
       .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId).eq("status", "live"))
       .order("desc")
-      .take(50);
+      .take(PLACE_SCAN);
     const photoRules = await placePhotoRules(ctx, viewer, place);
-    const views = [];
+    const authors = new Map<Id<"person">, { name: string; shown: number; key: Id<"story"> }>();
+    const shown = [];
     for (const story of stories) {
+      if (shown.length >= PLACE_LIMIT) break;
       const addedByMe = viewer !== null && story.authorPersonId === viewer._id;
       if (!isStoryShown(place, story) && !addedByMe) continue;
-      const author = await ctx.db.get("person", story.authorPersonId);
+      let author = authors.get(story.authorPersonId);
+      if (author === undefined) {
+        const person = await ctx.db.get("person", story.authorPersonId);
+        author = { name: person?.displayName ?? "", shown: 0, key: story._id };
+        authors.set(story.authorPersonId, author);
+      }
+      if (author.shown >= PLACE_PER_PERSON) continue;
+      author.shown++;
+      // Read newest first, so the last story kept for a person is their earliest here.
+      author.key = story._id;
+      shown.push({ story, author, addedByMe });
+    }
+    const views = [];
+    for (const { story, author, addedByMe } of shown) {
       views.push({
         _id: story._id,
         body: story.body,
         lang: story.lang,
-        authorName: author?.displayName ?? "",
+        authorName: author.name,
+        authorKey: author.key,
         addedAt: story._creationTime,
         isMock: story.isMock,
         addedByMe,

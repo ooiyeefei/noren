@@ -177,6 +177,13 @@ export function CheckInCard({
           <span className="min-w-0">{format(m.visited, { name, panel })}</span>
         </p>
         {spot.pickedLine && <PeopleMention locale={locale} line={spot.pickedLine} />}
+        {/* The panel and the stamp stay as the first visit left them; a new moment is a story. */}
+        <a
+          className="inline-flex min-h-11 items-center font-bold text-ai underline"
+          href={`${localePath(locale, `/places/${encodeURIComponent(slug)}`)}?tab=stories&write=1`}
+        >
+          {m.backAgain}
+        </a>
         {set && <NextPanelCard locale={locale} region={region} set={set} from={pin} />}
         <a className="inline-flex min-h-11 items-center text-ai underline" href={setHref}>
           {format(m.seeNoren, { name })}

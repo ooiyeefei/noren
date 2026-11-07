@@ -83,6 +83,8 @@ export type WrittenStoryLike = {
   body: string;
   lang: string;
   authorName: string;
+  /** Which stories here share a writer; never a person's id. With none, a story stands alone. */
+  authorKey?: string;
   addedAt: number;
   isMock: boolean;
   canRemove: boolean;
@@ -106,9 +108,16 @@ export type LatestStoryLike = {
   translations?: { lang: string; text: string }[];
   addedAt: number;
 };
-export type StoryFeedEntry = { id: string; addedAt: number; canRemove: boolean } & (
-  | { kind: "written"; story: WrittenStoryLike }
-  | { kind: "post"; sharedBy?: string; source: EmbedSourceView; outboundHref?: string }
+export type StoryFeedEntry = { id: string; addedAt: number } & (
+  /** One person's card: their moments here, oldest first. `addedAt` is the newest one's. */
+  | { kind: "written"; authorName: string; moments: readonly WrittenStoryLike[] }
+  | {
+      kind: "post";
+      canRemove: boolean;
+      sharedBy?: string;
+      source: EmbedSourceView;
+      outboundHref?: string;
+    }
 );
 type NameRegion = Pick<PublicRegionProps, "nameFallback" | "defaultLocale">;
 
@@ -224,22 +233,37 @@ export function toStoryViewModel(
   };
 }
 
+/** A person's stories here as one card that reads as a story over time. */
+function writtenCards(stories: readonly WrittenStoryLike[]): StoryFeedEntry[] {
+  const byWriter = new Map<string, WrittenStoryLike[]>();
+  for (const story of stories) {
+    const key = story.authorKey ?? story._id;
+    byWriter.set(key, [...(byWriter.get(key) ?? []), story]);
+  }
+  return [...byWriter].map(([key, theirs]) => {
+    const moments = [...theirs].sort((a, b) => a.addedAt - b.addedAt);
+    return {
+      kind: "written",
+      id: key,
+      addedAt: moments.at(-1)!.addedAt,
+      authorName: moments[0]!.authorName,
+      moments,
+    };
+  });
+}
+
 /**
- * Stories written here and posts linked from elsewhere read as one list, newest first (FR-033). The
- * member who shared a post may take it down, and so may the place's editor or a steward.
+ * Cards of what members wrote here and posts linked from elsewhere read as one list, newest first
+ * (FR-033). A linked post stays a row of its own, even the sharer's: it may be someone else's post,
+ * and its credit belongs beside it. The member who shared a post may take it down, and so may the
+ * place's editor or a steward.
  */
 export function toStoryFeed(
   sources: readonly SourceViewLike[],
   stories: readonly WrittenStoryLike[],
   canEdit: boolean,
 ): StoryFeedEntry[] {
-  const written = stories.map((story): StoryFeedEntry => ({
-    kind: "written",
-    id: story._id,
-    addedAt: story.addedAt,
-    canRemove: story.canRemove,
-    story,
-  }));
+  const written = writtenCards(stories);
   const posts = sources.map((source): StoryFeedEntry => ({
     kind: "post",
     id: source._id,

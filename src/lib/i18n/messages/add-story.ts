@@ -4,6 +4,7 @@ import { defineMessages } from "@/lib/i18n";
 export const addStoryMessages = defineMessages({
   en: {
     prompt: "Been here? Share what you heard, saw or tasted.",
+    promptAgain: "Back again? Add another moment.",
     write: "Write a story",
     link: "Link a post",
     body: "Your story",
@@ -51,6 +52,7 @@ export const addStoryMessages = defineMessages({
   },
   ja: {
     prompt: "訪れたことがありますか？聞いたこと、見たこと、味わったことを共有してください。",
+    promptAgain: "また来ましたか？別の日のことも書き足せます。",
     write: "話を書く",
     link: "投稿をリンク",
     body: "あなたの話",

@@ -29,6 +29,8 @@ import { ShownAs, type ShownAsActions } from "./shown-as";
 export type AddStoryActions = LinkReadActions & {
   /** Undefined while sign-in is still loading. */
   signedIn: boolean | undefined;
+  /** This member already shared something here, so the form asks for another moment. */
+  sharedHere?: boolean;
   /** Links a post the member made, or found, elsewhere. */
   add(args: StoryArgs): Promise<unknown>;
   /** Keeps a story the member writes here. */
@@ -155,7 +157,7 @@ export function AddStory({
     <div className="space-y-3">
       {mode === null ? (
         <div className="space-y-3">
-          <p className="text-[17px]">{m.prompt}</p>
+          <p className="text-[17px]">{actions.sharedHere ? m.promptAgain : m.prompt}</p>
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
