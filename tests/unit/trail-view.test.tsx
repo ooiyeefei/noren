@@ -142,6 +142,35 @@ for (const locale of ["en", "ja"] as const) {
   });
 }
 
+it("names a post's platform properly, and names none for a plain web page", () => {
+  const sheet = (platform: string) =>
+    render(
+      <TrailSheet
+        locale="en"
+        region={region}
+        onClose={() => undefined}
+        place={place("wan", "2026-11-05", {
+          moments: [
+            {
+              kind: "post",
+              at: 1,
+              day: "2026-11-05",
+              timed: true,
+              url: "https://example.com/post-1",
+              platform,
+              title: null,
+              note: null,
+              noteLang: null,
+            },
+          ],
+        })}
+      />,
+    );
+  expect(sheet("google_maps")).toContain(">Google Maps</p>");
+  expect(sheet("google_maps")).not.toContain("google_maps");
+  expect(sheet("web")).not.toContain(">web</p>");
+});
+
 it("links a post only when its address is https, and leaves photos out when they are off", () => {
   const html = render(
     <TrailSheet
