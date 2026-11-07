@@ -39,6 +39,7 @@ export const collectionMessages = defineMessages({
       "{name}ののれんの{panel}枚目は、もうあなたのものです。ここで押すとスタンプが増えます。",
     visited: "ここには来ました。{name}ののれんの{panel}枚目はあなたのものです。",
     seeNoren: "{name}ののれんを見る",
+    backAgain: "また来ましたか？今日のことを書き足す",
     imHere: "今ここにいます",
     locationNote:
       "位置情報は、これを押したときに一度だけ、お使いの端末の中で読みます。残るのは場所と日付だけです。",
@@ -133,6 +134,7 @@ export const collectionMessages = defineMessages({
       "Panel {panel} of {name}'s noren is already yours. Press to add this place's stamp.",
     visited: "You've been here. Panel {panel} of {name}'s noren is yours.",
     seeNoren: "See {name}'s noren",
+    backAgain: "Back again? Add today's moment",
     imHere: "I'm here",
     locationNote:
       "Noren reads your location on your device, once, when you press this. It keeps only the place and the date.",

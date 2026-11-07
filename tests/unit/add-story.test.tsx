@@ -207,14 +207,17 @@ describe("stories from people who've been here", () => {
 
   it("lets the member who shared a post, the place's editor or a steward remove it, and no one else", () => {
     const [mine, theirs] = [linked({ addedByMe: true }), linked({ _id: "theirs" })];
-    expect(toStoryFeed([mine, theirs], [], false).map((entry) => entry.canRemove)).toEqual([
-      true,
-      false,
-    ]);
-    expect(toStoryFeed([theirs], [], true)[0]?.canRemove).toBe(true);
+    const posts = (list: SourceViewLike[], canEdit: boolean) =>
+      toStoryFeed(list, [], canEdit).map((entry) => entry.kind === "post" && entry.canRemove);
+    expect(posts([mine, theirs], false)).toEqual([true, false]);
+    expect(posts([theirs], true)).toEqual([true]);
     // The server says who may remove a written story; the page takes its word.
-    expect(toStoryFeed([], [written({ canRemove: true })], false)[0]?.canRemove).toBe(true);
-    expect(toStoryFeed([], [written()], true)[0]?.canRemove).toBe(false);
+    const moment = (fields: Partial<WrittenStoryLike>, canEdit: boolean) => {
+      const [card] = toStoryFeed([], [written(fields)], canEdit);
+      return card?.kind === "written" && card.moments[0]?.canRemove;
+    };
+    expect(moment({ canRemove: true }, false)).toBe(true);
+    expect(moment({}, true)).toBe(false);
   });
 });
 
@@ -283,8 +286,7 @@ for (const locale of ["ja", "en"] as const) {
         story={allActions(false)}
       />,
     );
-    expect(html).toContain('<article lang="ja" class="space-y-3 rounded-lg border p-4">');
-    expect(html).toContain(">坂の途中で猫が昼寝していた。</p>");
+    expect(html).toMatch(/<p lang="ja"[^>]*>坂の途中で猫が昼寝していた。<\/p>/);
     expect(html).toContain(format(ui.writtenBy, { name: "Fictional walker" }));
     expect(html).toContain(format(ui.sharedBy, { name: "Fictional sharer" }));
     expect(html.indexOf("坂の途中で")).toBeLessThan(html.indexOf("Fictional sharer"));

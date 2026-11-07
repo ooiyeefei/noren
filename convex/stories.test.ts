@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { addPerson, addPlace, addSource, errorCode, newBackend } from "../tests/convex/fixtures";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -134,6 +135,111 @@ describe("stories written in Noren", () => {
     for (let i = 0; i < 50; i++) await write("user");
     expect(await errorCode(write("user"))).toBe("rate_limited");
     for (let i = 0; i < 51; i++) await write("steward");
+  });
+});
+
+describe("one card per person on a place page", () => {
+  const write = (b: Awaited<ReturnType<typeof world>>["b"], as: string, placeId: Id<"place">) =>
+    b.as(as).mutation(api.stories.add, { placeId, body: `A moment from ${as}`, lang: "en" });
+
+  it("gives all of a person's stories here one key: the id of their earliest, never their own", async () => {
+    const { b, steward, editor, placeId } = await world();
+    const first = await write(b, "user", placeId);
+    const theirs = await write(b, "other", placeId);
+    await write(b, "user", placeId);
+    await write(b, "user", placeId);
+    const stories = await b.t.query(api.stories.listForPlace, { placeId });
+    expect(stories.map((story) => story.authorKey)).toEqual([first, first, theirs, first]);
+    const people = await b.run((ctx) => ctx.db.query("person").take(20));
+    const personIds = new Set<string>([...people.map((person) => person._id), steward, editor]);
+    for (const story of stories) expect(personIds.has(story.authorKey)).toBe(false);
+    expect(JSON.stringify(stories)).not.toMatch(/authorPersonId/);
+    for (const person of people) expect(JSON.stringify(stories)).not.toContain(person._id);
+  });
+
+  it("tells two people with one name apart", async () => {
+    const { b, placeId } = await world();
+    for (const name of ["user", "other"])
+      await b.as(name).mutation(api.people.setMyDisplayName, { displayName: "Lantern fan" });
+    await write(b, "user", placeId);
+    await write(b, "other", placeId);
+    const stories = await b.t.query(api.stories.listForPlace, { placeId });
+    expect(stories.map((story) => story.authorName)).toEqual(["Lantern fan", "Lantern fan"]);
+    expect(new Set(stories.map((story) => story.authorKey)).size).toBe(2);
+  });
+
+  it("cannot follow a person from one place to another", async () => {
+    const { b, editor, placeId } = await world();
+    const elsewhere = await addPlace(b, { createdBy: editor, visibility: "public" });
+    const here = await write(b, "user", placeId);
+    const there = await write(b, "user", elsewhere);
+    const [mine] = await b.t.query(api.stories.listForPlace, { placeId });
+    const [mineThere] = await b.t.query(api.stories.listForPlace, { placeId: elsewhere });
+    expect(mine?.authorKey).toBe(here);
+    expect(mineThere?.authorKey).toBe(there);
+  });
+
+  it("moves the key to the next story when the earliest is removed", async () => {
+    const { b, placeId } = await world();
+    const first = await write(b, "user", placeId);
+    const second = await write(b, "user", placeId);
+    await b.as("user").mutation(api.stories.remove, { storyId: first });
+    const stories = await b.t.query(api.stories.listForPlace, { placeId });
+    expect(stories.map((story) => [story._id, story.authorKey])).toEqual([[second, second]]);
+  });
+
+  it("builds the key only from stories the viewer may see", async () => {
+    const { b, placeId } = await world();
+    const demo = await write(b, "mock", placeId);
+    const real = await write(b, "user", placeId);
+    // A demo account's story shows on a real place only to its writer, so nobody else learns its id.
+    const anyone = await b.t.query(api.stories.listForPlace, { placeId });
+    expect(anyone.map((story) => story.authorKey)).toEqual([real]);
+    expect(JSON.stringify(anyone)).not.toContain(demo);
+    const writer = await b.as("mock").query(api.stories.listForPlace, { placeId });
+    expect(writer.map((story) => story.authorKey)).toEqual([real, demo]);
+  });
+
+  describe("a regular with many stories", () => {
+    const insert = (b: Awaited<ReturnType<typeof world>>["b"], placeId: Id<"place">, as: string) =>
+      b.run(async (ctx) => {
+        const person = await ctx.db
+          .query("person")
+          .filter((q) => q.eq(q.field("displayName"), `Test Person (${as})`))
+          .first();
+        return ctx.db.insert("story", {
+          placeId,
+          authorPersonId: person!._id,
+          body: `A moment from ${as}`,
+          lang: "en",
+          status: "live",
+          isMock: false,
+        });
+      });
+
+    it("leaves room for everyone else, keeping the regular's newest stories", async () => {
+      const { b, placeId } = await world();
+      const older = await insert(b, placeId, "other");
+      const regular: Id<"story">[] = [];
+      for (let i = 0; i < 60; i++) regular.push(await insert(b, placeId, "user"));
+      const stories = await b.t.query(api.stories.listForPlace, { placeId });
+      expect(stories.map((story) => story._id)).toEqual([
+        ...regular.slice(-20).reverse(),
+        older,
+      ]);
+      // Among those returned, so the key is the earliest story the page was given.
+      expect(new Set(stories.slice(0, 20).map((story) => story.authorKey))).toEqual(
+        new Set([regular.at(-20)]),
+      );
+    });
+
+    it("shows at most 50 stories on a page", async () => {
+      const { b, placeId } = await world();
+      for (let i = 0; i < 3; i++) await addPerson(b, `walker${i}`, "user");
+      for (const name of ["user", "other", "walker0", "walker1", "walker2"])
+        for (let i = 0; i < 12; i++) await insert(b, placeId, name);
+      expect(await b.t.query(api.stories.listForPlace, { placeId })).toHaveLength(50);
+    });
   });
 });
 

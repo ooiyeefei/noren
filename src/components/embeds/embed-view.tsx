@@ -79,30 +79,35 @@ function Post({
   // creator gets for sharing (FR-024). /out passes on only Noren's origin, never the page.
   const toOriginal = outboundHref ? { target: "_blank", rel: "noopener" } : external;
   const frameAllowed = plan.kind !== "iframe" || isAllowedOrigin(plan.src, frameOrigins);
-  // A found post names the platform properly and credits its author as the platform shows them.
-  const platform = preview
-    ? (platformName(source.platform) ?? preview.siteName ?? messages.webPage)
-    : source.found
-      ? (platformName(source.platform) ?? messages.webPage)
-      : source.platform;
+  const platform =
+    platformName(source.platform) ?? (preview ? preview.siteName : undefined) ?? messages.webPage;
   const author = source.authorHandle
     ? format(source.found || preview ? messages.postedBy : messages.byAuthor, {
         author: source.authorHandle,
       })
     : undefined;
+  const toTheOriginal = (
+    <a
+      href={href}
+      {...toOriginal}
+      className="inline-flex min-h-11 items-center underline underline-offset-4"
+    >
+      {messages.viewOriginal}
+    </a>
+  );
   const excerpt = source.found ? source.excerpt?.trim() : undefined;
   const translation =
     excerpt && source.excerptLang !== locale
       ? source.excerptTranslations?.find((item) => item.lang === locale)?.text
       : undefined;
   return (
-    <article lang={locale} className="space-y-3 rounded-lg border p-4">
+    <article lang={locale} className="space-y-2 rounded-lg border p-4">
       {source.found && (
         <p className="text-[13px] font-bold text-muted-foreground" title={messages.foundHint}>
           {messages.foundInPublicPost}
         </p>
       )}
-      <header className="flex flex-wrap items-center gap-2">
+      <header className="flex flex-wrap items-center gap-x-2 text-[15px]">
         <span className="font-semibold">{platform}</span>
         {author && (
           <span>
@@ -154,16 +159,25 @@ function Post({
           {preview.caption}
         </p>
       )}
+      {source.creatorNote && (
+        <p lang={source.noteLang} className="whitespace-pre-wrap">
+          {source.creatorNote}
+        </p>
+      )}
       {plan.kind === "facade" && (
-        <div className="space-y-2 rounded border bg-muted p-4">
-          <button
-            type="button"
-            className="rounded border bg-background px-4 py-2 focus-visible:outline-2"
-            onClick={() => setLoaded(true)}
-          >
-            {format(messages.loadPost, { platform })}
-          </button>
-          <p className="text-sm">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button
+              type="button"
+              aria-label={format(messages.showPostFrom, { platform })}
+              className="min-h-11 rounded-[10px] border border-kon px-4 py-2 font-bold text-kon focus-visible:outline-2"
+              onClick={() => setLoaded(true)}
+            >
+              {messages.showPost}
+            </button>
+            {toTheOriginal}
+          </div>
+          <p className="text-[13px] text-muted-foreground">
             {format(messages.cookieLine, { platform })}{" "}
             <a className="underline" href={localePath(locale, "/notice")}>
               {messages.noticeLink}
@@ -206,14 +220,7 @@ function Post({
           </a>
         </p>
       )}
-      {source.creatorNote && (
-        <p lang={source.noteLang} className="whitespace-pre-wrap">
-          {source.creatorNote}
-        </p>
-      )}
-      <a href={href} {...toOriginal} className="underline underline-offset-4">
-        {messages.viewOriginal}
-      </a>
+      {plan.kind !== "facade" && toTheOriginal}
       {children}
     </article>
   );

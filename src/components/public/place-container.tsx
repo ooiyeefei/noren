@@ -116,6 +116,7 @@ function PlaceQuery({
   const story: (AddStoryActions & StoryFeedActions) | undefined = place
     ? {
         signedIn: isLoading ? undefined : isAuthenticated,
+        sharedHere: [...(stories ?? []), ...(sources ?? [])].some((entry) => entry.addedByMe),
         add: (args) => pressing("story", () => addSource({ ...args, placeId: place._id })),
         write: (args) => pressing("story", () => writeStory(writtenStory(args, place._id))),
         shownAs,

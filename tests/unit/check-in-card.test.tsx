@@ -249,6 +249,40 @@ describe("CheckInCard", () => {
     expect(html).toContain("data-next-panel");
   });
 
+  describe("back at a place already visited", () => {
+    const visited = { ...spot, visited: true, panelDyed: true };
+
+    it.each([
+      ["en", "Back again? Add today&#x27;s moment"],
+      ["ja", "また来ましたか？今日のことを書き足す"],
+    ] as const)("leads to the written form in the stories (%s)", (locale, words) => {
+      const html = render(card({ locale, spot: visited }));
+      expect(html).toContain(words);
+      expect(html).toContain(`href="/${locale}/places/a-shop?tab=stories&amp;write=1"`);
+    });
+
+    it("keeps a slug with odd characters safe in the address", () => {
+      expect(render(card({ slug: "a shop&co", spot: visited }))).toContain(
+        'href="/en/places/a%20shop%26co?tab=stories&amp;write=1"',
+      );
+    });
+
+    it("is offered only once the person has been here", () => {
+      expect(render(card())).not.toContain("tab=stories");
+      expect(render(card({ spot: { ...spot, panelDyed: true } }))).not.toContain("tab=stories");
+    });
+
+    it("counts no visits and reads no location", () => {
+      const locate = vi.fn(actions().locate);
+      const html = render(card({ spot: visited, set: null, actions: actions({ locate }) }));
+      expect(locate).not.toHaveBeenCalled();
+      expect(html).not.toContain("data-im-here");
+      // The only number on the card is which panel this place gave.
+      const words = html.replace(/<[^>]*>/g, " ").replaceAll("&#x27;", "'");
+      expect(words.match(/\d+/g)).toEqual(["3"]);
+    });
+  });
+
   it("still shows what people mention on a place already visited", () => {
     const picked = { en: "Try the toast.", ja: "トースト。", postsRead: 4 };
     const html = render(card({ spot: { ...spot, visited: true, pickedLine: picked } }));

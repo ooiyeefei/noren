@@ -89,12 +89,12 @@ describe("a found post on the place page", () => {
     const html = render(instagram, "en");
     expect(html).toContain(placeUiMessages.en.foundInPublicPost);
     expect(html).toContain(encoded(`“${QUOTE}”`));
-    expect(html).toContain("Load this post from Instagram");
+    expect(html).toContain('aria-label="Show post from Instagram"');
   });
 
   it("a found post linked before quotes were kept shows the embed alone", () => {
     const html = render({ ...instagram, excerpt: undefined, excerptLang: undefined }, "en");
-    expect(html).toContain("Load this post from Instagram");
+    expect(html).toContain('aria-label="Show post from Instagram"');
     expect(html).not.toContain("<blockquote lang");
   });
 

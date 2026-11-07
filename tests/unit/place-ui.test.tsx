@@ -815,7 +815,7 @@ describe("place UI", () => {
   ])("an iframe or blockquote embed renders only a facade before the click: $kind", (embed) => {
     const html = renderEmbed(embed);
     expect(html).not.toMatch(/<script|<iframe|<blockquote/);
-    expect(html).toContain("Load this post from instagram");
+    expect(html).toContain('aria-label="Show post from Instagram"');
   });
   it("the facade shows the platform, the author credit next to the post, the original link and the notice link", () => {
     const html = renderEmbed();
