@@ -48,6 +48,12 @@ for (const locale of ["ja", "en"] as const) {
     expect(html).toContain("prefers-reduced-motion: no-preference");
   });
 
+  it(`calls the owner idea an idea, with no shop signed up and none named (${locale})`, () => {
+    expect(m.ideaBody).toMatch(locale === "ja" ? /まだアイデアの段階/ : /still an idea/);
+    expect(m.ideaBody).toMatch(locale === "ja" ? /参加しているお店もまだありません/ : /no shop has signed up/);
+    expect(`${m.noticedBody}${m.ideaBody}`).not.toMatch(/Bravo|Inohara|Honda|猪原|ブラボー/);
+  });
+
   it(`the map guide links to the page (${locale})`, () => {
     const guide = render(<ExploreGuide locale={locale} />);
     expect(guide).toContain(`href="/${locale}/about"`);
