@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 /** What the tabs tell the story form: how many times the person asked to write, and where it sits. */
 const WriteRequest = createContext<{
   request: number;
-  slot: React.RefObject<HTMLDivElement | null>;
+  setSlot: (element: HTMLDivElement | null) => void;
 } | null>(null);
 
 /**
@@ -29,7 +29,7 @@ const WriteRequest = createContext<{
 export function StoryComposer(props: AddStoryProps) {
   const tabs = useContext(WriteRequest);
   return (
-    <div ref={tabs?.slot} id="write" className="scroll-mt-16">
+    <div ref={tabs?.setSlot} id="write" className="scroll-mt-16">
       <AddStory {...props} openWritten={tabs?.request} />
     </div>
   );
@@ -77,11 +77,13 @@ export function PlaceTabs({
 }) {
   const m = messagesFor(placePageMessages, locale);
   const base = useId();
-  const slot = useRef<HTMLDivElement | null>(null);
+  // Kept as state because the form mounts only after the stories have loaded, well after this does.
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<PlaceTab>(initialTab);
   const [seenVisit, setSeenVisit] = useState(initialTab === "visit");
   const [request, setRequest] = useState(initialWrite ? 1 : 0);
   const [formOpen, setFormOpen] = useState(false);
+  const [composerInView, setComposerInView] = useState(false);
   const refs = useRef<Partial<Record<PlaceTab, HTMLButtonElement | null>>>({});
   const tabLabel: Record<PlaceTab, string> = {
     stories: m.tabStories,
@@ -116,22 +118,30 @@ export function PlaceTabs({
 
   // The form closing or opening is read off the page, so the form itself needs no new callbacks.
   useEffect(() => {
-    const element = slot.current;
-    if (!element) return;
-    const read = () => setFormOpen(element.querySelector("form") !== null);
+    if (!slot) return;
+    const read = () => setFormOpen(slot.querySelector("form") !== null);
     const observer = new MutationObserver(read);
-    observer.observe(element, { childList: true, subtree: true });
+    observer.observe(slot, { childList: true, subtree: true });
     read();
     return () => observer.disconnect();
-  }, []);
+  }, [slot]);
+  // The bar is for when the form's own buttons are out of reach; on screen, it would only cover them.
+  useEffect(() => {
+    if (!slot || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) =>
+      setComposerInView(entry?.isIntersecting ?? false),
+    );
+    observer.observe(slot);
+    return () => observer.disconnect();
+  }, [slot]);
   // A request to write brings the form into view once its tab is showing.
   useEffect(() => {
-    if (request === 0 || tab !== "stories") return;
-    slot.current?.scrollIntoView({
+    if (request === 0 || tab !== "stories" || !slot) return;
+    slot.scrollIntoView({
       block: "start",
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
     });
-  }, [request, tab]);
+  }, [request, tab, slot]);
 
   const panels: Record<PlaceTab, ReactNode> = {
     stories,
@@ -144,7 +154,7 @@ export function PlaceTabs({
     about,
   };
   return (
-    <WriteRequest.Provider value={{ request, slot }}>
+    <WriteRequest.Provider value={{ request, setSlot }}>
       <div
         role="tablist"
         aria-label={m.tabsLabel}
@@ -200,28 +210,31 @@ export function PlaceTabs({
         </div>
       ))}
       {/* Phones only: the one thing most people came to do, always in reach. */}
-      {canWrite && !formOpen && (signedIn || (signedIn === false && signInHref)) && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),12px)] sm:hidden">
-          {signedIn ? (
-            <button
-              type="button"
-              data-add-story=""
-              onClick={write}
-              className="pointer-events-auto inline-flex min-h-12 w-full max-w-[720px] items-center justify-center rounded-[10px] bg-kon px-5 font-bold text-white shadow-float focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ai"
-            >
-              {m.addYourStory}
-            </button>
-          ) : (
-            <a
-              data-add-story=""
-              href={signInHref}
-              className="pointer-events-auto inline-flex min-h-12 w-full max-w-[720px] items-center justify-center rounded-[10px] bg-kon px-5 font-bold text-white shadow-float focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ai"
-            >
-              {m.addYourStory}
-            </a>
-          )}
-        </div>
-      )}
+      {canWrite &&
+        !formOpen &&
+        !composerInView &&
+        (signedIn || (signedIn === false && signInHref)) && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),12px)] sm:hidden">
+            {signedIn ? (
+              <button
+                type="button"
+                data-add-story=""
+                onClick={write}
+                className="pointer-events-auto inline-flex min-h-12 w-full max-w-[720px] items-center justify-center rounded-[10px] bg-kon px-5 font-bold text-white shadow-float focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ai"
+              >
+                {m.addYourStory}
+              </button>
+            ) : (
+              <a
+                data-add-story=""
+                href={signInHref}
+                className="pointer-events-auto inline-flex min-h-12 w-full max-w-[720px] items-center justify-center rounded-[10px] bg-kon px-5 font-bold text-white shadow-float focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ai"
+              >
+                {m.addYourStory}
+              </a>
+            )}
+          </div>
+        )}
     </WriteRequest.Provider>
   );
 }

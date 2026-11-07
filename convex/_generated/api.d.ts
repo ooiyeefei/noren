@@ -8,7 +8,6 @@
  * @module
  */
 
-import type * as storyVoice from "../storyVoice.js";
 import type * as aiActions from "../aiActions.js";
 import type * as aiRequests from "../aiRequests.js";
 import type * as audio from "../audio.js";
@@ -68,12 +67,14 @@ import type * as storyFinderActions from "../storyFinderActions.js";
 import type * as storyPhotoActions from "../storyPhotoActions.js";
 import type * as storyPhotos from "../storyPhotos.js";
 import type * as storyShare from "../storyShare.js";
+import type * as storyVoice from "../storyVoice.js";
 import type * as tables_collection from "../tables/collection.js";
 import type * as tables_community from "../tables/community.js";
 import type * as tables_interviews from "../tables/interviews.js";
 import type * as tables_places from "../tables/places.js";
 import type * as tables_storyFinder from "../tables/storyFinder.js";
 import type * as tables_storyPhotos from "../tables/storyPhotos.js";
+import type * as tables_storyVoice from "../tables/storyVoice.js";
 import type * as takedown from "../takedown.js";
 import type * as trail from "../trail.js";
 import type * as translationChecks from "../translationChecks.js";
@@ -85,7 +86,6 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  storyVoice: typeof storyVoice;
   aiActions: typeof aiActions;
   aiRequests: typeof aiRequests;
   audio: typeof audio;
@@ -145,12 +145,14 @@ declare const fullApi: ApiFromModules<{
   storyPhotoActions: typeof storyPhotoActions;
   storyPhotos: typeof storyPhotos;
   storyShare: typeof storyShare;
+  storyVoice: typeof storyVoice;
   "tables/collection": typeof tables_collection;
   "tables/community": typeof tables_community;
   "tables/interviews": typeof tables_interviews;
   "tables/places": typeof tables_places;
   "tables/storyFinder": typeof tables_storyFinder;
   "tables/storyPhotos": typeof tables_storyPhotos;
+  "tables/storyVoice": typeof tables_storyVoice;
   takedown: typeof takedown;
   trail: typeof trail;
   translationChecks: typeof translationChecks;
