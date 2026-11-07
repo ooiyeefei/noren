@@ -2,17 +2,12 @@ import { v } from "convex/values";
 import { activeRegionConfig } from "../src/lib/region/registry";
 import { internal } from "./_generated/api";
 import { action, type MutationCtx } from "./_generated/server";
-import { requireConfirmedName, requirePerson } from "./lib/auth";
+import { requirePerson } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { limitContribution } from "./lib/rateLimit";
 import { regionConfig } from "./lib/region";
 
-async function member(ctx: Parameters<typeof requirePerson>[0]) {
-  const person = await requirePerson(ctx);
-  requireConfirmedName(person);
-  return person;
-}
 function settings() {
   const region = regionConfig(activeRegionConfig().id);
   if (!region.voice.enabled) throw appError("forbidden", "speech input is switched off");
@@ -42,7 +37,8 @@ export const generateUploadUrl = mutation({
   args: { sha256: v.string() },
   returns: v.object({ uploadId: v.id("voiceUpload"), url: v.string() }),
   handler: async (ctx, { sha256 }) => {
-    const person = await member(ctx);
+    // No confirmed name is needed: this only fills the box, and sharing still asks for one.
+    const person = await requirePerson(ctx);
     const region = settings();
     if (!/^[A-Za-z0-9+/]{43}=$/.test(sha256))
       throw appError("invalid_input", "invalid recording digest");
@@ -88,7 +84,7 @@ export const gate = internalMutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
-    await member(ctx);
+    await requirePerson(ctx);
     return settings().voice.maxSeconds;
   },
 });

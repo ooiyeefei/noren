@@ -45,15 +45,11 @@ describe("ephemeral story voice", () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
   });
-  it("requires sign-in, a confirmed name and the enabled region at upload", async () => {
+  it("requires sign-in and the enabled region at upload", async () => {
     const b = newBackend(modules);
     const args = { sha256: "A".repeat(43) + "=" };
     expect(await errorCode(b.t.mutation(api.storyVoice.generateUploadUrl, args))).toBe(
       "unauthenticated",
-    );
-    await addPerson(b, "mina", "user", { nameConfirmed: false });
-    expect(await errorCode(b.as("mina").mutation(api.storyVoice.generateUploadUrl, args))).toBe(
-      "name_not_confirmed",
     );
     await addPerson(b, "ren", "user");
     enabled(false);
@@ -61,6 +57,15 @@ describe("ephemeral story voice", () => {
       "forbidden",
     );
     expect(provider.transcribe).not.toHaveBeenCalled();
+  });
+  it("turns a recording into words while a new member's name still waits, since nothing is shared", async () => {
+    const b = newBackend(modules);
+    await addPerson(b, "mina", "user", { nameConfirmed: false });
+    const args = await upload(b);
+    expect(await b.as("mina").action(api.storyVoice.transcribe, args)).toBe(
+      "架空の喫茶店でお茶を飲みました。",
+    );
+    expect(await b.t.run((ctx) => ctx.storage.get(args.storageId))).toBeNull();
   });
   it.each(["en", "ja"] as const)(
     "returns %s text, deletes audio and stores no transcript",
@@ -89,20 +94,13 @@ describe("ephemeral story voice", () => {
     expect(await errorCode(b.as("mina").action(api.storyVoice.transcribe, args))).toBe("conflict");
     expect(await b.t.run((ctx) => ctx.storage.get(args.storageId))).toBeNull();
   });
-  it("checks the flag and confirmed name again at transcription and still deletes audio", async () => {
+  it("checks the flag again at transcription and still deletes audio", async () => {
     const b = newBackend(modules);
-    const personId = await addPerson(b, "mina", "user");
+    await addPerson(b, "mina", "user");
     const args = await upload(b);
     enabled(false);
     expect(await errorCode(b.as("mina").action(api.storyVoice.transcribe, args))).toBe("forbidden");
     expect(await b.t.run((ctx) => ctx.storage.get(args.storageId))).toBeNull();
-    enabled();
-    const second = await upload(b);
-    await b.run((ctx) => ctx.db.patch("person", personId, { nameConfirmedAt: undefined }));
-    expect(await errorCode(b.as("mina").action(api.storyVoice.transcribe, second))).toBe(
-      "name_not_confirmed",
-    );
-    expect(await b.t.run((ctx) => ctx.storage.get(second.storageId))).toBeNull();
     expect(provider.transcribe).not.toHaveBeenCalled();
   });
   it("refuses strangers and mismatched digests without deleting another recording", async () => {
