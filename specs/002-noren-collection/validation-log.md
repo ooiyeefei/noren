@@ -84,9 +84,13 @@ On a temporary fictional account with a "+" address, in Chromium at phone size:
 
 **Not run on production:**
 
-- A real email-code sign-up, which needs an inbox I can't read, and the return to the same place after it. The owner will try one.
+- The return to the same place after a real sign-up.
 - Adding a place and hitting a daily limit (step 3). Convex tests cover both.
 - The mic in real iPhone Safari.
 - Google isn't offered, so step 2 doesn't apply.
 
-Clerk's own delete button is still on (T067), though Noren doesn't link to it. Pressing it would remove the login and leave the person's name and stories on Noren.
+**Later on 7 Nov:**
+
+- The owner made a real account with a fresh "+" address, and reports that it works.
+- The owner turned off "Allow users to delete their accounts" in Clerk. The public environment now reads `delete_self: false`.
+- With that off, the check above ran again on a new temporary account. Noren's delete button still removed the Clerk login, which answered 404, and left the person row as "Former member". It goes through the backend API, so Clerk's switch doesn't affect it. The other checks in the run passed too. Speech came back in 7.8 s this time.
