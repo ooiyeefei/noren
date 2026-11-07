@@ -73,6 +73,7 @@ import type * as tables_places from "../tables/places.js";
 import type * as tables_storyFinder from "../tables/storyFinder.js";
 import type * as tables_storyPhotos from "../tables/storyPhotos.js";
 import type * as takedown from "../takedown.js";
+import type * as trail from "../trail.js";
 import type * as translationChecks from "../translationChecks.js";
 
 import type {
@@ -147,6 +148,7 @@ declare const fullApi: ApiFromModules<{
   "tables/storyFinder": typeof tables_storyFinder;
   "tables/storyPhotos": typeof tables_storyPhotos;
   takedown: typeof takedown;
+  trail: typeof trail;
   translationChecks: typeof translationChecks;
 }>;
 
