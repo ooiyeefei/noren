@@ -32,6 +32,7 @@ function displayNameFrom(identity: Pick<UserIdentity, "name" | "nickname">): str
  * registered. It returns nothing that identifies them to the outside (no token, no Clerk user ID).
  * `nameConfirmed` is false exactly when a share would be refused with `name_not_confirmed`.
  * `joinedAt` lets the add-place form say what will happen, since a query may not read the clock.
+ * `filmSeen` is false until they close the welcome film, which opens by itself until then.
  */
 export const current = query({
   args: {},
@@ -43,6 +44,7 @@ export const current = query({
       isMock: v.boolean(),
       nameConfirmed: v.boolean(),
       joinedAt: v.number(),
+      filmSeen: v.boolean(),
     }),
   ),
   handler: async (ctx) => {
@@ -55,6 +57,7 @@ export const current = query({
           isMock: person.isMock,
           nameConfirmed: nameIsConfirmed(person),
           joinedAt: person._creationTime,
+          filmSeen: person.introFilmSeen === true,
         };
   },
 });
@@ -153,6 +156,19 @@ export const confirmMyDisplayName = mutation({
     if (person.nameConfirmedAt !== undefined) return null;
     checkedDisplayName(person.displayName);
     await ctx.db.patch("person", person._id, { nameConfirmedAt: Date.now() });
+    return null;
+  },
+});
+
+/** The caller closed the welcome film, on any device, so it stops opening by itself. */
+export const markFilmSeen = mutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const person = await requirePerson(ctx);
+    if (person.introFilmSeen !== true) {
+      await ctx.db.patch("person", person._id, { introFilmSeen: true });
+    }
     return null;
   },
 });

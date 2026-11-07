@@ -101,6 +101,19 @@ describe("people.ensureCurrent", () => {
   });
 });
 
+describe("people.markFilmSeen", () => {
+  it("stops the film opening by itself, for that person only, and can be called twice", async () => {
+    const { t, as, signUp } = backend();
+    await signUp("aiko", { name: "Aiko Tanaka" });
+    await signUp("ben", { name: "Ben Ito" });
+    await as("aiko").mutation(api.people.markFilmSeen, {});
+    await as("aiko").mutation(api.people.markFilmSeen, {});
+    expect((await as("aiko").query(api.people.current, {}))?.filmSeen).toBe(true);
+    expect((await as("ben").query(api.people.current, {}))?.filmSeen).toBe(false);
+    await expect(t.mutation(api.people.markFilmSeen, {})).rejects.toThrow();
+  });
+});
+
 describe("people.current", () => {
   it("is null for a visitor who is signed out or has no record yet", async () => {
     const { t, as } = backend();
@@ -117,6 +130,7 @@ describe("people.current", () => {
       isMock: false,
       nameConfirmed: false,
       joinedAt: expect.any(Number),
+      filmSeen: false,
     });
   });
   it("current reports a mock person as mock", async () => {
@@ -129,6 +143,7 @@ describe("people.current", () => {
       isMock: true,
       nameConfirmed: true,
       joinedAt: expect.any(Number),
+      filmSeen: false,
     });
   });
 

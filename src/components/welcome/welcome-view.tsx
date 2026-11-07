@@ -1,17 +1,11 @@
 import Link from "next/link";
 import { NorenTab } from "@/components/explore/noren-tab";
+import { FilmPlayer } from "@/components/film/film-player";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { welcomeMessages } from "@/lib/i18n/messages/welcome";
 
-const FILM = "/film/noren-intro.mp4";
-const POSTER = "/film/noren-intro.jpg";
-
-/**
- * The page a signed-out visitor meets first: what Noren is, the film, and the way to the map. The film
- * loads nothing until someone presses play. Its voice is English, so a Japanese page starts with
- * Japanese captions on.
- */
+/** The page a signed-out visitor meets first: what Noren is, the film, and the way to the map. */
 export function WelcomeView({ locale, accountsOpen }: { locale: Locale; accountsOpen: boolean }) {
   const m = messagesFor(welcomeMessages, locale);
   const map = localePath(locale, "/map");
@@ -42,30 +36,7 @@ export function WelcomeView({ locale, accountsOpen }: { locale: Locale; accounts
             </Link>
           </div>
           <figure className="space-y-3">
-            <video
-              aria-label={m.filmLabel}
-              className="aspect-video w-full rounded-[14px] bg-kon"
-              controls
-              playsInline
-              poster={POSTER}
-              preload="none"
-            >
-              <source src={FILM} type="video/mp4" />
-              <track
-                default={locale === "ja"}
-                kind="subtitles"
-                label={m.captionsJa}
-                src="/film/noren-intro.ja.vtt"
-                srcLang="ja"
-              />
-              <track
-                kind="subtitles"
-                label={m.captionsEn}
-                src="/film/noren-intro.en.vtt"
-                srcLang="en"
-              />
-              <a href={FILM}>{m.filmFallback}</a>
-            </video>
+            <FilmPlayer locale={locale} />
           </figure>
         </section>
 

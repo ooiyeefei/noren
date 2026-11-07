@@ -26,6 +26,8 @@ export const placeTables = {
     displayName: v.string(),
     /** When the person last saw and kept the name shown beside what they share (FR-131). */
     nameConfirmedAt: v.optional(v.number()),
+    /** They have closed the welcome film, so it no longer opens by itself. No time is kept. */
+    introFilmSeen: v.optional(v.boolean()),
     publicProfileUrl: v.optional(v.string()),
     verifiedAt: v.optional(v.number()),
     verifiedBy: v.optional(v.id("person")),
