@@ -132,6 +132,46 @@ describe("ephemeral story voice", () => {
       "rate_limited",
     );
   });
+  it("removes a recording left behind when the browser closed before transcribing", async () => {
+    const b = newBackend(modules);
+    await addPerson(b, "mina", "user");
+    const other = await b.t.run((ctx) => ctx.storage.store(new Blob(["private fictional audio"])));
+    const left = await upload(b);
+    await b.t.mutation(internal.storyVoice.expire, { uploadId: left.uploadId });
+    expect(await b.t.run((ctx) => ctx.storage.get(left.storageId))).toBeNull();
+    expect(await b.t.run((ctx) => ctx.db.get("voiceUpload", left.uploadId))).toBeNull();
+    expect(await b.t.run(async (ctx) => (await ctx.storage.get(other)) !== null)).toBe(true);
+  });
+
+  it("schedules a last look for an upload that lands after its permit has gone", async () => {
+    const b = newBackend(modules);
+    await addPerson(b, "mina", "user");
+    const other = await b.t.run((ctx) => ctx.storage.store(new Blob(["private fictional audio"])));
+    const { uploadId, storageId } = await upload(b);
+    const permit = await b.t.run((ctx) => ctx.db.get("voiceUpload", uploadId));
+    const looks = await b.t.run((ctx) => ctx.db.system.query("_scheduled_functions").take(10));
+    expect(looks.map((job) => job.name).sort()).toEqual(["storyVoice:expire", "storyVoice:sweep"]);
+    await b.t.mutation(internal.storyVoice.sweep, {
+      sha256: permit!.sha256,
+      after: permit!._creationTime,
+    });
+    expect(await b.t.run((ctx) => ctx.storage.get(storageId))).toBeNull();
+    expect(await b.t.run(async (ctx) => (await ctx.storage.get(other)) !== null)).toBe(true);
+  });
+
+  it("does not touch a file from before the permit, even with the same digest", async () => {
+    const b = newBackend(modules);
+    await addPerson(b, "mina", "user");
+    const { uploadId, storageId } = await upload(b);
+    const permit = await b.t.run((ctx) => ctx.db.get("voiceUpload", uploadId));
+    const file = await b.t.run((ctx) => ctx.db.system.get("_storage", storageId));
+    await b.t.mutation(internal.storyVoice.sweep, {
+      sha256: permit!.sha256,
+      after: file!._creationTime + 1,
+    });
+    expect(await b.t.run(async (ctx) => (await ctx.storage.get(storageId)) !== null)).toBe(true);
+  });
+
   it("rejects overlong WAV before sending it, deletes it, and expires permits", async () => {
     const b = newBackend(modules);
     await addPerson(b, "mina", "user");
