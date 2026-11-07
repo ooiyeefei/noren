@@ -79,6 +79,7 @@ const inheritsMockFlag = [
   "placeStoryRun",
   // From its person and place: a demo account or a demo place is refused at upload.
   "storyPhoto",
+  "voiceUpload",
 ];
 const notPersonCreated = [
   "seedOsmCandidate",

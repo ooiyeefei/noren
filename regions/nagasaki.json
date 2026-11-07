@@ -148,10 +148,12 @@
         "draft": 3,
         "check": 10,
         "report": 3,
-        "photo": 5
+        "photo": 5,
+        "voice": 5
       }
     }
   },
+  "voice": { "enabled": false, "maxSeconds": 120 },
   "photos": {
     "enabled": true,
     "maxPerStory": 4,

@@ -338,6 +338,18 @@ const DELETION_STEPS: readonly DeletionStep[] = [
     for (const story of page.page) await ctx.db.delete("story", story._id);
     return page;
   },
+  async (ctx, personId, paginationOpts) => {
+    const page = await ctx.db
+      .query("voiceUpload")
+      .withIndex("by_personId", (q) => q.eq("personId", personId))
+      .paginate(paginationOpts);
+    for (const permit of page.page) {
+      if (permit.storageId && (await ctx.db.system.get("_storage", permit.storageId)))
+        await ctx.storage.delete(permit.storageId);
+      await ctx.db.delete("voiceUpload", permit._id);
+    }
+    return page;
+  },
   // Hidden through the same steps as sources.remove, because AI story citations may point at it.
   async (ctx, personId, paginationOpts) => {
     const page = await ctx.db

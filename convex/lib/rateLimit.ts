@@ -33,6 +33,7 @@ const CONTRIBUTIONS_PER_DAY = {
   story: 50,
   preview: 200,
   draft: 30,
+  voice: 30,
   check: 100,
   report: 20,
 } as const;

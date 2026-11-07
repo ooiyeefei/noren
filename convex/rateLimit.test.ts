@@ -44,6 +44,7 @@ describe("limitContribution", () => {
     story: 50,
     preview: 200,
     draft: 30,
+    voice: 30,
     check: 100,
     report: 20,
   };
@@ -77,6 +78,7 @@ describe("limitContribution", () => {
       post: 5,
       preview: 20,
       draft: 3,
+      voice: 5,
       check: 10,
       report: 3,
     });

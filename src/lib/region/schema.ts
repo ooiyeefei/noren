@@ -136,6 +136,7 @@ export const regionSchema = z
           check: dailyLimit,
           report: dailyLimit,
           photo: dailyLimit,
+          voice: dailyLimit.default(5),
         }),
       }),
     }),
@@ -165,6 +166,12 @@ export const regionSchema = z
       /** Off hides the written-story tick that lets Noren feature a story on its own accounts. */
       norenAccount: z.boolean(),
     }),
+    voice: z
+      .strictObject({
+        enabled: z.boolean(),
+        maxSeconds: z.number().int().positive().max(120),
+      })
+      .default({ enabled: false, maxSeconds: 120 }),
     legal: z.strictObject({
       /** Named legal operator shown on notices; null until decided (blocks real people's stories). */
       operatorName: z.string().min(1).nullable(),
