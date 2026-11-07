@@ -37,21 +37,24 @@ for (const locale of ["ja", "en"] as const) {
   });
 }
 
-test("the welcome film is served as itself, with range requests, and its captions load", async ({
-  request,
-}) => {
-  const film = await request.get("/film/noren-intro.mp4", {
-    headers: { Range: "bytes=0-1023" },
-    maxRedirects: 0,
+// The English-voice cut and the Japanese-voice cut, each with captions in both languages.
+for (const name of ["noren-intro", "noren-intro-ja"]) {
+  test(`the welcome film ${name} is served as itself, with range requests, and its captions load`, async ({
+    request,
+  }) => {
+    const film = await request.get(`/film/${name}.mp4`, {
+      headers: { Range: "bytes=0-1023" },
+      maxRedirects: 0,
+    });
+    expect(film.status()).toBe(206);
+    expect(film.headers()["content-type"]).toBe("video/mp4");
+    for (const language of ["en", "ja"]) {
+      const captions = await request.get(`/film/${name}.${language}.vtt`, { maxRedirects: 0 });
+      expect(captions.status()).toBe(200);
+      expect(await captions.text()).toMatch(/^WEBVTT/);
+    }
   });
-  expect(film.status()).toBe(206);
-  expect(film.headers()["content-type"]).toBe("video/mp4");
-  for (const language of ["en", "ja"]) {
-    const captions = await request.get(`/film/noren-intro.${language}.vtt`, { maxRedirects: 0 });
-    expect(captions.status()).toBe(200);
-    expect(await captions.text()).toMatch(/^WEBVTT/);
-  }
-});
+}
 
 for (const locale of ["ja", "en"] as const) {
   test(`/${locale}/map has its language and shell; language switching preserves the page`, async ({
