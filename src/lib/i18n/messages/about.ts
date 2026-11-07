@@ -39,7 +39,8 @@ export const aboutMessages = defineMessages({
     typicalLabel: "よくある掲載ページ",
     typicalCaption: "点数、順位、広告、そして知らない人たちの意見。",
     norenLabel: "Noren のページ",
-    norenCaption: "人々が書いたものからまとめた短い物語と、一文ごとの出典。確かめたかどうかも正直に表示します。",
+    norenCaption:
+      "人々が書いたものからまとめた短い物語と、一文ごとの出典。確かめたかどうかも正直に表示します。",
     sponsored: "広告",
     topTen: "トップ10",
     confirmedChip: "現地で確認済み",
@@ -49,7 +50,8 @@ export const aboutMessages = defineMessages({
     p1Title: "点数ではなく、物語を",
     p1Body: "星もランキングもトップ10もありません。お店は数字ではないからです。",
     p2Title: "すべての文に出典を",
-    p2Body: "物語は人々の投稿をもとに AI が書き、そのことを明記します。各文の脚注から、もとになった投稿をたどれます。",
+    p2Body:
+      "物語は人々の投稿をもとに AI が書き、そのことを明記します。各文の脚注から、もとになった投稿をたどれます。",
     p3Title: "誰でも削除を依頼できます",
     p3Body:
       "AI は投稿を読み違えることがあります。誤りや、載せるべきでないものを見つけたら、このページの下にあるフォームから依頼してください。アカウントは不要で、担当者がすべての依頼を確認します。",
@@ -70,14 +72,13 @@ export const aboutMessages = defineMessages({
     nowBody:
       "長崎。地元の場所、数千か所をひとつの地図に。その一部には物語があります。行ったことのある人が「今もあります」と伝えるまで、どの場所にも「未確認」の表示がつきます。",
     nextLabel: "これから",
-    nextBody:
-      "ひとつの地区から順に。物語を増やし、このまちのやり方とその理由も加えていきます。",
+    nextBody: "ひとつの地区から順に。物語を増やし、このまちのやり方とその理由も加えていきます。",
     noticedTitle: "気づいたこと",
     noticedBody:
       "大きな街の外にある小さなお店は、見つけにくいことがあります。日本語を読まない旅行者にとっては、なおさらです。お店の人は日々の営業で忙しく、外国語でネットに書くことまでは、なかなか手が回りません。",
     ideaTitle: "次に取り組んでいるアイデア",
     ideaBody:
-      "お店の人が Noren で自分のお店を登録すると、確認した話を英語と日本語で受け取り、Google のプロフィールや Instagram にそのまま投稿でき、店先に貼るポスターも用意できる。そんな仕組みを考えています。まだアイデアの段階で、公開はしていません。参加しているお店もまだありません。",
+      "お店の人が Noren で自分のお店を登録すると、確認した話を英語と地元の言葉（今は日本語、広がれば他の国の言葉も）で受け取り、Google や Instagram などの SNS をはじめ、インターネットのどこにでも投稿でき、店先に貼るポスターも用意できる。そんな仕組みを考えています。まだアイデアの段階で、公開はしていません。参加しているお店もまだありません。",
     madeIn:
       "Nagasaki Nomad プログラムの期間中に、長崎でつくりました。誰でも関われるオープンなプロジェクトです。",
     seeCode: "GitHub でコードを見る",
@@ -161,7 +162,7 @@ export const aboutMessages = defineMessages({
       "Small places outside the big cities can be hard to find, above all for visitors who don't read Japanese. Owners are busy running the place, and writing about it online in a second language rarely comes first.",
     ideaTitle: "An idea we're working on next",
     ideaBody:
-      "Owners could claim their place on Noren and get their own story back in English and Japanese, ready to post on their Google profile or Instagram, with a poster for the window. It's still an idea: it isn't live yet, and no shop has signed up.",
+      "Owners could claim their place on Noren and get their own story back in English and their local language (Japanese for now, others as we expand), ready to share on Google, Instagram and other social media, or anywhere online, with a poster for the window. It's still an idea: it isn't live yet, and no shop has signed up.",
     madeIn:
       "Made in Nagasaki during the Nagasaki Nomad programme, as an open project anyone can build on.",
     seeCode: "Read the code on GitHub",

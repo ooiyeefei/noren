@@ -89,7 +89,7 @@ export function NextPanelCard({
       )}
       <a
         className="inline-flex min-h-11 w-full items-center justify-center rounded-[10px] bg-kon px-5 py-2 font-bold text-white"
-        href={localePath(locale, `/places/${encodeURIComponent(next.place.slug)}`)}
+        href={`${localePath(locale, `/places/${encodeURIComponent(next.place.slug)}`)}?tab=visit`}
       >
         {m.walkThere}
       </a>
@@ -104,7 +104,7 @@ export function NextPanelCard({
                   <a
                     lang={other.lang}
                     className="inline-flex min-h-11 items-center text-ai underline [overflow-wrap:anywhere]"
-                    href={localePath(locale, `/places/${encodeURIComponent(place.slug)}`)}
+                    href={`${localePath(locale, `/places/${encodeURIComponent(place.slug)}`)}?tab=visit`}
                   >
                     {other.text}
                   </a>
