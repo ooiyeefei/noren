@@ -1,8 +1,11 @@
 import { defineMessages, type Locale } from "../index";
 
 // The terms and the privacy notice (FR-126). The owner approved them on 6 Nov 2026 (T059), with no
-// lawyer's read and no second person's review of the Japanese recorded. Both pages answer 404 while
-// documentsVersion is null.
+// lawyer's read and no second person's review of the Japanese recorded. On 7 Nov they approved the
+// changes for sign-in by email and password, no Google, speech input, pictures of a story and Noren's
+// own accounts, also with no lawyer's read or review of the Japanese. Both pages answer 404 while
+// documentsVersion is null. Turning speech input or Noren's own accounts off makes this notice wrong,
+// so change the words and documentsVersion in the same change.
 //
 // Every {placeholder} is filled from regions/<id>.json by src/components/legal/documents.ts, so the
 // operator, the contact, the minimum age and the takedown times are never typed here.
@@ -92,6 +95,7 @@ export const legalDocuments: Readonly<
           heading: "あなたの権利と、運営者への許可",
           paragraphs: [
             "あなたが書いたものの権利は、あなたのものです。あなたは運営者に対し、それを保存し、あなたの名前とともに Noren に表示することを許可します。この許可は、あなたか運営担当者が削除するまで続きます。",
+            "Noren の公式アカウントで紹介してよいとチェックを入れた話については、本文、最初の写真、表示名をそこに投稿することも許可します。取り消す方法は、プライバシーポリシーに書いてあります。",
             "追加した場所の名前とピンは、地図上の事実として扱います。アカウントを削除した後も、あなたの名前を外して地図に残ります。",
           ],
         },
@@ -178,11 +182,12 @@ export const legalDocuments: Readonly<
           id: "keeps",
           heading: "Noren が保存するもの",
           items: [
-            "ログインの情報：メールアドレス、または Google でログインする場合は Google のアカウント。これらと、規約に同意した日時は Clerk が保存します。Noren のデータベースには Clerk の ID だけを保存し、メールアドレスは保存しません。",
+            "ログインの情報：メールアドレスとパスワード。これらと、規約に同意した日時は Clerk が保存します。Noren のデータベースには Clerk の ID だけを保存し、メールアドレスは保存しません。",
             "あなたが決めた表示名と、アカウントの役割。",
             "共有したもの：話、リンクとそれに添えた一文、追加した場所とそのピン。",
             "「今もあります」を押した記録と、場所について送った報告（添えた文章を含む）。",
             "のれん集めの記録：「今ここにいます」を押した場所、その地区と枚目、日本時間の日付。そして、バッジ。",
+            "歓迎の動画を閉じたかどうか。",
             "一つのアカウントによる大量の投稿を防ぐ、1日あたりの回数。アカウントの ID と数字だけを保存します。",
             "運営担当者の操作の記録（話の削除など）。",
           ],
@@ -206,6 +211,15 @@ export const legalDocuments: Readonly<
           ],
         },
         {
+          id: "story-pictures",
+          heading: "話の画像と Noren の公式アカウント",
+          paragraphs: [
+            "ご自身が書いた話ごとに「画像でシェアする」を選べます。Noren は、話が Noren で表示されている間に限り、本文、場所の名前、最初の写真（ある場合）、表示名、Noren のウェブアドレスから画像を作ります。画像はご依頼のたびに作られ、Noren は保存しません。その後に Instagram などへ投稿するかどうかは、あなたとそのサービスとの間のことです。",
+            "話を書くときに「Norenの公式アカウントで、あなたの名前を添えて紹介してよい」にチェックを入れると、Noren の担当者が、あなたの話（本文、最初の写真、表示名）を画像にして、Noren の公式 SNS アカウントに、場所へのリンクを付けて投稿することがあります。投稿は担当者が手で行い、Noren が自動で投稿することはありません。チェックは任意で、入れない限りオフです。Noren は、チェックを入れたことと、その日時を記録します。チェックのない話が紹介されることはありません。",
+            "チェックはいつでも、ご自身の話から「取り消す」を選んで外せます。外した後は、Noren はその話を投稿しません。話を削除すると、紹介する話の一覧からすぐに消えます。すでに SNS に投稿したものは、Noren が削除するまでそこに残ります。{contact} にご連絡いただければ、14 日以内に削除します。他の人が保存・再共有したものは、Noren の管理の外にあります。",
+          ],
+        },
+        {
           id: "services",
           heading: "データを扱うサービス",
           paragraphs: [
@@ -215,7 +229,7 @@ export const legalDocuments: Readonly<
             {
               name: "Clerk",
               country: "米国",
-              does: "ログインの情報を保存します。メールアドレス、Google でログインする場合は Google から届く名前と画像、ログイン中の端末の情報（IP アドレスなど）です。ログイン用のコードをメールで送り、不正な登録を確認します。",
+              does: "ログインの情報を保存します。メールアドレス、パスワード、ログイン中の端末の情報（IP アドレスなど）です。ログイン用のコードをメールで送り、不正な登録を確認します。",
             },
             {
               name: "Cloudflare",
@@ -223,14 +237,9 @@ export const legalDocuments: Readonly<
               does: "登録のときに Clerk が表示することのある、ロボットを防ぐ確認を動かします。IP アドレスとブラウザの情報が伝わります。",
             },
             {
-              name: "Google",
-              country: "米国",
-              does: "Google でのログインを選んだ場合のみ使います。Google は名前、メールアドレス、画像を Clerk に伝え、あなたが Noren にログインしたことを知ります。",
-            },
-            {
               name: "Convex",
               country: "オーストラリア（シドニー）。運営会社は米国",
-              does: "Noren のデータベースです。上の一覧のうち、ログインの情報を除くすべてを保存します。",
+              does: "Noren のデータベースです。上の一覧のうち、ログインの情報を除くすべてを保存します。音声認識のために送ることを選んだ録音も、一時的に保存します。",
             },
             {
               name: "Vercel",
@@ -240,7 +249,7 @@ export const legalDocuments: Readonly<
             {
               name: "Meta Platforms",
               country: "米国",
-              does: "AI です。自分の投稿から一文の下書きを作るとき（下記）に、その投稿の文章を受け取ります。インタビューの録音と文章、公開投稿の文章も受け取ります。",
+              does: "AI です。自分の投稿から一文の下書きを作るとき（下記）に、その投稿の文章を受け取ります。インタビューの録音と文章、公開投稿の文章も受け取ります。音声認識に同意した場合、録音も受け取り、文字にします。",
             },
             {
               name: "Modal",
@@ -255,7 +264,7 @@ export const legalDocuments: Readonly<
             {
               name: "OpenAI",
               country: "米国",
-              does: "音声の文字起こしです。Noren の設定で Meta Platforms の代わりに使うことがあり、そのときはインタビューの録音を受け取ります。",
+              does: "音声の文字起こしです。Noren の設定で Meta Platforms の代わりに使うことがあり、そのときはインタビューの録音と、メンバーが音声認識のために送ることを選んだ録音を受け取ります。",
             },
             {
               name: "OpenStreetMap Foundation",
@@ -273,7 +282,10 @@ export const legalDocuments: Readonly<
           id: "ai",
           heading: "AI とあなたの言葉",
           paragraphs: [
-            "Noren は、あなたが書いた話、表示名、メールアドレスを AI サービスに送りません。",
+            "Noren は、あなたが文字で入力した話、表示名、メールアドレスを AI サービスに送りません。",
+            "『体験を話す』を選び、音声認識に同意すると、Noren は録音をオーストラリアのシドニーにある Convex に一時的にアップロードし、米国の Meta Platforms に送って文字にします。自分の声だけを録音し、他の人の個人情報を話さないでください。",
+            "文字にした内容は、確認して直せるように入力欄に戻ります。文字起こしの間、Noren は文章をサーバーに保存しません。共有前の文章は、ブラウザーに下書きとして保存されます。『共有』を押したときだけ、話として保存され、名前とともに公開されます。",
+            "文字が戻ると、音声認識が成功しても失敗しても、Noren は保管した音声をすぐに削除します。その前にページを離れた場合は、1 時間ほどで削除します。Meta Platforms はこの録音をモデルの学習に使いません。安全確認などのために、Meta の規約が認める期間保存することがあります。",
             "自分の投稿だと示して下書きを頼むと、Noren はそのページから題名と文章を読み、場所の名前とともに Meta Platforms に送ります。下書きはあなたに返され、「共有」を押すまで何も保存しません。Meta が受け取った内容で学習するモデルは、Noren の設定で拒否しています。",
             "インタビューは別の扱いです。店主には先に専用の同意書で同意していただき、そこで録音と文章を扱うサービスを示します。",
           ],
@@ -316,6 +328,7 @@ export const legalDocuments: Readonly<
           closing: [
             "非表示にするもの：共有したリンクは、すべてのページから消えます。リンクの記録と添えた一文は、非表示のままデータベースに残ります。",
             "残るもの：追加した場所とそのピン、名前は、場所についての事実として残り、あなたの名前は出ません。運営担当者の操作の記録は残りますが、空の行を指すので、あなたを特定しません。1日あたりの回数の記録も残りますが、アカウントの ID しか持ちません。",
+            "Noren の公式 SNS アカウントにすでに投稿したものは、Noren が削除するまで残ります。{contact} にご連絡いただければ、14 日以内に削除します。",
             "もう一度ログインしても、何も戻りません。",
           ],
         },
@@ -325,6 +338,7 @@ export const legalDocuments: Readonly<
           paragraphs: [
             "アカウントと共有したものは、あなたか運営担当者が削除するまで、またはアカウントを削除するまで保存します。",
             "削除の依頼に書いた連絡先は、依頼を閉じるときに消します。Vercel と Clerk の記録は、それぞれのサービスが定める期間残ります。",
+            "音声認識のために送った録音は、「AI とあなたの言葉」に書いたとおり削除します。Noren の公式 SNS アカウントの投稿は、Noren が削除するまで残ります。",
           ],
         },
         {
@@ -398,6 +412,7 @@ export const legalDocuments: Readonly<
           heading: "What stays yours and what you allow",
           paragraphs: [
             "What you write stays yours. You allow the operator to store it and show it on Noren with your name, until you or a steward removes it.",
+            "If you tick that Noren may share a story on its own accounts, you also allow the operator to post its words, your first photo and your name there. The privacy notice says how to take this back.",
             "A place you add, with its name and pin, is a fact on the map. It stays on the map after you delete your account, without your name.",
           ],
         },
@@ -484,11 +499,12 @@ export const legalDocuments: Readonly<
           id: "keeps",
           heading: "What Noren keeps",
           items: [
-            "Your sign-in: your email address, or your Google account if you sign in with Google. Clerk holds these, and the time you accepted the documents. Noren's own database holds only an ID from Clerk and never your email address.",
+            "Your sign-in: your email address and password. Clerk holds these, and the time you accepted the documents. Noren's own database holds only an ID from Clerk and never your email address.",
             "The name you choose, and your account's role.",
             "What you share: stories, links with the line you write about them, and places you add with their pins.",
             "Your “Still here” presses, and any report you send about a place with its note.",
             "Your collection: where you pressed “I'm here”, its set and panel, and the date in Japan. Also your badges.",
+            "Whether you have closed the welcome film.",
             "Daily counts that stop one account flooding the map. They hold only your account's ID and a number.",
             "A record of what stewards do, such as removing a story.",
           ],
@@ -512,6 +528,15 @@ export const legalDocuments: Readonly<
           ],
         },
         {
+          id: "story-pictures",
+          heading: "Pictures of your story and Noren's own accounts",
+          paragraphs: [
+            "On each of your own stories you can choose “Share as a picture”. Noren draws a picture from the words, the place name, your first photo (if the story has one), your display name and our web address, only while the story is shown on Noren. The picture is made when you ask for it and is not kept by Noren. What you do with it afterwards, for example posting it on Instagram, is between you and that service.",
+            "If you tick “Noren may share this on its own accounts, credited to you” when you write a story, a person at Noren may post your story (its words, your first photo and your display name) as a picture on Noren's own social media accounts, with a link to the place. A person posts it by hand; Noren never posts by itself. Ticking is your choice and is off unless you tick it. Noren records that you ticked it and when. Someone who has not ticked is never featured.",
+            "You can withdraw the tick at any time from your own story: choose “Take back”. After that Noren will not post the story. If you remove the story, it leaves the list of stories to share at once. A post already made on a social media account stays there until Noren deletes it; ask us at {contact} and we will delete it within 14 days. Copies that other people have saved or reshared are outside Noren's control.",
+          ],
+        },
+        {
           id: "services",
           heading: "Services that handle your data",
           paragraphs: [
@@ -521,7 +546,7 @@ export const legalDocuments: Readonly<
             {
               name: "Clerk",
               country: "United States",
-              does: "Holds your sign-in: your email address, the name and picture Google sends if you sign in with Google, and details of the devices you sign in on, including IP address. Sends sign-in codes by email and checks sign-ups for abuse.",
+              does: "Holds your sign-in: your email address, your password and details of the devices you sign in on, including IP address. Sends sign-in codes by email and checks sign-ups for abuse.",
             },
             {
               name: "Cloudflare",
@@ -529,14 +554,9 @@ export const legalDocuments: Readonly<
               does: "Runs the bot check Clerk can show during sign-up. It sees your IP address and browser details.",
             },
             {
-              name: "Google",
-              country: "United States",
-              does: "Used only if you choose to sign in with Google. It sends Clerk your name, email address and picture, and it knows you signed in to Noren.",
-            },
-            {
               name: "Convex",
               country: "Australia (Sydney), run by a United States company",
-              does: "Noren's database. It holds everything in the list above apart from your sign-in details.",
+              does: "Noren's database. It holds everything in the list above apart from your sign-in details. It also temporarily stores recordings you choose to send for speech recognition.",
             },
             {
               name: "Vercel",
@@ -546,7 +566,7 @@ export const legalDocuments: Readonly<
             {
               name: "Meta Platforms",
               country: "United States",
-              does: "An AI service. It receives your post's words when you ask for a draft from your own post (see below). It also receives interview recordings and transcripts, and the words of public posts.",
+              does: "An AI service. It receives your post's words when you ask for a draft from your own post (see below). It also receives interview recordings and transcripts, and the words of public posts. If you agree to speech recognition, it also receives your voice recording and turns it into words.",
             },
             {
               name: "Modal",
@@ -561,7 +581,7 @@ export const legalDocuments: Readonly<
             {
               name: "OpenAI",
               country: "United States",
-              does: "Transcribes speech. A Noren setting can use it in place of Meta Platforms, and it then receives interview recordings.",
+              does: "Transcribes speech. A Noren setting can use it in place of Meta Platforms, and it then receives interview recordings and recordings members choose to send for speech recognition.",
             },
             {
               name: "OpenStreetMap Foundation",
@@ -579,7 +599,10 @@ export const legalDocuments: Readonly<
           id: "ai",
           heading: "AI and your words",
           paragraphs: [
-            "Noren does not send the stories you write, your name or your email address to an AI service.",
+            "Noren does not send stories you type, your display name or your email address to an AI service.",
+            "If you choose Speak your story and agree to speech recognition, Noren temporarily uploads your recording to Convex in Sydney, Australia, and sends it to Meta Platforms in the United States to turn it into words. Record only your own voice and avoid saying other people's personal information.",
+            "The words return to your story box for you to check and edit. Noren does not save a transcript on its server during transcription. Your unsent words are kept in your browser as a draft. They are saved as a story and shown publicly with your name only when you press Share.",
+            "Noren deletes its copy of the audio as soon as the words come back, whether speech recognition worked or not. If you leave the page before that, Noren deletes it within about an hour. Meta Platforms does not use the recording to train its models, and may keep it for as long as its own terms allow, for example for safety checks.",
             "If you tick that a post is your own and ask for a draft, Noren reads the post's title and words from its page and sends them, with the place's name, to Meta Platforms. The draft comes back to you, and nothing is kept until you press Share. Noren's settings refuse the Meta models that train on what they receive.",
             "An interview works differently. A shop owner first agrees to a separate consent form, which names the services that handle the recording and the transcript.",
           ],
@@ -622,6 +645,7 @@ export const legalDocuments: Readonly<
           closing: [
             "These are hidden: the links you shared come off every page. The record of each link, with the line you wrote, stays hidden in the database.",
             "These stay: places you added, with their pins and names, stay as facts about a place, and your name does not show. The record of what stewards did stays, and it points at the empty row, so it no longer identifies you. Daily counts stay too, and they hold only an account ID.",
+            "A post already made on Noren's own social media accounts stays until Noren deletes it. Ask us at {contact} and we will delete it within 14 days.",
             "Signing in again brings nothing back.",
           ],
         },
@@ -631,6 +655,7 @@ export const legalDocuments: Readonly<
           paragraphs: [
             "Your account and what you share stay until you or a steward removes them, or you delete the account.",
             "A contact detail written on a removal request is erased when the request closes. Logs at Vercel and Clerk last as long as each service sets.",
+            "A recording you send for speech recognition is deleted as described under “AI and your words”. A post on Noren's own social media accounts stays until Noren deletes it.",
           ],
         },
         {

@@ -153,7 +153,7 @@
       }
     }
   },
-  "voice": { "enabled": false, "maxSeconds": 120 },
+  "voice": { "enabled": true, "maxSeconds": 120 },
   "photos": {
     "enabled": true,
     "maxPerStory": 4,
@@ -168,13 +168,13 @@
     "refusingCaution": "no_photography"
   },
   "sharing": {
-    "norenAccount": false
+    "norenAccount": true
   },
   "legal": {
     "operatorName": "Noren, an open-source project run by Yee Fei",
     "launchPackComplete": false,
-    "accountsOpen": false,
-    "documentsVersion": "2026-11-06"
+    "accountsOpen": true,
+    "documentsVersion": "2026-11-07"
   },
   "neighbourhoods": [
     {

@@ -139,11 +139,11 @@ describe("region loader", () => {
 });
 
 describe("region policy", () => {
-  it("forces the restrictions while the launch pack is incomplete", () => {
+  it("keeps the other restrictions while the launch pack is incomplete, with accounts open", () => {
     const region = loadRegions().get("nagasaki")!;
     expect(region.legal.launchPackComplete).toBe(false);
     expect(deriveRegionPolicy(region)).toEqual({
-      inviteOnly: true,
+      inviteOnly: false,
       noindex: true,
       allowPilotVisibility: false,
       realBusinessesDraftOnly: true,
@@ -156,10 +156,10 @@ describe("region policy", () => {
     expect(region.legal.launchPackComplete).toBe(false);
   });
 
-  it("ships with accounts closed and the documents the owner approved", () => {
+  it("ships with accounts open and the documents the owner approved", () => {
     const { legal } = loadRegions().get("nagasaki")!;
-    expect(legal.accountsOpen).toBe(false);
-    expect(legal.documentsVersion).toBe("2026-11-06");
+    expect(legal.accountsOpen).toBe(true);
+    expect(legal.documentsVersion).toBe("2026-11-07");
   });
 
   it("opening accounts ends invite-only and changes no other launch rule", () => {

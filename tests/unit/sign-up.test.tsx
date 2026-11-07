@@ -64,6 +64,7 @@ const open = () =>
     r.legal.accountsOpen = true;
     r.legal.documentsVersion = "2030-01-31";
   });
+const closed = () => region((r) => (r.legal.accountsOpen = false));
 
 const layout = async () =>
   RootLayout({ children: null, params: Promise.resolve({ lang: state.locale }) } as never);
@@ -78,9 +79,13 @@ describe.each(["en", "ja"] as const)("sign-up in %s (T060)", (locale) => {
     state.locale = locale;
   });
 
-  describe("while accounts are closed, as shipped", () => {
-    it("the shipped region is closed", () => {
-      expect(config.legal.accountsOpen).toBe(false);
+  it("the shipped region is open", () => {
+    expect(config.legal.accountsOpen).toBe(true);
+  });
+
+  describe("while accounts are closed", () => {
+    beforeEach(() => {
+      state.region = closed();
     });
 
     it("the sign-up page answers 404", async () => {
@@ -120,9 +125,15 @@ describe.each(["en", "ja"] as const)("sign-up in %s (T060)", (locale) => {
   });
 
   it("documents open separately from accounts, because they must be readable first", async () => {
-    state.region = region((r) => (r.legal.documentsVersion = null));
+    state.region = region((r) => {
+      r.legal.accountsOpen = false;
+      r.legal.documentsVersion = null;
+    });
     expect(find(await layout(), "DocumentLinksProvider")).toMatchObject({ published: false });
-    state.region = region((r) => (r.legal.documentsVersion = "2030-01-31"));
+    state.region = region((r) => {
+      r.legal.accountsOpen = false;
+      r.legal.documentsVersion = "2030-01-31";
+    });
     expect(find(await layout(), "DocumentLinksProvider")).toMatchObject({ published: true });
     expect(find(await layout(), "ClerkProvider").signUpUrl).toBeUndefined();
     await expect(SignUpPage()).rejects.toThrow("NEXT_NOT_FOUND");

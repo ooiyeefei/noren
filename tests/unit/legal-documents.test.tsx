@@ -189,9 +189,9 @@ describe("the documents' text (T057)", () => {
       expect(country("ja", "Clerk")).toBe("米国");
     });
 
-    it("names only services it can tie to the code, apart from the sign-in choice", () => {
+    it("names only services it can tie to the code", () => {
       const named = section("en", "privacy", "services").services?.map((s) => s.name) ?? [];
-      const traced = new Set([...usedByTheCode.map(([name]) => name), "Google"]);
+      const traced = new Set(usedByTheCode.map(([name]) => name));
       expect(named.filter((name) => !traced.has(name))).toEqual([]);
     });
   });
