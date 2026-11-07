@@ -72,6 +72,12 @@ export const aboutMessages = defineMessages({
     nextLabel: "これから",
     nextBody:
       "ひとつの地区から順に。物語を増やし、このまちのやり方とその理由も加えていきます。",
+    noticedTitle: "気づいたこと",
+    noticedBody:
+      "大きな街の外にある小さなお店は、見つけにくいことがあります。日本語を読まない旅行者にとっては、なおさらです。お店の人は日々の営業で忙しく、外国語でネットに書くことまでは、なかなか手が回りません。",
+    ideaTitle: "次に取り組んでいるアイデア",
+    ideaBody:
+      "お店の人が Noren で自分のお店を登録すると、確認した話を英語と日本語で受け取り、Google のプロフィールや Instagram にそのまま投稿でき、店先に貼るポスターも用意できる。そんな仕組みを考えています。まだアイデアの段階で、公開はしていません。参加しているお店もまだありません。",
     madeIn:
       "Nagasaki Nomad プログラムの期間中に、長崎でつくりました。誰でも関われるオープンなプロジェクトです。",
     seeCode: "GitHub でコードを見る",
@@ -150,6 +156,12 @@ export const aboutMessages = defineMessages({
     nextLabel: "Next",
     nextBody:
       "One neighbourhood at a time: more stories, and local ways (how things work here, and why).",
+    noticedTitle: "Something we've noticed",
+    noticedBody:
+      "Small places outside the big cities can be hard to find, above all for visitors who don't read Japanese. Owners are busy running the place, and writing about it online in a second language rarely comes first.",
+    ideaTitle: "An idea we're working on next",
+    ideaBody:
+      "Owners could claim their place on Noren and get their own story back in English and Japanese, ready to post on their Google profile or Instagram, with a poster for the window. It's still an idea: it isn't live yet, and no shop has signed up.",
     madeIn:
       "Made in Nagasaki during the Nagasaki Nomad programme, as an open project anyone can build on.",
     seeCode: "Read the code on GitHub",

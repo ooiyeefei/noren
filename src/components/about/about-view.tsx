@@ -271,6 +271,17 @@ export function AboutView({ locale }: { locale: Locale }) {
               </li>
             ))}
           </ol>
+          <div className="grid gap-8 md:grid-cols-2">
+            {[
+              [m.noticedTitle, m.noticedBody],
+              [m.ideaTitle, m.ideaBody],
+            ].map(([title, body]) => (
+              <div key={title} className="min-w-0 space-y-2">
+                <h3 className="text-[20px] font-bold">{title}</h3>
+                <p className="text-[18px] leading-[1.8]">{body}</p>
+              </div>
+            ))}
+          </div>
           <p className="max-w-[40em] leading-[1.8] text-muted-foreground">{m.madeIn}</p>
           <div className="space-y-6 rounded-[14px] bg-kamenozoki p-6 sm:p-10">
             <p className="text-[26px] leading-snug font-bold text-balance sm:text-[32px]">
