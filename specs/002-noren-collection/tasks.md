@@ -201,8 +201,8 @@ Before writing any Convex code, read `convex/_generated/ai/guidelines.md`. All m
 
 - [X] T066 Run all checks, then ship Phase 9 switched off through a PR once the owner approves merging, and deploy
   - Merged in PR #84 at the owner's word on 6 Nov 2026 and deployed.
-- [ ] T067 **OWNER ACTION**: In the Clerk dashboard, in the order in quickstart.md: check the plan limit and protections, turn on legal consent with `/terms` and `/privacy`, block disposable addresses and subaddresses, keep self-deletion off, choose sign-up methods, and set access to Public. Done 7 Nov 2026 except self-deletion, which is still on in Clerk. The owner allowed "+" addresses and chose email only, with a password and an email code
-- [ ] T068 Deploy with `accountsOpen: true` and run the live UAT in quickstart.md stage 3 with a fictional test name, recording results in `specs/002-noren-collection/validation-log.md`. Deployed 7 Nov 2026 (PR #96 to #98) and recorded. Still waiting for a real email-code sign-up on the owner's phone
+- [X] T067 **OWNER ACTION**: In the Clerk dashboard, in the order in quickstart.md: check the plan limit and protections, turn on legal consent with `/terms` and `/privacy`, block disposable addresses and subaddresses, keep self-deletion off, choose sign-up methods, and set access to Public. Done 7 Nov 2026, with self-deletion off and read back as `delete_self: false`. The owner allowed "+" addresses and chose email only, with a password and an email code
+- [X] T068 Deploy with `accountsOpen: true` and run the live UAT in quickstart.md stage 3 with a fictional test name, recording results in `specs/002-noren-collection/validation-log.md`. Deployed 7 Nov 2026 (PR #96 to #98) and recorded. The owner's real sign-up with a "+" address worked the same day. What wasn't run on production is listed in the log
 
 **Checkpoint**: Real visitors can play.
 
