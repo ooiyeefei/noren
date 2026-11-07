@@ -320,7 +320,7 @@ export function AddStory({
                 </label>
               </>
             )}
-            {mode === "write" && <VoiceInput locale={locale} disabled={pending || !!actions.shownAs || draft.body.length >= BODY_LIMIT} onText={(text) => setDraft((current) => ({ ...current, body: [current.body, text].filter(Boolean).join("\n") }))} />}
+            {mode === "write" && <VoiceInput locale={locale} disabled={pending || draft.body.length >= BODY_LIMIT} onText={(text) => setDraft((current) => ({ ...current, body: [current.body, text].filter(Boolean).join("\n") }))} />}
             {mode === "write" && actions.photos && (
               <PhotoPicker
                 locale={locale}
