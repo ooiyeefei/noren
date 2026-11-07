@@ -57,7 +57,9 @@ for (const locale of ["en", "ja"] as const) {
     expect(tabs({}, locale)).toMatch(
       new RegExp(`<button[^>]*data-add-story[^>]*>${ui.addYourStory}`),
     );
-    const out = tabs({ signedIn: false }, locale);
+    // While accounts are invite-only a visitor has nowhere to go with it, so there is no bar.
+    expect(tabs({ signedIn: false }, locale)).not.toContain("data-add-story");
+    const out = tabs({ signedIn: false, signInHref: `/${locale}/sign-in` }, locale);
     expect(out).toContain(`href="/${locale}/sign-in"`);
     expect(out).toContain(ui.addYourStory);
     expect(tabs({ signedIn: undefined }, locale)).not.toContain("data-add-story");

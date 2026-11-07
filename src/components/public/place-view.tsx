@@ -328,6 +328,13 @@ export function PlaceView({
           initialWrite={initialWrite}
           signedIn={story?.signedIn}
           canWrite={!place.isMock}
+          signInHref={
+            region.accountsOpen
+              ? `${localePath(locale, "/sign-in")}?redirect_url=${encodeURIComponent(
+                  `${localePath(locale, `/places/${encodeURIComponent(place.slug)}`)}?tab=stories&write=1`,
+                )}`
+              : undefined
+          }
           visitDot={collection ? !collection.spot.visited : false}
           stories={storiesPanel}
           visit={visitPanel}

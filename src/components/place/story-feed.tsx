@@ -117,7 +117,10 @@ export function StoryFeed({
                         {moment.isMock && <DemoBadge locale={locale} />}
                         {removeControl({ kind: "written", id: moment._id }, moment.canRemove)}
                       </p>
-                      <p lang={moment.lang} className="text-[18px] leading-[1.8] whitespace-pre-wrap">
+                      <p
+                        lang={moment.lang}
+                        className="text-[18px] leading-[1.8] whitespace-pre-wrap"
+                      >
                         {moment.body}
                       </p>
                       {photoBaseUrl && !!moment.photos?.length && (

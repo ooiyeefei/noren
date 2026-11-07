@@ -100,7 +100,7 @@ describe("the book", () => {
     expect(book()).not.toContain("data-next-panel");
     const html = book({ signedIn: true, sets: [tile([0])], next: set([0]) });
     expect(html).toContain("Your next panel is 111 m away");
-    expect(html).toContain('href="/en/places/fictional-1"');
+    expect(html).toContain('href="/en/places/fictional-1?tab=visit"');
   });
 
   it("says so when no neighbourhood has a noren", () => {
@@ -144,7 +144,7 @@ describe("the set page", () => {
     expect(html).toContain("1 of 6");
     expect(html.match(/<img/g)).toHaveLength(1);
     for (const index of [0, 1, 2, 3, 4, 5])
-      expect(html).toContain(`href="/en/places/fictional-${index}"`);
+      expect(html).toContain(`href="/en/places/fictional-${index}?tab=visit"`);
     expect(html.match(new RegExp(collectionMessages.en.panelDyed, "g"))).toHaveLength(1);
   });
 
@@ -180,20 +180,20 @@ describe("the next panel", () => {
     const html = card(set([]));
     expect(html).toContain(collectionMessages.en.nextStart);
     expect(html).toContain("from the middle of Shinchi");
-    expect(html).toContain('href="/en/places/fictional-0"');
+    expect(html).toContain('href="/en/places/fictional-0?tab=visit"');
   });
 
   it("measures from the last place visited, naming the distance and its line", () => {
     const html = card(set([0]));
     expect(html).toContain("Your next panel is 111 m away");
-    expect(html).toContain('href="/en/places/fictional-1"');
+    expect(html).toContain('href="/en/places/fictional-1?tab=visit"');
     expect(html).toContain("Try the toast.");
     expect(html).toContain("Stitched by Noren&#x27;s AI from 3 posts.");
   });
 
   it("uses the place just checked in at when told to", () => {
     expect(card(set([0, 5]), set([]).panels[5]!.places[0]!.pin!)).toContain(
-      'href="/en/places/fictional-4"',
+      'href="/en/places/fictional-4?tab=visit"',
     );
   });
 
@@ -212,9 +212,9 @@ describe("the next panel", () => {
       panel.index === 1 ? { ...panel, places: [place(1), place(7)] } : panel,
     );
     const html = card({ ...value, panels });
-    expect(html).toContain('href="/en/places/fictional-1"');
+    expect(html).toContain('href="/en/places/fictional-1?tab=visit"');
     expect(html).toContain("data-next-panel-others");
-    expect(html).toContain('href="/en/places/fictional-7"');
+    expect(html).toContain('href="/en/places/fictional-7?tab=visit"');
     expect(card(value)).not.toContain("data-next-panel-others");
   });
 

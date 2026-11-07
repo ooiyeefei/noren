@@ -81,7 +81,7 @@ export function SetView({
                         key={place.placeId}
                         lang={heading.lang}
                         className="block min-h-11 py-2 text-ai underline [overflow-wrap:anywhere]"
-                        href={localePath(locale, `/places/${encodeURIComponent(place.slug)}`)}
+                        href={`${localePath(locale, `/places/${encodeURIComponent(place.slug)}`)}?tab=visit`}
                       >
                         {heading.text}
                       </a>

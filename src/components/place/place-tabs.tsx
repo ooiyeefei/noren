@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { AddStory, type AddStoryProps } from "@/components/place/add-story";
-import { localePath, messagesFor, type Locale } from "@/lib/i18n";
+import { messagesFor, type Locale } from "@/lib/i18n";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { PLACE_TABS, nextPlaceTab, placeTabSearch, type PlaceTab } from "@/lib/place/tabs";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,7 @@ export function PlaceTabs({
   initialWrite,
   signedIn,
   canWrite,
+  signInHref,
   visitDot,
   stories,
   visit,
@@ -64,6 +65,8 @@ export function PlaceTabs({
   signedIn: boolean | undefined;
   /** False where the page takes no stories (the fictional demo place). */
   canWrite: boolean;
+  /** Where a signed-out person goes to write; unset while they couldn't get an account anyway. */
+  signInHref?: string;
   /** Something on Visit the person has not done yet. */
   visitDot: boolean;
   stories: ReactNode;
@@ -197,7 +200,7 @@ export function PlaceTabs({
         </div>
       ))}
       {/* Phones only: the one thing most people came to do, always in reach. */}
-      {canWrite && !formOpen && signedIn !== undefined && (
+      {canWrite && !formOpen && (signedIn || (signedIn === false && signInHref)) && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),12px)] sm:hidden">
           {signedIn ? (
             <button
@@ -211,7 +214,7 @@ export function PlaceTabs({
           ) : (
             <a
               data-add-story=""
-              href={localePath(locale, "/sign-in")}
+              href={signInHref}
               className="pointer-events-auto inline-flex min-h-12 w-full max-w-[720px] items-center justify-center rounded-[10px] bg-kon px-5 font-bold text-white shadow-float focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ai"
             >
               {m.addYourStory}

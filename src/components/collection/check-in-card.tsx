@@ -208,7 +208,7 @@ export function CheckInCard({
                   })
                 : null;
   const back = `?redirect_url=${encodeURIComponent(
-    localePath(locale, `/places/${encodeURIComponent(slug)}`),
+    `${localePath(locale, `/places/${encodeURIComponent(slug)}`)}?tab=visit`,
   )}`;
   const signInHref = `${localePath(locale, "/sign-in")}${back}`;
   return (
