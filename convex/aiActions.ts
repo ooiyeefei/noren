@@ -1,5 +1,6 @@
 "use node";
 
+import { readWav } from "../src/lib/audio/wav";
 import { createGateway } from "ai";
 import { v } from "convex/values";
 import { createClaimExtractor, createLanguageModel } from "../src/lib/ai/claim-extractor";
@@ -15,6 +16,60 @@ import type { Id } from "./_generated/dataModel";
 import { action, internalAction } from "./_generated/server";
 import { appError } from "./lib/errors";
 import { regionConfig } from "./lib/region";
+
+/** The same provider selection for interviews and ephemeral member recordings. */
+export function transcriptionProvider(
+  config: TranscriptionConfig,
+  context?: { vocabularyHint: string; durationSeconds?: number },
+) {
+  if (config.provider === "openai-compatible")
+    return createCompatibleTranscriber({ ...config, ...context });
+  if (config.provider === "meta")
+    return createMetaTranscriber({ ...config, vocabularyHint: context?.vocabularyHint });
+  return createTranscriber({
+    model: createGateway({ apiKey: config.apiKey }).transcription(config.modelId),
+    modelVersion: config.modelId,
+  });
+}
+
+export const transcribeStoryAudio = internalAction({
+  args: {
+    storageId: v.id("_storage"),
+    language: v.union(v.literal("en"), v.literal("ja")),
+    maxSeconds: v.number(),
+  },
+  returns: v.string(),
+  handler: async (ctx, { storageId, language, maxSeconds }) => {
+    const blob = await ctx.storage.get(storageId);
+    if (!blob || blob.size > 44 + 32000 * maxSeconds)
+      throw appError("invalid_input", "recording is missing or too large");
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const wav = readWav(bytes);
+    if (
+      !wav ||
+      wav.format !== 1 ||
+      wav.channels !== 1 ||
+      wav.sampleRate !== 16000 ||
+      wav.bitsPerSample !== 16 ||
+      !wav.data.length ||
+      wav.data.length / 32000 > maxSeconds
+    )
+      throw appError("invalid_input", "recording must be a short speech WAV");
+    const config = aiConfig("transcribe", process.env);
+    if (!config.ok) throw appError("conflict", "speech input is unavailable; type your story");
+    try {
+      const result = await transcriptionProvider(config.config).transcribe(bytes, { language });
+      const text = result.text.trim();
+      if (!text || text.length > 1000) throw new Error("TranscriptLength");
+      return text;
+    } catch (error) {
+      console.error(
+        `story transcription failed (${error instanceof Error ? error.name || "Error" : "NonError"})`,
+      );
+      throw appError("conflict", "speech could not be transcribed; try again or type your story");
+    }
+  },
+});
 
 export const transcribeInterview = internalAction({
   args: { interviewId: v.id("interview"), storageId: v.id("_storage"), language: v.string() },
@@ -38,14 +93,7 @@ export const transcribeInterview = internalAction({
       makeTranscriber: (config: TranscriptionConfig) => {
         modelVersion =
           config.provider === "gateway" ? config.modelId : `${config.provider}:${config.modelId}`;
-        if (config.provider === "openai-compatible")
-          return createCompatibleTranscriber({ ...config, ...context });
-        if (config.provider === "meta")
-          return createMetaTranscriber({ ...config, vocabularyHint: context?.vocabularyHint });
-        return createTranscriber({
-          model: createGateway({ apiKey: config.apiKey }).transcription(config.modelId),
-          modelVersion: config.modelId,
-        });
+        return transcriptionProvider(config, context);
       },
       saveMachineTranscript: (args) =>
         ctx.runMutation(internal.interviews.saveMachineTranscript, {

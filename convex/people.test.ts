@@ -521,6 +521,7 @@ describe("setDisplayName", () => {
  */
 const DELETION_DECISIONS = {
   "personCollection.personId": "deleted",
+  "voiceUpload.personId": "deleted",
   "story.authorPersonId": "deleted",
   "storyPhoto.uploaderPersonId": "deleted",
   "placeCheck.personId": "deleted",

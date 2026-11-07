@@ -1,5 +1,6 @@
 "use client";
 
+import { VoiceInput } from "@/components/voice/voice-input";
 import { useId, useRef, useState } from "react";
 import { useDraft, usePhotoDrafts } from "@/components/drafts/drafts";
 import { ErrorMessage } from "@/components/layout/error-message";
@@ -319,6 +320,7 @@ export function AddStory({
                 </label>
               </>
             )}
+            {mode === "write" && <VoiceInput locale={locale} disabled={pending || !!actions.shownAs || draft.body.length >= BODY_LIMIT} onText={(text) => setDraft((current) => ({ ...current, body: [current.body, text].filter(Boolean).join("\n") }))} />}
             {mode === "write" && actions.photos && (
               <PhotoPicker
                 locale={locale}
