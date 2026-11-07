@@ -78,12 +78,20 @@ describe("the welcome film", () => {
     expect(html).toContain(`aria-label="${shellMessages.en.filmButtonLabel}"`);
   });
 
-  it("speaks the page's language and starts Japanese captions on a Japanese page", () => {
+  it("plays the Japanese-voice film on a Japanese page, with no captions forced on", () => {
     state.pathname = "/ja/map";
     const html = render(<FilmOnboarding locale="ja" />);
     expect(html).toContain(shellMessages.ja.filmTitle);
     expect(html).toContain(`aria-label="${shellMessages.ja.filmClose}"`);
-    expect(html).toMatch(/<track[^>]*default=""[^>]*srcLang="ja"/);
+    expect(html).toContain('src="/film/noren-intro-ja.mp4"');
+    expect(html).toContain('src="/film/noren-intro-ja.ja.vtt"');
+    expect(html).not.toMatch(/<track[^>]*\bdefault\b/);
+  });
+
+  it("keeps the English-voice film on an English page", () => {
+    const html = render(<FilmOnboarding locale="en" />);
+    expect(html).toContain('src="/film/noren-intro.mp4"');
+    expect(html).not.toContain("noren-intro-ja");
   });
 
   it.each([

@@ -2,13 +2,19 @@ import { messagesFor, type Locale } from "@/lib/i18n";
 import { welcomeMessages } from "@/lib/i18n/messages/welcome";
 import { cn } from "@/lib/utils";
 
-const FILM = "/film/noren-intro.mp4";
 const POSTER = "/film/noren-intro.jpg";
 
 /**
- * The intro film. It loads nothing until someone presses play. Its voice is English, so a Japanese
- * page starts with Japanese captions on.
+ * One cut of the film per language. Each has its own captions, timed to its own voice, so they
+ * can't be swapped between cuts. Both voices are in their page's language, so no captions start
+ * on; either language can still be turned on from the player.
  */
+const FILMS: Record<Locale, string> = {
+  en: "/film/noren-intro",
+  ja: "/film/noren-intro-ja",
+};
+
+/** The intro film. It loads nothing until someone presses play. */
 export function FilmPlayer({
   locale,
   className,
@@ -17,6 +23,7 @@ export function FilmPlayer({
   className?: string;
 }): React.JSX.Element {
   const m = messagesFor(welcomeMessages, locale);
+  const film = FILMS[locale];
   return (
     <video
       aria-label={m.filmLabel}
@@ -26,16 +33,10 @@ export function FilmPlayer({
       poster={POSTER}
       preload="none"
     >
-      <source src={FILM} type="video/mp4" />
-      <track
-        default={locale === "ja"}
-        kind="subtitles"
-        label={m.captionsJa}
-        src="/film/noren-intro.ja.vtt"
-        srcLang="ja"
-      />
-      <track kind="subtitles" label={m.captionsEn} src="/film/noren-intro.en.vtt" srcLang="en" />
-      <a href={FILM}>{m.filmFallback}</a>
+      <source src={`${film}.mp4`} type="video/mp4" />
+      <track kind="subtitles" label={m.captionsJa} src={`${film}.ja.vtt`} srcLang="ja" />
+      <track kind="subtitles" label={m.captionsEn} src={`${film}.en.vtt`} srcLang="en" />
+      <a href={`${film}.mp4`}>{m.filmFallback}</a>
     </video>
   );
 }

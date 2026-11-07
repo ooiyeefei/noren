@@ -31,19 +31,26 @@ for (const locale of ["ja", "en"] as const) {
       if (key !== "metaTitle" && !OPEN_ONLY.includes(key)) expect(html, key).toContain(m[key]);
   });
 
-  it(`loads the film only when someone presses play, with captions in both languages (${locale})`, () => {
+  // The Japanese page has its own cut with a Japanese voice, and captions timed to that voice.
+  const film = locale === "ja" ? "/film/noren-intro-ja" : "/film/noren-intro";
+  // Both cuts share one poster, so look for the other cut's film file itself.
+  const otherFilm = locale === "ja" ? "/film/noren-intro.mp4" : "/film/noren-intro-ja";
+
+  it(`loads its own language's film only when someone presses play, with captions in both languages (${locale})`, () => {
     expect(html.match(/<video\b/g)).toHaveLength(1);
     expect(html).toContain('preload="none"');
     expect(html).toContain('poster="/film/noren-intro.jpg"');
-    expect(html).toContain('src="/film/noren-intro.mp4"');
+    expect(html).toContain(`src="${film}.mp4"`);
+    expect(html).toContain(`href="${film}.mp4"`);
     expect(html).toContain(`aria-label="${m.filmLabel}"`);
     expect(html).not.toMatch(/\bautoplay\b/i);
-    expect(html).toContain('src="/film/noren-intro.en.vtt"');
-    expect(html).toContain('src="/film/noren-intro.ja.vtt"');
+    expect(html).toContain(`src="${film}.en.vtt"`);
+    expect(html).toContain(`src="${film}.ja.vtt"`);
+    expect(html).not.toContain(otherFilm);
   });
 
-  it(`turns Japanese captions on for a Japanese page only, because the voice is English (${locale})`, () => {
-    expect(html.includes("default")).toBe(locale === "ja");
+  it(`starts with no captions on, because the voice speaks the page's language (${locale})`, () => {
+    expect(html).not.toMatch(/<track[^>]*\bdefault\b/);
   });
 
   describe(`what it says about adding (${locale})`, () => {
