@@ -1,0 +1,51 @@
+import { defineMessages } from "../index";
+
+// The trail on the stamp page. Japanese copy awaits native-speaker review (T098).
+export const trailMessages = defineMessages({
+  ja: {
+    viewLabel: "表示",
+    book: "スタンプ帳",
+    map: "地図",
+    intro: "スタンプを押した場所を、行った順につないだ地図です。見られるのはあなただけです。",
+    mapLabel: "あなたの足あとの地図",
+    empty:
+      "足あとはまだありません。地図で場所を見つけて、行ってみたら「今もあります」を押してください。",
+    goToMap: "地図で場所を探す",
+    tripsLabel: "旅",
+    allTrips: "すべての旅",
+    sheetHint: "印を選ぶと、そこでのできごとが見られます。",
+    sheetLabel: "{name}でのできごと",
+    close: "閉じる",
+    openPlace: "場所のページを開く",
+    stampedOn: "{date}にスタンプ",
+    wroteStory: "話を書きました",
+    sharedPost: "投稿を分かち合いました",
+    openPost: "投稿を開く",
+    checkedIn: "チェックインしました。{set}ののれんの{panel}枚目です。",
+    stillHere: "「今もあります」を押しました。",
+    mapFailed: "地図を読み込めませんでした。スタンプ帳には、すべてのスタンプがあります。",
+  },
+  en: {
+    viewLabel: "View",
+    book: "Book",
+    map: "Map",
+    intro: "The places you have stamped, joined in the order you went. Only you can see this map.",
+    mapLabel: "Your footprints on the map",
+    empty:
+      "You have no footprints yet. Find a place on the map, and when you have been there, press Still here.",
+    goToMap: "Find a place on the map",
+    tripsLabel: "Trips",
+    allTrips: "All trips",
+    sheetHint: "Select a seal to see what you did there.",
+    sheetLabel: "What you did at {name}",
+    close: "Close",
+    openPlace: "Open the place page",
+    stampedOn: "Stamped on {date}",
+    wroteStory: "You wrote a story",
+    sharedPost: "You shared a post",
+    openPost: "Open the post",
+    checkedIn: "You checked in. Panel {panel} of the {set} noren.",
+    stillHere: "You pressed Still here.",
+    mapFailed: "The map could not load. Your book still has every stamp.",
+  },
+});
