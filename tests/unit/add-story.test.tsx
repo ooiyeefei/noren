@@ -22,6 +22,8 @@ import { PlaceView } from "@/components/public/place-view";
 import { format } from "@/lib/i18n";
 import type { LinkRead } from "@/lib/link-read/types";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
+import { ConsentTick } from "@/components/share/consent-tick";
+import { shareMessages } from "@/lib/i18n/messages/share";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { shellMessages } from "@/lib/i18n/messages/shell";
@@ -334,6 +336,7 @@ function harness<T>(view: () => T) {
       byType("input")
         .filter((item) => item.props.type !== "checkbox")
         .map((item) => item.props.value),
+    component: (type: unknown) => all().filter((item) => item.type === type),
     checkbox: () => byType("input").find((item) => item.props.type === "checkbox"),
     tick: (checked: boolean) =>
       (
@@ -1033,5 +1036,54 @@ describe("removing a story", () => {
     expect(remove).toHaveBeenCalledWith({ kind: "post", id: "linked" });
     expect(view.html()).toContain(ui.removeQuestion);
     expect(view.html()).not.toContain(ui.removed);
+  });
+});
+
+describe("the tick that lets Noren share a story on its own accounts", () => {
+  const m = addStoryMessages.en;
+  const tickText = shareMessages.en.consentTick;
+  const mountWith = (shareToNoren: boolean, write = vi.fn(async () => null)) => ({
+    write,
+    form: harness(() =>
+      AddStory({
+        locale: "en",
+        region: { ...region, shareToNoren },
+        actions: { signedIn: true, add: async () => null, write },
+      }),
+    ),
+  });
+
+  it("is hidden while the region does not offer it", () => {
+    const { form } = mountWith(false);
+    form.click(m.write);
+    expect(form.html()).not.toContain(tickText);
+    expect(form.component(ConsentTick)).toHaveLength(0);
+  });
+
+  it("is off by default, and a written story carries no consent until it is ticked", async () => {
+    const { form, write } = mountWith(true);
+    form.click(m.write);
+    expect(form.html()).toContain(tickText);
+    expect(form.component(ConsentTick)[0]?.props.checked).toBe(false);
+    form.type("textarea", 0, "A fictional story about a bridge.");
+    form.submit();
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    expect(write).toHaveBeenLastCalledWith({ body: "A fictional story about a bridge.", lang: "en" });
+  });
+
+  it("sends the consent when ticked, and not for a linked post", async () => {
+    const { form, write } = mountWith(true);
+    form.click(m.write);
+    (form.component(ConsentTick)[0]!.props.onChange as (on: boolean) => void)(true);
+    form.type("textarea", 0, "A fictional story about a bridge.");
+    form.submit();
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    expect(write).toHaveBeenLastCalledWith({
+      body: "A fictional story about a bridge.",
+      lang: "en",
+      shareConsent: true,
+    });
+    form.click(m.link);
+    expect(form.html()).not.toContain(tickText);
   });
 });

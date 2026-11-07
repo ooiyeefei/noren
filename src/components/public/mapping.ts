@@ -33,6 +33,8 @@ export type PublicRegionProps = {
   checkIn: Pick<RegionConfig["collection"], "checkInMetres" | "accuracyAllowanceMetres">;
   /** Anyone old enough may make an account, so a signed-out prompt leads to sign-up. */
   accountsOpen: boolean;
+  /** The region offers the tick that lets Noren share a story on its own accounts. */
+  shareToNoren: boolean;
   /** Set only on the place page, while the region has photos on and every setting is in place. */
   photos?: PublicPhotoProps;
 };
@@ -88,6 +90,7 @@ export type WrittenStoryLike = {
   addedAt: number;
   isMock: boolean;
   canRemove: boolean;
+  addedByMe?: boolean;
   photos?: readonly StoryPhotoLike[];
 };
 /** One of the newest stories in the region, for the home page (FR-033). */
@@ -142,6 +145,7 @@ export function publicRegionProps(region: RegionConfig, locale: Locale): PublicR
       accuracyAllowanceMetres: region.collection.accuracyAllowanceMetres,
     },
     accountsOpen: region.legal.accountsOpen,
+    shareToNoren: region.sharing.norenAccount,
   };
 }
 

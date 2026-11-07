@@ -165,6 +165,9 @@
     "cacheSeconds": 3600,
     "refusingCaution": "no_photography"
   },
+  "sharing": {
+    "norenAccount": false
+  },
   "legal": {
     "operatorName": "Noren, an open-source project run by Yee Fei",
     "launchPackComplete": false,

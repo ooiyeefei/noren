@@ -11,13 +11,21 @@ export type StoryArgs = {
   title?: string;
   authorHandle?: string;
 };
-export type WrittenStoryArgs = { body: string; lang: string; photoIds?: string[] };
+export type WrittenStoryArgs = {
+  body: string;
+  lang: string;
+  photoIds?: string[];
+  /** The writer's tick that Noren may feature the story on its own accounts. */
+  shareConsent?: boolean;
+};
 export type StoryRegion = {
   sourceAdapters: readonly SourceAdapterId[];
   locales: readonly string[];
   defaultLocale: string;
   scriptOrigins: readonly string[];
   frameOrigins: readonly string[];
+  /** The region offers the tick that lets Noren share a story on its own accounts. */
+  shareToNoren?: boolean;
 };
 
 export const NOTE_LIMIT = 1000;

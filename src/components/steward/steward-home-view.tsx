@@ -108,6 +108,8 @@ export type StewardHomeProps = ActionState & {
   onDeclineWaiting?: (id: string) => void;
   /** New members' photos, while photos are on. */
   waitingPhotos?: ReactNode;
+  /** Stories whose writers said Noren may share them. */
+  shareQueue?: ReactNode;
 };
 export function StewardHomeView(props: StewardHomeProps) {
   const { locale, region, rows, drafts, onDraft, onKind, onVisibility, pending, waitingPhotos } =
@@ -134,6 +136,7 @@ export function StewardHomeView(props: StewardHomeProps) {
           />
         )}
         {waitingPhotos}
+        {props.shareQueue}
         <section className="space-y-4">
           <h2 className="min-w-0 text-[22px] font-bold break-words">{m.places}</h2>
           <div className="max-w-prose space-y-2 rounded-[10px] bg-kamenozoki p-4">

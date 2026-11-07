@@ -3,6 +3,8 @@
 import { useId, useRef, useState } from "react";
 import { useDraft, usePhotoDrafts } from "@/components/drafts/drafts";
 import { ErrorMessage } from "@/components/layout/error-message";
+import { ConsentTick } from "@/components/share/consent-tick";
+import { ShareStoryConnected } from "@/components/share/share-story";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
 import { cn } from "@/lib/utils";
@@ -77,6 +79,9 @@ export function AddStory({
   const [problem, setProblem] = useState<StoryProblem>();
   const [pending, setPending] = useState(false);
   const [added, setAdded] = useState(false);
+  const [sharedId, setSharedId] = useState<string | null>(null);
+  // Not kept through a reload: a tick is made with the form in front of the writer.
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [photos, setPhotos] = useState<PhotoDraft>(NO_PHOTOS);
   const keptPhotos = usePhotoDrafts(draftName);
@@ -107,7 +112,11 @@ export function AddStory({
       const result = toWrittenArgs(draft, region);
       if (!result.ok) return result;
       const { photoIds } = photos;
-      const args = photoIds.length ? { ...result.args, photoIds } : result.args;
+      const args = {
+        ...result.args,
+        ...(photoIds.length ? { photoIds } : {}),
+        ...(consent && region.shareToNoren ? { shareConsent: true } : {}),
+      };
       return { ok: true as const, run: () => send.write(args) };
     }
     const result = toStoryArgs(draft, region);
@@ -122,12 +131,14 @@ export function AddStory({
     setPending(true);
     setError(null);
     try {
-      await prepared.run();
+      const result = await prepared.run();
       setDraft(EMPTY);
       setMode(null);
       // The shared story holds them now; kept, they would come back in the next one.
       void keptPhotos?.store.save(keptPhotos.key, []);
       setAdded(true);
+      setConsent(false);
+      setSharedId(current === "write" && typeof result === "string" ? result : null);
     } catch (caught) {
       setError(caught);
     } finally {
@@ -140,6 +151,7 @@ export function AddStory({
     setProblem(undefined);
     setError(null);
     setAdded(false);
+    setSharedId(null);
   };
   const described = (field: StoryProblem, hint?: string) => ({
     "aria-invalid": problem === field || undefined,
@@ -318,6 +330,14 @@ export function AddStory({
             {actions.shownAs && (
               <ShownAs locale={locale} hintId={`${id}-name`} actions={actions.shownAs} />
             )}
+            {mode === "write" && region.shareToNoren && (
+              <ConsentTick
+                locale={locale}
+                hintId={`${id}-consent-hint`}
+                checked={consent}
+                onChange={setConsent}
+              />
+            )}
             {/* Sharing is the agreement to show it; saying so beside the button is the consent. */}
             <p id={`${id}-public`} className="text-[15px]">
               {m.shownPublicly}
@@ -351,6 +371,7 @@ export function AddStory({
       <div role="status" aria-live="polite">
         {added ? m.added : null}
       </div>
+      {added && sharedId && <ShareStoryConnected locale={locale} storyId={sharedId} />}
       {error !== null && <ErrorMessage error={error} locale={locale} />}
     </div>
   );
