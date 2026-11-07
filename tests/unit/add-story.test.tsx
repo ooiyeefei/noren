@@ -64,7 +64,9 @@ vi.mock("react", async (importOriginal) => {
   };
 });
 // Speech input needs a Convex client, and has its own tests in voice-input.test.tsx.
-vi.mock("@/components/voice/voice-input", () => ({ VoiceInput: () => null }));
+vi.mock("@/components/voice/voice-input", () => ({
+  VoiceInput: ({ disabled }: { disabled?: boolean }) => (disabled ? "mic off" : "mic on"),
+}));
 // Here a kept draft is plain state, on the harness above; keeping it is tested in drafts-storage.
 vi.mock("@/components/drafts/drafts", async () => {
   const { useState } = await import("react");
@@ -484,6 +486,12 @@ describe("the name before the first share (FR-131)", () => {
       expect(html.indexOf(m.useThisName)).toBeLessThan(html.indexOf(">Share<"));
     },
   );
+
+  it("leaves the mic working while the name waits, since it only fills the box", () => {
+    const form = mount(member({ shownAs: shownAs() }));
+    form.click(m.write);
+    expect(form.html()).toContain("mic on");
+  });
 
   it("shows nothing and holds nothing once the name is confirmed", () => {
     const form = mount(member());

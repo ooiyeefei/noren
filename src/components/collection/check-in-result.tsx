@@ -94,7 +94,7 @@ function LineForm({
         className="block w-full rounded-[10px] border border-input p-3 text-[16px]"
         onChange={(event) => setBody(event.target.value)}
       />
-      <VoiceInput locale={locale} disabled={pending || !!shownAs || body.length >= BODY_LIMIT} onText={(text) => setBody((current) => [current, text].filter(Boolean).join("\n"))} />
+      <VoiceInput locale={locale} disabled={pending || body.length >= BODY_LIMIT} onText={(text) => setBody((current) => [current, text].filter(Boolean).join("\n"))} />
       {shownAs && <ShownAs locale={locale} hintId={`${id}-name`} actions={shownAs} />}
       {/* Sharing is the agreement to show it; saying so beside the button is the consent. */}
       <p id={`${id}-public`} className="text-[13px] text-muted-foreground">

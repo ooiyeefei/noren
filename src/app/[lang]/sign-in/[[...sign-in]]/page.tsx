@@ -9,7 +9,7 @@ export default async function SignInPage() {
   const locale = await lang();
   const signUpUrl = activeRegionConfig().legal.accountsOpen ? `/${locale}/sign-up` : undefined;
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
+    <main id="main" tabIndex={-1} className="flex flex-1 items-center justify-center p-6">
       <Suspense>
         <SignIn
           path={`/${locale}/sign-in`}
