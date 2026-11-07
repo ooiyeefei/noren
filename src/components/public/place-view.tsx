@@ -150,7 +150,10 @@ export function PlaceView({
       {placeStory && <PlaceStory locale={locale} story={placeStory} />}
       {/* The fictional demo place takes no stories about it, so it shows the section only for its own. */}
       {(feed === undefined || feed.length > 0 || !place.isMock) && (
-        <section className="space-y-6 border-t border-line pt-6" aria-labelledby="stories-heading">
+        <section
+          className="space-y-6 border-t border-line pt-6 first:border-t-0 first:pt-0"
+          aria-labelledby="stories-heading"
+        >
           <h2 id="stories-heading" className="font-sans text-[22px] font-bold">
             {ui.stories}
           </h2>
