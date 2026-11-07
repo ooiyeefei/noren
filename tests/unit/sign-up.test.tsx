@@ -179,6 +179,15 @@ describe("the tick in Clerk's form (T060)", () => {
     expect(Object.keys(en.signUp?.legalConsent ?? {})).toEqual(["checkbox"]);
   });
 
+  it("fills the sign-up strings Clerk's Japanese pack leaves in English", () => {
+    const ja = clerkLocalization("ja", 16);
+    expect(ja.formFieldInputPlaceholder__signUpPassword).toBe("パスワードを作成");
+    expect(ja.unstable__errors?.form_password_matches_identifier).toContain("パスワード");
+    expect(ja.unstable__errors?.too_many_unverified_identifications).toContain("確認待ち");
+    // Clerk's other error messages stay.
+    expect(ja.unstable__errors?.form_identifier_not_found).toBeTruthy();
+  });
+
   it("reaches the provider with the region's age", async () => {
     state.region = region((r) => (r.minimumAge = 19));
     const provider = find(await layout(), "ClerkProvider") as {

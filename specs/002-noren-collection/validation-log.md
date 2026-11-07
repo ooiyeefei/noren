@@ -61,3 +61,32 @@ At the owner's request, from their own notes, on their account:
 Live check signed out, phone and desktop: each story shows with its place name and author, the Japanese page shows the Bravo World name and story, map search finds Bravo World, no page errors. Signed out, `/en/creator` and `/en/stamps` redirect to sign-in in a browser, so the earlier note about "page not found" was wrong (curl sees a 404).
 
 Update the same day: the owner said they met the teacher, and learned about the dialect, at a welcome party at Bravo World. Both stories moved there in their words, and the copies on Shimabara City were hidden. Bravo World now carries three stories, and Shimabara City carries none.
+
+## Open sign-up on the live site, 7 Nov 2026 JST
+
+PR #96 turned on `accountsOpen`, `voice.enabled` and `sharing.norenAccount`, with documents version 2026-11-07. PR #97 and #98 fixed what this check found.
+
+Signed out, phone size, both languages:
+
+- The sign-in page links to sign-up. The sign-up page has email, password and the tick, which says 16 or over.
+- The tick's two links open the terms and the privacy notice in the visitor's language.
+- The privacy notice has the new words on speech, Noren's own accounts and the welcome film, and no longer offers Google. The terms cover Noren's own accounts.
+- The welcome page and a place card offer a free account, and neither says invite-only.
+
+On a temporary fictional account with a "+" address, in Chromium at phone size:
+
+- Opening a form to write leaves the film closed. The Noren tick shows, unticked. The mic waits for its own agreement.
+- A real recording went through a fake microphone, playing a line of the owner's own film narration. It came back as words in 5.3 s through Meta's service in production. No recording stayed in storage, and no story was made.
+- The words survived a reload as a draft. No page errors.
+- Noren's delete button removed the Clerk login, which then answered 404, and left the person row as "Former member" with a `deleted:` ID.
+
+**Found and fixed:** a new member's name is unconfirmed until they press "Use this name", and the mic was greyed out until then, with no reason given (PR #97). The server refused too, so a recording then failed (PR #98). FR-131 asks for the name before a share, and speech input shares nothing, so neither now asks. Sharing still does, and the daily recording limit still applies.
+
+**Not run on production:**
+
+- A real email-code sign-up, which needs an inbox I can't read, and the return to the same place after it. The owner will try one.
+- Adding a place and hitting a daily limit (step 3). Convex tests cover both.
+- The mic in real iPhone Safari.
+- Google isn't offered, so step 2 doesn't apply.
+
+Clerk's own delete button is still on (T067), though Noren doesn't link to it. Pressing it would remove the login and leave the person's name and stories on Noren.

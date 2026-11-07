@@ -7,7 +7,19 @@ import { legalMessages } from "./messages/legal-documents";
 type ClerkLocalization = NonNullable<ComponentProps<typeof ClerkProvider>["localization"]>;
 
 // Clerk's own UI strings; a language without an entry falls back to Clerk's English.
-const CLERK_LOCALIZATION: Partial<Record<Locale, ClerkLocalization>> = { ja: jaJP };
+// Clerk's Japanese pack leaves these three strings on the sign-up path in English.
+const JA: ClerkLocalization = {
+  ...jaJP,
+  formFieldInputPlaceholder__signUpPassword: "パスワードを作成",
+  unstable__errors: {
+    ...jaJP.unstable__errors,
+    form_password_matches_identifier:
+      "パスワードをメールアドレス、電話番号、ユーザー名と同じにすることはできません。",
+    too_many_unverified_identifications:
+      "確認待ちのメールアドレスや電話番号が多すぎます。不要なものを削除してから、もう一度お試しください。",
+  },
+};
+const CLERK_LOCALIZATION: Partial<Record<Locale, ClerkLocalization>> = { ja: JA };
 
 /**
  * Clerk's strings for a language, with one tick that also states the minimum age (research R9). Clerk
