@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { platformName } from "@/components/embeds/platform-name";
 import { StoryPhotos } from "@/components/place/story-photos";
 import { placeHeading, type NameLike } from "@/components/public/mapping";
 import { StampInk, stampName, type StampRegion } from "@/components/stamps/stamp";
@@ -275,7 +276,11 @@ export function TrailSheet({
                     {moment.title ?? m.openPost}
                   </a>
                 )}
-                <p className="text-[13px] text-muted-foreground">{moment.platform}</p>
+                {platformName(moment.platform) && (
+                  <p className="text-[13px] text-muted-foreground">
+                    {platformName(moment.platform)}
+                  </p>
+                )}
               </>
             )}
           </li>
