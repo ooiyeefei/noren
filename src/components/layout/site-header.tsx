@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { FilmOnboarding } from "@/components/film/film-onboarding";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
 import { AccountMenu } from "./account-menu";
@@ -48,6 +49,9 @@ export function SiteHeader({
             }
           >
             <LanguageSwitcher locale={locale} locales={locales} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <FilmOnboarding locale={locale} />
           </Suspense>
           <Suspense fallback={null}>
             <AccountMenu locale={locale} />

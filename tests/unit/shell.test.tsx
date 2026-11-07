@@ -38,7 +38,10 @@ vi.mock("radix-ui", async (original) => {
   };
 });
 
-vi.mock("next/navigation", () => ({ usePathname: () => navigation.pathname }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => navigation.pathname,
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isLoading: headerAccount.state.kind === "loading",
