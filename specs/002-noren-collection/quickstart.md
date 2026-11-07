@@ -77,9 +77,9 @@ Read every screen of `/[lang]/for-local-teams` in both languages (SC-106). Each 
 
 1. Check the plan's monthly user limit, and that the protections below are on this plan.
 2. Legal: turn on "Require express consent to legal documents", with `/terms` and `/privacy`.
-3. Protect or restrictions: block disposable addresses and email subaddresses, and keep the suspicious sign-up challenge on.
+3. Protect or restrictions: block disposable addresses, and keep the suspicious sign-up challenge on. The owner chose on 7 Nov 2026 to allow "+" addresses.
 4. Keep "Allow users to delete their accounts" off.
-5. Choose which sign-up methods to offer. Email code and Google are the suggestion for now. The privacy notice names Google, so drop that entry if Google isn't offered.
+5. Sign-up methods: email with a password and an email code, by the owner's decision on 7 Nov 2026. Phone and Google aren't offered, and the privacy notice no longer names Google.
 6. On the Access mode page, select Open and save. Clerk's API calls this value `public`, and T067 in tasks.md and R16 in research.md call it Public. The other modes are Invite-only (`restricted`), which is where Noren is today, and Waitlist (`waitlist`), which Noren doesn't use.
 
 Then deploy with `accountsOpen: true`.
@@ -97,7 +97,7 @@ The documents promise this for an account reported as under age, and for a creat
 Use a fictional test name and a test address.
 
 1. On a phone, while signed out, open a Shinchi place and press "Make a free account to keep your panels" on its card. Sign up by email. The tick must state 16 or over in both languages, its two links must open the terms and the privacy notice in the visitor's language, and the person must return to the same place.
-2. Do the same through Google, starting once from the sign-up form and once from the sign-in form. The tick must appear before the account finishes, and the story form must show the Google name for confirming before any share.
+2. Only if Google is offered later: do the same through Google, starting once from the sign-up form and once from the sign-in form. The tick must appear before the account finishes, and the story form must show the Google name for confirming before any share.
 3. Hit one daily limit and add one place. The place must stay off the public map, and show in the steward's waiting section.
 4. Delete the test account from `/account` and check SC-107. Signing in again must not bring anything back.
 
