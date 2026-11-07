@@ -4,6 +4,7 @@ import {
   StewardErrorBoundary,
   StewardHomeContainer,
 } from "@/components/steward/steward-home-container";
+import { ShareQueueContainer } from "@/components/share/steward-share-queue";
 import { WaitingPhotosContainer } from "@/components/steward/waiting-photos";
 import { getLocale } from "@/lib/i18n/server";
 import { publicPhotoProps } from "@/lib/photos/settings";
@@ -27,6 +28,7 @@ async function Content({ params }: { params: Promise<{ lang: string }> }) {
             params={params}
             locale={locale}
             region={region}
+            shareQueue={<ShareQueueContainer locale={locale} regionId={region.id} />}
             waitingPhotos={
               photos && (
                 <WaitingPhotosContainer locale={locale} region={region} baseUrl={photos.baseUrl} />

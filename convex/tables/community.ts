@@ -34,9 +34,14 @@ export const communityTables = {
     lang: v.string(),
     status: v.union(v.literal("live"), v.literal("hidden")),
     isMock: v.boolean(),
+    /** When the writer ticked that Noren may feature the story on its own accounts; absent when not, or withdrawn. */
+    shareConsentAt: v.optional(v.number()),
+    /** When a steward marked it as posted on Noren's accounts, by hand. */
+    sharePostedAt: v.optional(v.number()),
   })
     .index("by_placeId_and_status", ["placeId", "status"])
     .index("by_status", ["status"])
+    .index("by_status_and_shareConsentAt", ["status", "shareConsentAt"])
     .index("by_authorPersonId", ["authorPersonId"]),
 
   noteTranslation: defineTable({

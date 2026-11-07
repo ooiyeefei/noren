@@ -67,11 +67,13 @@ export function StewardHomeContainer({
   locale,
   region,
   waitingPhotos,
+  shareQueue,
 }: {
   params: Promise<{ lang: string }>;
   locale: Locale;
   region: RegionConfig;
   waitingPhotos?: ReactNode;
+  shareQueue?: ReactNode;
 }) {
   use(params);
   const places = useQuery(api.places.listAll, { regionId: region.id });
@@ -92,6 +94,7 @@ export function StewardHomeContainer({
       region={region}
       rows={placeRows(places, locale, region)}
       waitingPhotos={waitingPhotos}
+      shareQueue={shareQueue}
       drafts={drafts}
       {...state}
       waiting={waiting?.map((place) => ({

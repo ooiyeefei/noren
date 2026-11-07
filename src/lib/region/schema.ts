@@ -160,6 +160,11 @@ export const regionSchema = z
       /** A key from cautionVocabulary: the owner has said no photos. */
       refusingCaution: z.string().min(1),
     }),
+    /** Sharing a story beyond Noren (a picture of it, and Noren's own accounts). */
+    sharing: z.strictObject({
+      /** Off hides the written-story tick that lets Noren feature a story on its own accounts. */
+      norenAccount: z.boolean(),
+    }),
     legal: z.strictObject({
       /** Named legal operator shown on notices; null until decided (blocks real people's stories). */
       operatorName: z.string().min(1).nullable(),

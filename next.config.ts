@@ -8,7 +8,11 @@ const nextConfig: NextConfig = {
   // A global 404 for a root layout under a dynamic segment ([lang]); see src/app/global-not-found.tsx.
   experimental: { globalNotFound: true },
   // Region files are read from disk at start-up, so they must ship with every server bundle.
-  outputFileTracingIncludes: { "/*": ["./regions/**/*"] },
+  outputFileTracingIncludes: {
+    "/*": ["./regions/**/*"],
+    // The picture of a story draws its words in a Japanese font read from disk.
+    "/api/share/[storyId]": ["./src/lib/share/fonts/*.ttf"],
+  },
   // FR-021: every response, static files and error pages included, is hidden from search engines.
   // This is set here rather than in the proxy because the proxy does not run for static files.
   async headers() {

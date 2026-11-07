@@ -66,6 +66,7 @@ import type * as storyFinder from "../storyFinder.js";
 import type * as storyFinderActions from "../storyFinderActions.js";
 import type * as storyPhotoActions from "../storyPhotoActions.js";
 import type * as storyPhotos from "../storyPhotos.js";
+import type * as storyShare from "../storyShare.js";
 import type * as tables_collection from "../tables/collection.js";
 import type * as tables_community from "../tables/community.js";
 import type * as tables_interviews from "../tables/interviews.js";
@@ -141,6 +142,7 @@ declare const fullApi: ApiFromModules<{
   storyFinderActions: typeof storyFinderActions;
   storyPhotoActions: typeof storyPhotoActions;
   storyPhotos: typeof storyPhotos;
+  storyShare: typeof storyShare;
   "tables/collection": typeof tables_collection;
   "tables/community": typeof tables_community;
   "tables/interviews": typeof tables_interviews;

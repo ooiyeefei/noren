@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { DemoBadge } from "@/components/badges/demo-badge";
 import { EmbedView } from "@/components/embeds/embed-view";
 import { ErrorMessage } from "@/components/layout/error-message";
+import { ShareStoryConnected } from "@/components/share/share-story";
 import type { StoryFeedEntry } from "@/components/public/mapping";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
@@ -127,6 +128,9 @@ export function StoryFeed({
                           authorName={moment.authorName}
                           remove={actions?.removePhoto}
                         />
+                      )}
+                      {moment.addedByMe && actions && (
+                        <ShareStoryConnected locale={locale} storyId={moment._id} />
                       )}
                     </li>
                   ))}
