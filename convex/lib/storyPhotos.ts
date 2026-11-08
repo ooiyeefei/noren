@@ -102,23 +102,27 @@ export async function attachPhotos(
     place,
     storyId,
     photoIds,
+    alreadyOnStory = 0,
   }: {
     person: Doc<"person">;
     place: Doc<"place">;
     storyId: Id<"story">;
     photoIds: readonly Id<"storyPhoto">[];
+    /** Photos the story already has. New ones go after them, and all of them count towards the limit. */
+    alreadyOnStory?: number;
   },
 ): Promise<void> {
   if (photoIds.length === 0) return;
   const refusal = await uploadRefusal(ctx, person, place);
   if (refusal !== null) throw appError("forbidden", refusal);
   const region = regionConfig(place.regionId);
-  if (photoIds.length > region.photos.maxPerStory)
+  if (alreadyOnStory + photoIds.length > region.photos.maxPerStory)
     throw appError("invalid_input", `a story holds at most ${region.photos.maxPerStory} photos`);
   if (new Set(photoIds).size !== photoIds.length)
     throw appError("invalid_input", "the same photo was given twice");
   const status = isNewMember(person, region.id, Date.now()) ? "waiting" : "live";
-  for (const [position, photoId] of photoIds.entries()) {
+  for (const [index, photoId] of photoIds.entries()) {
+    const position = alreadyOnStory + index;
     const photo = await ctx.db.get("storyPhoto", photoId);
     if (
       photo === null ||

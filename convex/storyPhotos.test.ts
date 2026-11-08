@@ -415,6 +415,73 @@ describe("attaching to a story", () => {
   });
 });
 
+describe("adding photos to a story that is already up", () => {
+  const add = (b: Backend, storyId: Id<"story">, photoIds: Id<"storyPhoto">[]) =>
+    b.t.mutation(internal.storyPhotos.attachToStory, { storyId, photoIds });
+
+  it("puts the writer's photos after the ones it has, live, and records it", async () => {
+    const { b, placeId } = await world();
+    const first = await stored(b, "member", placeId);
+    const storyId = await story(b, "member", placeId, [first]);
+    const second = await stored(b, "member", placeId);
+    const third = await stored(b, "member", placeId);
+    await add(b, storyId, [second, third]);
+    expect(await photosOnPage(b, placeId)).toEqual([first, second, third]);
+    expect(await photoRow(b, third)).toMatchObject({ status: "live", storyId, position: 2 });
+    const audit = await b.run((ctx) => ctx.db.query("auditLog").collect());
+    expect(audit.filter((row) => row.action === "photo.attachToStory")).toHaveLength(1);
+  });
+
+  it("adds to a story that had none", async () => {
+    const { b, placeId } = await world();
+    const storyId = await story(b, "member", placeId);
+    const photoId = await stored(b, "member", placeId);
+    await add(b, storyId, [photoId]);
+    expect(await photoRow(b, photoId)).toMatchObject({ status: "live", storyId, position: 0 });
+  });
+
+  it("counts the photos already there towards the limit, and changes nothing when refused", async () => {
+    const { b, placeId } = await world();
+    const ids: Id<"storyPhoto">[] = [];
+    for (let i = 0; i < 3; i++) ids.push(await stored(b, "member", placeId));
+    const storyId = await story(b, "member", placeId, ids);
+    const extra = [await stored(b, "member", placeId), await stored(b, "member", placeId)];
+    expect(await errorCode(add(b, storyId, extra))).toBe("invalid_input");
+    expect((await photoRow(b, extra[0]!))!.status).toBe("unattached");
+    await add(b, storyId, extra.slice(0, 1));
+    expect(await photosOnPage(b, placeId)).toHaveLength(4);
+  });
+
+  it("refuses someone else's photo, or one meant for another place", async () => {
+    const { b, placeId, editor } = await world();
+    const storyId = await story(b, "member", placeId);
+    expect(await errorCode(add(b, storyId, [await stored(b, "other", placeId)]))).toBe(
+      "invalid_input",
+    );
+    const elsewhere = await addPlace(b, { createdBy: editor, visibility: "public" });
+    expect(await errorCode(add(b, storyId, [await stored(b, "member", elsewhere)]))).toBe(
+      "invalid_input",
+    );
+  });
+
+  it("a new member's added photos wait for a steward, as on a new story", async () => {
+    const { b, placeId } = await world();
+    const storyId = await story(b, "newcomer", placeId);
+    const photoId = await stored(b, "newcomer", placeId);
+    await add(b, storyId, [photoId]);
+    expect((await photoRow(b, photoId))!.status).toBe("waiting");
+  });
+
+  it("refuses a hidden story", async () => {
+    const { b, placeId } = await world();
+    const storyId = await story(b, "member", placeId);
+    await b.run((ctx) => ctx.db.patch("story", storyId, { status: "hidden" }));
+    expect(await errorCode(add(b, storyId, [await stored(b, "member", placeId)]))).toBe(
+      "not_found",
+    );
+  });
+});
+
 describe("a new member's photos wait", () => {
   async function waiting() {
     const w = await world();
