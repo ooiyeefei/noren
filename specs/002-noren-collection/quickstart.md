@@ -11,6 +11,8 @@ pnpm build
 
 ## Stage 1: collection with invited accounts
 
+Status, 8 Nov 2026: the collection is live with two sets, Shinchi and Shimabara Castle Town. Results are in [validation-log.md](./validation-log.md). The first passing check-ins on production were the owner's two in Shimabara Castle Town on 6 Nov. The Shinchi walk test, the Android run and SC-101 to SC-103 as numbers are still to do.
+
 ### Automated checks
 
 | Proves | Where | Expected |
@@ -36,6 +38,8 @@ Run the deployed end-to-end tests with `--workers=2`.
 
 ### Walk test in Shinchi (SC-101 to SC-104)
 
+Not run in Shinchi yet. See the status above.
+
 This needs a person on the ground with real phones, on iPhone Safari and an Android browser.
 
 1. Stand at or inside each of 10 places. At least 9 must pass on the first press.
@@ -49,9 +53,18 @@ If first-press success falls short, change `checkInMetres` or move the pin befor
 
 ## Stage 2: proposal
 
-Read every screen of `/[lang]/for-local-teams` in both languages (SC-106). Each needs the 見本 Mock label, sample names only, and the statement that nobody has agreed.
+Live since 8 Nov 2026, with no link to it from anywhere.
 
-## Stage 3: before sign-up opens
+| Proves | Where | Expected |
+|---|---|---|
+| FR-121, FR-122, SC-106 | `tests/unit/proposal.test.tsx` | The page and all four screens carry the 見本 Mock label in both languages. The statement that nobody has agreed and the line that shops see totals only are there. No name from `regions/nagasaki.json` or the Shinchi set appears in the page or its copy |
+| R18 | `tests/unit/proposal.test.tsx` | The page imports nothing from Convex or Clerk, leaves noindex to the layout, and no other file in `src` mentions its address |
+
+On the deployed site, read every screen of `/[lang]/for-local-teams` in both languages at 390 px and at desktop width (SC-106).
+
+## Stage 3: sign-up
+
+Status, 8 Nov 2026: sign-up has been open since 7 Nov 2026 (documents version 2026-11-07). The owner approved both documents without a lawyer's read, and no second person has checked the Japanese. The steps below were run in the order written. What was not run on production is listed in [validation-log.md](./validation-log.md).
 
 ### Automated checks
 
@@ -69,7 +82,7 @@ Read every screen of `/[lang]/for-local-teams` in both languages (SC-106). Each 
 
 ### Owner review
 
-1. Read the terms and the privacy notice in both languages, with a lawyer's check. The services named in the notice must match what the code uses on that day. Both pages answer 404 until step 3, so read them in `src/lib/i18n/messages/legal-documents.ts`, or on a local run with `documentsVersion` set in an edit you don't commit. Keep or drop the notice's "Photos you add" section at this point, because photos ship switched off.
+1. Read the terms and the privacy notice in both languages, with a lawyer's check. The services named in the notice must match what the code uses on that day. Both pages are live at `/terms` and `/privacy`. Read them again after any change to a service the code uses.
 2. Have a person review all new Japanese copy.
 3. Set `documentsVersion`.
 
@@ -82,7 +95,7 @@ Read every screen of `/[lang]/for-local-teams` in both languages (SC-106). Each 
 5. Sign-up methods: email with a password and an email code, by the owner's decision on 7 Nov 2026. Phone and Google aren't offered, and the privacy notice no longer names Google.
 6. On the Access mode page, select Open and save. Clerk's API calls this value `public`, and T067 in tasks.md and R16 in research.md call it Public. The other modes are Invite-only (`restricted`), which is where Noren is today, and Waitlist (`waitlist`), which Noren doesn't use.
 
-Then deploy with `accountsOpen: true`.
+Then deploy with `accountsOpen: true`. Done on 7 Nov 2026.
 
 ### Deleting an account for someone
 
@@ -94,12 +107,24 @@ The documents promise this for an account reported as under age, and for a creat
 
 ### Live UAT after opening
 
-Use a fictional test name and a test address.
+Use a fictional test name and a test address. Run on 7 Nov 2026, apart from the return to the same place after a real sign-up and steps 2 and 3 below.
 
 1. On a phone, while signed out, open a Shinchi place and press "Make a free account to keep your panels" on its card. Sign up by email. The tick must state 16 or over in both languages, its two links must open the terms and the privacy notice in the visitor's language, and the person must return to the same place.
 2. Only if Google is offered later: do the same through Google, starting once from the sign-up form and once from the sign-in form. The tick must appear before the account finishes, and the story form must show the Google name for confirming before any share.
 3. Hit one daily limit and add one place. The place must stay off the public map, and show in the steward's waiting section.
 4. Delete the test account from `/account` and check SC-107. Signing in again must not bring anything back.
+
+## Accessibility and phone width
+
+Run the signed-out axe suite against the deployed site with two workers:
+
+```sh
+E2E_BASE_URL=https://noren.yooi.me npx playwright test tests/e2e/a11y-public.spec.ts --workers=2
+```
+
+It covers the welcome, about, proposal, collection, terms, privacy and sign-up pages in both languages, on a phone and a desktop. It fails on serious or critical violations, sideways scroll on a phone, a control with no name, a page without exactly one heading, and a focus with no visible outline. The collection pages show "no noren here" on a site where a set isn't live, and are still checked.
+
+Then look at every screen at 390 px. The signed-in screens need a temporary fictional member, and never press "I'm here" on production.
 
 ## Rollback
 

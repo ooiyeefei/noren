@@ -1,8 +1,26 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { publicPages } from "./helpers";
+import {
+  collectionPages,
+  documentPages,
+  introPages,
+  proposalPages,
+  publicPages,
+  signUpPages,
+} from "./helpers";
 
-for (const path of publicPages) {
+const pages: readonly string[] = [
+  ...publicPages,
+  ...introPages,
+  ...proposalPages,
+  ...collectionPages,
+  ...documentPages,
+  ...signUpPages,
+];
+// Clerk owns the sign-in and sign-up widgets; audit the surrounding app shell here.
+const clerkPage = (path: string) => path.endsWith("/sign-in") || path.endsWith("/sign-up");
+
+for (const path of pages) {
   test.describe(path, () => {
     test.beforeEach(async ({ page }) => {
       await page.goto(path);
@@ -20,13 +38,24 @@ for (const path of publicPages) {
         await expect(
           page.getByRole("textbox", { name: "Request code", exact: true }),
         ).toBeVisible();
-      if (path.endsWith("/sign-in")) await expect(page.locator(".cl-rootBox")).toBeVisible();
+      if (clerkPage(path)) await expect(page.locator(".cl-rootBox")).toBeVisible();
+      // The set loads from Convex: wait for it, or for "no noren here" where it is not live.
+      if (path.includes("/collection"))
+        await expect(
+          page
+            .locator("[data-set], [data-book-set]")
+            .first()
+            .or(
+              page.getByText(
+                /^(No noren here|のれんが見つかりません|No neighbourhood has a noren yet\.|のれんのある地区はまだありません。)$/,
+              ),
+            ),
+        ).toBeVisible();
     });
 
     test("axe WCAG A/AA has no serious or critical violations", async ({ page }, testInfo) => {
       let builder = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]);
-      // Clerk owns its sign-in widget; audit the surrounding app shell here.
-      if (path.endsWith("/sign-in")) builder = builder.exclude(".cl-rootBox");
+      if (clerkPage(path)) builder = builder.exclude(".cl-rootBox");
       const { violations } = await builder.analyze();
       for (const violation of violations.filter(
         (item) => item.impact === "minor" || item.impact === "moderate",

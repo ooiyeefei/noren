@@ -210,9 +210,20 @@ Before writing any Convex code, read `convex/_generated/ai/guidelines.md`. All m
 
 ## Phase 10: Polish
 
-- [ ] T069 [P] Run axe on the new pages through `tests/e2e/a11y-public.spec.ts`, and check every screen at 390 px on the deployed site
-- [ ] T070 [P] Update `README.md` and `specs/002-noren-collection/quickstart.md` with what was actually built, leaving out anything not live
-- [ ] T071 Reread every task and FR, and mark any gap
+- [X] T069 [P] Run axe on the new pages through `tests/e2e/a11y-public.spec.ts`, and check every screen at 390 px on the deployed site
+  - Done 8 Nov 2026. `a11y-public.spec.ts` now covers the welcome, about, proposal, collection, terms, privacy and sign-up pages in both languages: 216 passed and 24 skipped (the phone-only check on desktop), run against production with `--workers=2`. Every screen a visitor or ordinary member can reach was looked at at 390 px, signed out and on a temporary fictional member. The check-in result and finished screens and the steward pages can't be reached without a passing check-in or a steward, so they were not looked at on production. See validation-log.md.
+- [X] T070 [P] Update `README.md` and `specs/002-noren-collection/quickstart.md` with what was actually built, leaving out anything not live
+  - Done 8 Nov 2026. README.md has new "The noren collection" and "Accounts" sections and no longer says accounts are invite-only. The quickstart carries a status line for each stage and an accessibility step. Rewards, QR codes, team-built sets and shop totals are described only as the mock they are.
+- [X] T071 Reread every task and FR, and mark any gap
+  - Done 8 Nov 2026. Every task is marked and every function named in the contracts exists. FR-101 to FR-131 each map to built work in the tasks above. What the reread found is below, listed and not built:
+  - Not proven on production: SC-101 to SC-103 as numbers (the walk was two check-ins in Shimabara Castle Town, with no timing, no first-press count, no search of records and logs afterwards, and nothing from Android); SC-105 (`repeatVisitTotals` has not been run, and the owner has not confirmed the 30% bar); the return to the same place after a real sign-up (FR-113); a daily limit and a waiting place on production (SC-108); and a search of the stored records for a deleted member (SC-107), because the live run checked only the Clerk login and the empty person row. Convex tests cover the last three.
+  - FR-123: no person has reviewed the Japanese for any of this (collection, account, terms, privacy, proposal). It went live at the owner's word and the footer says so.
+  - T059: no lawyer has read the documents, and the note above says documents version `2026-11-06` while the live value is `2026-11-07`.
+  - FR-114: in Shinchi, 三栄製麺 is 37 m from 泰安洋行 and 40 m from 京華園, under the 50 m the spec asks for. validation-log.md left this for the walk, and the walk was elsewhere. There is no record of a place being moved.
+  - FR-115: nothing records where the Shimabara Castle Town picture came from. The art stays out of the repository, so the origin needs writing down.
+  - T072 is marked done, but its last sentence is still open work: about 40 steward functions plus `canReadPlace` and `stories.remove` trust a demo steward. No demo login exists today.
+  - Not recorded as run on production: `people.backfillNameConfirmed` (R13), for members who shared before names had to be confirmed.
+  - Seen on the live set page: five of Shinchi's seven places show their Japanese name only, because no English name is on record. That goes against the English-names-first rule for place names. It is data, not code.
 - [X] T072 Before T068, stop demo accounts reaching real data. Done 6 Nov 2026: the owner had the four demo logins deleted in Clerk, so no one can sign in as a demo account. About 40 steward functions plus `canReadPlace` and `stories.remove` still trust a demo steward, so make those refuse demo accounts before ever creating a demo login again
 
 ---

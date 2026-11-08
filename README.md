@@ -4,7 +4,7 @@ Noren is a Japanese and English map of Nagasaki's local places, with the stories
 
 ## Status
 
-This is an MVP. On 5 November 2026 the live site shows 3,612 real places and about 1,100 checked public posts on 359 of them, chosen from about 6,200 collected posts. 108 places carry a story the agent wrote, 318 sentences in all. It has no real visitors yet. Owner interviews have only run on one 42-second clip, a fictional script read by a synthetic voice. The launch pack (terms, creator licence and privacy notice) isn't finished, so accounts are invite-only and pages stay out of search results. The labelled demo place, Demo Cafe Noren (fictional), belongs to a labelled mock account and isn't shown publicly.
+This is an MVP. On 5 November 2026 the live site shows 3,612 real places and about 1,100 checked public posts on 359 of them, chosen from about 6,200 collected posts. 108 places carry a story the agent wrote, 318 sentences in all. Owner interviews have only run on one 42-second clip, a fictional script read by a synthetic voice. Anyone aged 16 or over can make an account, since 7 November 2026, under terms and a privacy notice in Japanese and English whose Japanese wording native speakers haven't checked yet. The rest of the launch pack (the creator licence) isn't finished, so pages stay out of search results, `pilot` visibility is unavailable and real businesses stay under the draft rule. The labelled demo place, Demo Cafe Noren (fictional), belongs to a labelled mock account and isn't shown publicly.
 
 ## Built during the hackathon
 
@@ -21,7 +21,7 @@ Noren is an entry in the Meta Global AI Developer Hackathon (building period 27 
 
 - Next.js 16 on Vercel: pages and web request handling.
 - Convex: backend functions, database and audio storage; production is in Sydney.
-- Clerk: accounts with invite-only sign-up.
+- Clerk: accounts. Anyone aged 16 or over can sign up with an email address, a password and an email code.
 - MapLibre with OpenFreeMap tiles: the map.
 - AI, chosen per step by a setting: Meta's Muse Spark and Muse Voice Transcribe through the Meta Model API, Muse Glimmer 30B (open weights) on a Modal endpoint, Anthropic's Claude, or an OpenAI-compatible transcription endpoint. See [AI, step by step](#ai-step-by-step).
 - Apify's free tier and open-source tools: collect public posts for the [story finder](#story-finder), from scripts run on the operator's machine. The open-source collection scripts aren't in this repository.
@@ -146,6 +146,25 @@ A signed-in member can add to any place from its page, in [src/components/place]
 - Paste a link to a post they already published. [src/lib/link-read](src/lib/link-read) reads TikTok, YouTube and X through their public oEmbed, and a blog's Open Graph and title tags over an https-only fetch that refuses private hosts. Instagram, Facebook and Threads get only their official embed, and Noren fetches nothing from them. The card credits the author and links back to the post.
 - Tick "This is my own post", and Muse Spark drafts a line from that post for them to change before sharing. With no tick, nothing goes to a model.
 - Press Still here to confirm a place in person. That leaves the place's stamp in their stamp book at `/stamps`, which only they can see, and moves its neighbourhood one place closer to done ([convex/missions.ts](convex/missions.ts), [convex/stampBook.ts](convex/stampBook.ts)). There are no points, ranks or totals per person.
+
+## The noren collection
+
+Each neighbourhood in a region's file can have one noren: six panels of one original picture, each held by one to three public places. Two are live, Shinchi and Shimabara Castle Town. A neighbourhood without its art has no set. The pages are `/en/collection` and `/en/collection/<neighbourhood>`, open to anyone, and a place that belongs to a set says which panel it gives before anyone goes ([src/components/collection](src/components/collection), [convex/collection.ts](convex/collection.ts)).
+
+- A person at a place presses "I'm here" and that place's panel dyes. The phone reads its location once, when the button is pressed, and the check passes when the distance to the place's pin, less the phone's reported error (at most 30 m), is within 50 m. Both numbers are region settings. Noren's server never receives the coordinates.
+- A check-in keeps only the place, the set, the panel and the day in Japan, one record per person per place. It adds the place's stamp to the stamp book. A failed press records nothing and says what to do.
+- An undyed panel shows none of the picture, and the server sends a panel's art only to the person who has dyed it. The whole picture shows once every panel is dyed, with a dated badge that stays even if the set changes later.
+- Progress and badges are for their owner alone. There are no points, ranks, totals or comparisons, and a person can share only the finished picture. A person needs an account to check in. Reading and browsing need none.
+- After a check-in the person sees the nearest undyed panel and how far it is, a line from the place's story that a steward picked (with the AI label), and a box for "What did you have?" that is shared only when they press to share. "Still here" is its own press.
+- Stewards swap places, pick lines and set a set live on `/steward/collection`. An operator makes a set with `collection:createSet` and uploads its art with [scripts/upload-set-art.mts](scripts/upload-set-art.mts). The art stays out of this repository.
+- Rewards, QR codes, sets built by local teams and totals for shops aren't built. [`/en/for-local-teams`](src/components/proposal) is a mock that shows what they could be, with sample names, a 見本 Mock label on every screen and a note that nobody has agreed to it. Nothing links to it.
+
+## Accounts
+
+- Sign-up asks for a tick that the person is 16 or over and accepts the terms and the privacy notice (`/terms`, `/privacy`). The notice names every service outside Japan that holds or processes account data.
+- A new account has lower daily limits for its first 7 days. A place it adds waits as a draft until a steward approves it, and its stories go live at once. A person sees and can change the name shown beside what they share before their first share.
+- `/account` lets a member change that name or delete the account. Deleting removes their check-ins, panels, badges and name, takes down the stories and links they shared, and then removes the Clerk login. Places they added stay, without their name. A creator, shop owner or steward asks a steward instead.
+- `launchPackComplete` stays off, so opening sign-up changes none of the other launch rules.
 
 ## Data and licences
 
