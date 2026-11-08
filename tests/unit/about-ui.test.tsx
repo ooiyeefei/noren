@@ -11,13 +11,19 @@ for (const locale of ["ja", "en"] as const) {
   const m = aboutMessages[locale];
   const html = text(render(<AboutView locale={locale} />));
 
-  it(`tells the idea with one heading and sends people to the map (${locale})`, () => {
+  it(`is called what it answers, with one heading, and sends people to the map (${locale})`, () => {
     expect(html.match(/<h1\b/g)).toHaveLength(1);
     expect(html).toContain(`>${m.heroTitle}</h1>`);
+    // The page, its tab and the map guide's link all name it the same way.
+    expect(m.heroTitle).toBe(locale === "ja" ? "Noren とは？" : "What is Noren?");
+    expect(m.metaTitle).toBe(m.heroTitle);
+    expect(publicMessages[locale].whatIsNoren).toBe(m.heroTitle);
     expect(html).toContain(`<main id="main" tabindex="-1" lang="${locale}"`);
     expect(html.split(`href="/${locale}/map"`)).toHaveLength(3);
-    expect(html).toContain('href="#what"');
-    expect(html).toContain('id="what"');
+    expect(html).toContain('href="#film"');
+    expect(html).toContain('id="film"');
+    // It explains rather than pitches: no "why Noren exists" section.
+    expect(html).not.toContain('id="why-title"');
     expect(html).toContain(`href="${REPO_URL}"`);
     for (const key of Object.keys(m) as (keyof typeof m)[])
       if (key !== "metaTitle") expect(html, key).toContain(m[key]);
@@ -39,8 +45,8 @@ for (const locale of ["ja", "en"] as const) {
     expect(html).toContain(`<source src="${film}.mp4"`);
     expect(html).toContain('preload="none"');
     const at = (marker: string) => html.indexOf(marker);
-    expect(at('id="meaning-title"')).toBeLessThan(at('id="what-title"'));
-    expect(at('id="what-title"')).toBeLessThan(at("<video"));
+    expect(at('id="meaning-title"')).toBeLessThan(at('id="film-title"'));
+    expect(at('id="film-title"')).toBeLessThan(at("<video"));
     expect(at("<video")).toBeLessThan(at('id="feel-title"'));
     // The app comparison table is gone; the film tells that part now.
     expect(html).not.toContain("data-compare");
@@ -64,7 +70,7 @@ for (const locale of ["ja", "en"] as const) {
   it(`the map guide links to the page (${locale})`, () => {
     const guide = render(<ExploreGuide locale={locale} />);
     expect(guide).toContain(`href="/${locale}/about"`);
-    expect(guide).toContain(publicMessages[locale].whyNoren);
+    expect(guide).toContain(publicMessages[locale].whatIsNoren);
   });
 }
 

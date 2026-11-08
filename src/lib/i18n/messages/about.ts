@@ -3,13 +3,13 @@ import { defineMessages } from "../index";
 // The "What is Noren" page. Japanese UI copy remains unreviewed until owner task T098.
 export const aboutMessages = defineMessages({
   ja: {
-    metaTitle: "Noren とは",
-    heroTitle: "のれんの向こうへ。",
+    metaTitle: "Noren とは？",
+    heroTitle: "Noren とは？",
     heroLead:
       "Noren は、長崎の地元のお店と、その奥にいる人たちの物語を載せたオープンな地図です。星の数も、広告も、ランキングもありません。",
     openMap: "地図をひらく",
-    whatIs: "Noren とは？",
-    meaningTitle: "なぜ「のれん」なのか",
+    watchFilm: "映像で見る",
+    meaningTitle: "名前の由来",
     meaningBody:
       "日本のお店は、店を開けるときにのれんを掛けます。のれんには店の名前が染めてあり、お客さんはそれをくぐって中に入ります。Noren は、まちに対して同じことをします。のれんの向こうに何があるのかを見せるのです。",
     together: "使い分けてください。行き方は Google マップで、行く理由は Noren で。",
@@ -41,10 +41,6 @@ export const aboutMessages = defineMessages({
     p6Title: "ひらかれている",
     p6Body:
       "コードはオープンソース（Apache-2.0）、地図はオープンデータ。地図は私たちのものではなく、まちのものです。",
-    whyTitle: "Noren をつくった理由",
-    why1: "どのまちも、小さなお店で成り立っています。始発の路面電車より早く開くコーヒーカウンター、三代続く家族のお店、名前を覚えてくれる店主のいるバー。多くのアプリでは、そうしたお店はピンと星の数でしかありません。誰が営んでいるのか、なぜそこにあるのか、そこではどう振る舞うのか。行く価値をつくっている部分は、画面に出てきません。",
-    why2: "その差をいちばん感じるのは、まちに来たばかりの人です。旅行者、デジタルノマド、興味はあるけれど、どう入っていけばいいかわからない人。お店の物語は入り口になります。聞いてみたいこと、また来る理由、最初の会話のきっかけに。",
-    why3: "Noren は、知らない人たちのフィードではなく、お店を通してまちと出会う場所です。",
     statusTitle: "いまの Noren",
     nowLabel: "いま",
     nowBody:
@@ -63,13 +59,13 @@ export const aboutMessages = defineMessages({
     ctaTitle: "のれんの向こうの物語を探しに。",
   },
   en: {
-    metaTitle: "About Noren",
-    heroTitle: "Step through the curtain.",
+    metaTitle: "What is Noren?",
+    heroTitle: "What is Noren?",
     heroLead:
       "Noren is an open map of Nagasaki's local places and the stories of the people behind them. No stars, no ads, no ranking.",
     openMap: "Open the map",
-    whatIs: "What is Noren?",
-    meaningTitle: "Why “noren”",
+    watchFilm: "Watch the film",
+    meaningTitle: "The name",
     meaningBody:
       "In Japan, a shop hangs its noren, a split cloth curtain, when it opens. The cloth carries the shop's name, and you part it to step inside. Noren does the same for a city: it shows you what is behind the curtain.",
     together: "Use them together: Google Maps to get there, Noren to know why.",
@@ -102,10 +98,6 @@ export const aboutMessages = defineMessages({
     p6Title: "Open",
     p6Body:
       "Open-source code (Apache-2.0) and open map data. The map belongs to the city, not to us.",
-    whyTitle: "Why Noren exists",
-    why1: "Every city runs on small places: a coffee counter that opens before the first tram, a shop one family has kept for three generations, a bar where the owner learns your name. On most apps they are a pin and a star rating. The part that makes them worth the visit, who runs them, why they exist and how things are done there, never reaches the screen.",
-    why2: "That gap is felt most by people who are new in town: travellers, digital nomads, anyone curious who is not sure how to begin. A place's story is a way in: something to ask about, a reason to come back, a first conversation.",
-    why3: "Noren lets you meet a city through its places, not through a feed of strangers.",
     statusTitle: "Where it is today",
     nowLabel: "Now",
     nowBody:

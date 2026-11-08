@@ -63,8 +63,8 @@ export function AboutView({ locale }: { locale: Locale }) {
               <Link href={map} className={primary}>
                 {m.openMap}
               </Link>
-              <a href="#what" className={secondary}>
-                {m.whatIs}
+              <a href="#film" className={secondary}>
+                {m.watchFilm}
               </a>
             </div>
           </div>
@@ -83,13 +83,13 @@ export function AboutView({ locale }: { locale: Locale }) {
           </div>
         </section>
 
-        <section id="what" aria-labelledby="what-title" className="scroll-mt-4 bg-kamenozoki">
+        <section id="film" aria-labelledby="film-title" className="scroll-mt-4 bg-kamenozoki">
           <div className="mx-auto max-w-[1200px] space-y-8 px-4 py-16 sm:px-6 lg:py-24">
             <h2
-              id="what-title"
+              id="film-title"
               className="text-[30px] leading-tight font-bold text-balance sm:text-[40px]"
             >
-              {m.whatIs}
+              {m.watchFilm}
             </h2>
             <div className="max-w-[960px]">
               <FilmPlayer locale={locale} />
@@ -151,25 +151,9 @@ export function AboutView({ locale }: { locale: Locale }) {
           </ul>
         </section>
 
-        <section aria-labelledby="why-title" className="bg-kon text-white">
-          <div className="mx-auto max-w-[1200px] space-y-6 px-4 py-16 sm:px-6 lg:py-24">
-            <h2
-              id="why-title"
-              className="text-[30px] leading-tight font-bold text-balance sm:text-[40px]"
-            >
-              {m.whyTitle}
-            </h2>
-            <p className="max-w-[40em] text-[18px] leading-[1.9]">{m.why1}</p>
-            <p className="max-w-[40em] text-[18px] leading-[1.9]">{m.why2}</p>
-            <p className="max-w-[24em] pt-4 text-[26px] leading-snug font-bold text-balance text-kasutera sm:text-[32px]">
-              {m.why3}
-            </p>
-          </div>
-        </section>
-
         <section
           aria-labelledby="status-title"
-          className="mx-auto max-w-[1200px] space-y-10 px-4 py-16 sm:px-6 lg:py-24"
+          className="mx-auto max-w-[1200px] space-y-10 border-t border-line px-4 py-16 sm:px-6 lg:py-24"
         >
           <h2
             id="status-title"

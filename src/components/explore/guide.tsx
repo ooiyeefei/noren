@@ -26,7 +26,7 @@ export function ExploreGuide({ locale, onDismiss }: { locale: Locale; onDismiss?
           className="inline-flex min-h-11 items-center text-ai underline"
           href={localePath(locale, "/about")}
         >
-          {m.whyNoren}
+          {m.whatIsNoren}
         </a>
       </div>
     </aside>

@@ -37,7 +37,7 @@ export const publicMessages = defineMessages({
     guide2: "開くと、どんなお店か、どこにあるかがわかります。",
     guide3: "黄色いのれんは、訪れた人や店主の話がある場所です。",
     gotIt: "わかりました",
-    whyNoren: "ほかのアプリとの違い",
+    whatIsNoren: "Noren とは？",
     noPlaces: "まだ公開されたお店はありません。地元の人が確認すると、ここに表示されます。",
     noCafeMatches:
       "「カフェ・喫茶店」に一致するお店はありません。別の種類を選ぶか、検索を消してください。",
@@ -122,7 +122,7 @@ export const publicMessages = defineMessages({
     guide2: "Open it to see what it is and where to find it.",
     guide3: "A yellow noren means someone who has been there, or its owner, has shared a story.",
     gotIt: "Got it",
-    whyNoren: "How Noren is different",
+    whatIsNoren: "What is Noren?",
     noPlaces: "No places are published yet. Places appear here once a local has checked them.",
     noCafeMatches: "No cafes match. Try another kind of place or clear the search.",
     noMatches: "No {category} match. Try another kind of place or clear the search.",
