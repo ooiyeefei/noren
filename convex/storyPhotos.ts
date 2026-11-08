@@ -10,7 +10,13 @@ import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { readMapNames } from "./lib/mapCopies";
 import { regionConfig } from "./lib/region";
-import { limitPhoto, newMemberUntil, removePhotos, uploadRefusal } from "./lib/storyPhotos";
+import {
+  attachPhotos,
+  limitPhoto,
+  newMemberUntil,
+  removePhotos,
+  uploadRefusal,
+} from "./lib/storyPhotos";
 import { scriptValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
 
@@ -147,6 +153,38 @@ export const remove = mutation({
         targetType: "storyPhoto",
         targetId: photoId,
       });
+    return null;
+  },
+});
+
+/**
+ * Adds photos to a story that is already up, when its writer asks for it. Internal, so only someone
+ * holding the deploy key can run it. The photos are the writer's own uploads through the routes, so
+ * they were re-encoded like any other; the same rules as a new story apply, counting the photos the
+ * story already has.
+ */
+export const attachToStory = internalMutation({
+  args: { storyId: v.id("story"), photoIds: v.array(v.id("storyPhoto")) },
+  returns: v.null(),
+  handler: async (ctx, { storyId, photoIds }) => {
+    const story = await ctx.db.get("story", storyId);
+    if (story === null || story.status !== "live" || story.isMock)
+      throw appError("not_found", "no live story to add photos to");
+    const person = await ctx.db.get("person", story.authorPersonId);
+    const place = await ctx.db.get("place", story.placeId);
+    if (person === null || place === null) throw appError("not_found", "story's writer or place");
+    const already = await ctx.db
+      .query("storyPhoto")
+      .withIndex("by_storyId", (q) => q.eq("storyId", storyId))
+      .take(regionConfig(place.regionId).photos.maxPerStory + 1);
+    await attachPhotos(ctx, { person, place, storyId, photoIds, alreadyOnStory: already.length });
+    await writeAudit(ctx, {
+      actorKind: "system",
+      action: "photo.attachToStory",
+      targetType: "story",
+      targetId: storyId,
+      diff: { photoIds },
+    });
     return null;
   },
 });
