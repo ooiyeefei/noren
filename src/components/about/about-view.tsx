@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CircleCheck } from "lucide-react";
 import { NorenTab } from "@/components/explore/noren-tab";
+import { FilmPlayer } from "@/components/film/film-player";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { localePath, messagesFor, type Locale, type MessageTable } from "@/lib/i18n";
 import { aboutMessages } from "@/lib/i18n/messages/about";
@@ -10,23 +11,13 @@ export const REPO_URL = "https://github.com/ooiyeefei/noren";
 type AboutMessages = MessageTable<keyof (typeof aboutMessages)["en"]>;
 
 /**
- * What Noren is and how it differs from maps, review apps and travel apps. The sketches are
- * drawn from shapes, not from a real or invented shop, so nothing on this page is mock data.
+ * What Noren is: the meaning of the name, the intro film in the page's language, how a Noren page
+ * differs from a usual listing, and where it is today. The sketches are drawn from shapes, not
+ * from a real or invented shop, so nothing on this page is mock data.
  */
 export function AboutView({ locale }: { locale: Locale }) {
   const m = messagesFor(aboutMessages, locale);
   const map = localePath(locale, "/map");
-  const others = [
-    { key: "maps", name: m.mapsName, question: m.mapsQuestion, gives: m.mapsGives },
-    {
-      key: "reviews",
-      name: m.reviewsName,
-      hint: m.reviewsHint,
-      question: m.reviewsQuestion,
-      gives: m.reviewsGives,
-    },
-    { key: "travel", name: m.travelName, question: m.travelQuestion, gives: m.travelGives },
-  ];
   const promises = [
     [m.p1Title, m.p1Body],
     [m.p2Title, m.p2Body],
@@ -72,8 +63,8 @@ export function AboutView({ locale }: { locale: Locale }) {
               <Link href={map} className={primary}>
                 {m.openMap}
               </Link>
-              <a href="#different" className={secondary}>
-                {m.howDifferent}
+              <a href="#what" className={secondary}>
+                {m.whatIs}
               </a>
             </div>
           </div>
@@ -92,83 +83,17 @@ export function AboutView({ locale }: { locale: Locale }) {
           </div>
         </section>
 
-        <section
-          id="different"
-          aria-labelledby="different-title"
-          className="scroll-mt-4 bg-kamenozoki"
-        >
+        <section id="what" aria-labelledby="what-title" className="scroll-mt-4 bg-kamenozoki">
           <div className="mx-auto max-w-[1200px] space-y-8 px-4 py-16 sm:px-6 lg:py-24">
-            <div className="max-w-[40em] space-y-4">
-              <h2
-                id="different-title"
-                className="text-[30px] leading-tight font-bold text-balance sm:text-[40px]"
-              >
-                {m.compareTitle}
-              </h2>
-              <p className="text-[18px] leading-[1.8]">{m.compareLead}</p>
+            <h2
+              id="what-title"
+              className="text-[30px] leading-tight font-bold text-balance sm:text-[40px]"
+            >
+              {m.whatIs}
+            </h2>
+            <div className="max-w-[960px]">
+              <FilmPlayer locale={locale} />
             </div>
-            <table className="block w-full border-separate border-spacing-y-3 text-left md:table md:table-fixed">
-              <thead className="sr-only md:not-sr-only md:table-header-group">
-                <tr className="text-[14px] text-muted-foreground">
-                  <th scope="col" className="w-[24%] px-5 pb-1 font-normal">
-                    {m.colApp}
-                  </th>
-                  <th scope="col" className="w-[34%] px-5 pb-1 font-normal">
-                    {m.colQuestion}
-                  </th>
-                  <th scope="col" className="px-5 pb-1 font-normal">
-                    {m.colGives}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="block space-y-3 md:table-row-group md:space-y-0">
-                {others.map((row) => (
-                  <tr
-                    key={row.key}
-                    data-compare={row.key}
-                    className="block rounded-[14px] bg-white p-5 md:table-row md:p-0"
-                  >
-                    <th
-                      scope="row"
-                      className="block align-top font-bold md:table-cell md:rounded-l-[14px] md:p-5"
-                    >
-                      {row.name}
-                      {row.hint && (
-                        <span className="block text-[14px] font-normal text-muted-foreground">
-                          {row.hint}
-                        </span>
-                      )}
-                    </th>
-                    <td className="block pt-2 align-top text-[19px] leading-snug font-bold md:table-cell md:p-5">
-                      {row.question}
-                    </td>
-                    <td className="block pt-2 align-top leading-[1.8] text-muted-foreground md:table-cell md:rounded-r-[14px] md:p-5">
-                      {row.gives}
-                    </td>
-                  </tr>
-                ))}
-                <tr
-                  data-compare="noren"
-                  className="block rounded-[14px] bg-kon p-5 text-white md:table-row md:p-0"
-                >
-                  <th
-                    scope="row"
-                    className="block align-top font-bold md:table-cell md:rounded-l-[14px] md:p-5"
-                  >
-                    <span className="flex items-center gap-2">
-                      <NorenTab story />
-                      {m.norenName}
-                    </span>
-                  </th>
-                  <td className="block pt-2 align-top text-[19px] leading-snug font-bold text-kasutera md:table-cell md:p-5">
-                    {m.norenQuestion}
-                  </td>
-                  <td className="block pt-2 align-top leading-[1.8] md:table-cell md:rounded-r-[14px] md:p-5">
-                    {m.norenGives}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
             <p className="text-[20px] font-bold text-balance">{m.together}</p>
           </div>
         </section>

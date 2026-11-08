@@ -8,32 +8,10 @@ export const aboutMessages = defineMessages({
     heroLead:
       "Noren は、長崎の地元のお店と、その奥にいる人たちの物語を載せたオープンな地図です。星の数も、広告も、ランキングもありません。",
     openMap: "地図をひらく",
-    howDifferent: "ほかのアプリと何が違う？",
+    whatIs: "Noren とは？",
     meaningTitle: "なぜ「のれん」なのか",
     meaningBody:
       "日本のお店は、店を開けるときにのれんを掛けます。のれんには店の名前が染めてあり、お客さんはそれをくぐって中に入ります。Noren は、まちに対して同じことをします。のれんの向こうに何があるのかを見せるのです。",
-    compareTitle: "アプリごとに、答えている問いが違う",
-    compareLead:
-      "「Google マップや口コミアプリ、旅行アプリと何が違うの？」とよく聞かれます。短く言えば、それぞれ別の問いに答えるために作られています。",
-    colApp: "アプリ",
-    colQuestion: "答えている問い",
-    colGives: "得られるもの",
-    mapsName: "Google マップ",
-    mapsQuestion: "どこにあって、今開いている？",
-    mapsGives: "道順、営業時間、写真。Noren の「道順」ボタンからそのまま開けます。",
-    reviewsName: "口コミアプリ",
-    reviewsHint: "Yelp、食べログ、Google の口コミなど",
-    reviewsQuestion: "そこは良い店？",
-    reviewsGives:
-      "知らない人の評価を平均した星の数。声の大きい意見が上に来て、小さなお店はたった一日の不調で点数を落とします。",
-    travelName: "旅行アプリと AI の答え",
-    travelQuestion: "どこへ行くべき？",
-    travelGives:
-      "トップ10 のリスト。広告料が絡んでいたり、同じ情報源の焼き直しだったり。結局、みんなが同じ場所に集まります。",
-    norenName: "Noren",
-    norenQuestion: "こののれんの向こうには誰がいて、なぜくぐる価値があるのか？",
-    norenGives:
-      "その場所の奥にいる人たちの物語。人々が書いたものからまとめ、一文ごとに出典がついています。",
     together: "使い分けてください。行き方は Google マップで、行く理由は Noren で。",
     feelTitle: "同じお店、ふたつのページ",
     typicalLabel: "よくある掲載ページ",
@@ -90,32 +68,10 @@ export const aboutMessages = defineMessages({
     heroLead:
       "Noren is an open map of Nagasaki's local places and the stories of the people behind them. No stars, no ads, no ranking.",
     openMap: "Open the map",
-    howDifferent: "How is this different?",
+    whatIs: "What is Noren?",
     meaningTitle: "Why “noren”",
     meaningBody:
       "In Japan, a shop hangs its noren, a split cloth curtain, when it opens. The cloth carries the shop's name, and you part it to step inside. Noren does the same for a city: it shows you what is behind the curtain.",
-    compareTitle: "Every app answers a different question",
-    compareLead:
-      "People ask how Noren is different from Google Maps, review apps or the travel apps they already have. The short answer: each one is built to answer a different question.",
-    colApp: "App",
-    colQuestion: "The question it answers",
-    colGives: "What you get",
-    mapsName: "Google Maps",
-    mapsQuestion: "Where is it, and is it open?",
-    mapsGives: "Directions, opening hours and photos. Noren's Directions button opens it for you.",
-    reviewsName: "Review apps",
-    reviewsHint: "Yelp, Tabelog, Google reviews",
-    reviewsQuestion: "Is it any good?",
-    reviewsGives:
-      "Stars averaged from strangers. The loudest opinions rise, and a small shop is one bad day away from a low score.",
-    travelName: "Travel apps and AI answers",
-    travelQuestion: "What should I see?",
-    travelGives:
-      "Top-10 lists, often paid for or remixed from the same few sources. Everyone ends up in the same places.",
-    norenName: "Noren",
-    norenQuestion: "Who is behind this curtain, and why is it worth stepping in?",
-    norenGives:
-      "The stories of the people behind a place, gathered from what people wrote, with every sentence pointing to where it came from.",
     together: "Use them together: Google Maps to get there, Noren to know why.",
     feelTitle: "One place, two kinds of page",
     typicalLabel: "A typical listing",

@@ -16,8 +16,8 @@ for (const locale of ["ja", "en"] as const) {
     expect(html).toContain(`>${m.heroTitle}</h1>`);
     expect(html).toContain(`<main id="main" tabindex="-1" lang="${locale}"`);
     expect(html.split(`href="/${locale}/map"`)).toHaveLength(3);
-    expect(html).toContain('href="#different"');
-    expect(html).toContain('id="different"');
+    expect(html).toContain('href="#what"');
+    expect(html).toContain('id="what"');
     expect(html).toContain(`href="${REPO_URL}"`);
     for (const key of Object.keys(m) as (keyof typeof m)[])
       if (key !== "metaTitle") expect(html, key).toContain(m[key]);
@@ -33,11 +33,18 @@ for (const locale of ["ja", "en"] as const) {
     );
   });
 
-  it(`answers how Noren differs, Noren last among the four apps (${locale})`, () => {
-    const rows = Array.from(html.matchAll(/data-compare="([a-z]+)"/g), (match) => match[1]);
-    expect(rows).toEqual(["maps", "reviews", "travel", "noren"]);
-    expect(html.match(/<th scope="row"/g)).toHaveLength(4);
-    expect(html.match(/<th scope="col"/g)).toHaveLength(3);
+  it(`plays its own language's film after the name's meaning, loading nothing before play (${locale})`, () => {
+    const film = locale === "ja" ? "/film/noren-intro-ja" : "/film/noren-intro";
+    expect(html.match(/<video\b/g)).toHaveLength(1);
+    expect(html).toContain(`<source src="${film}.mp4"`);
+    expect(html).toContain('preload="none"');
+    const at = (marker: string) => html.indexOf(marker);
+    expect(at('id="meaning-title"')).toBeLessThan(at('id="what-title"'));
+    expect(at('id="what-title"')).toBeLessThan(at("<video"));
+    expect(at("<video")).toBeLessThan(at('id="feel-title"'));
+    // The app comparison table is gone; the film tells that part now.
+    expect(html).not.toContain("data-compare");
+    expect(html).not.toContain("<table");
   });
 
   it(`draws its sketches from shapes, hidden from screen readers, with the Japanese cloth marked (${locale})`, () => {
