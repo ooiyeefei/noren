@@ -94,3 +94,22 @@ On a temporary fictional account with a "+" address, in Chromium at phone size:
 - The owner made a real account with a fresh "+" address, and reports that it works.
 - The owner turned off "Allow users to delete their accounts" in Clerk. The public environment now reads `delete_self: false`.
 - With that off, the check above ran again on a new temporary account. Noren's delete button still removed the Clerk login, which answered 404, and left the person row as "Former member". It goes through the backend API, so Clerk's switch doesn't affect it. The other checks in the run passed too. Speech came back in 7.8 s this time.
+
+## Final checks, 8 Nov 2026
+
+Production, after PR #108 (the proposal page). Nothing here wrote to a real account or pressed "I'm here" or Share.
+
+| Check | How | Result |
+|---|---|---|
+| axe on the new pages | `tests/e2e/a11y-public.spec.ts`, `--workers=2`, phone and desktop, welcome, about, proposal, collection (book and Shinchi), terms, privacy and sign-up, both languages | 216 passed, 24 skipped (phone-only check on desktop). No serious or critical violations |
+| Proposal page | Scripted browser, 390 px and 1280 px, both languages | All 20 checks on each page, phone and desktop, both languages: label on the page and all four screens, nobody-has-agreed statement, no real place name, one link out (the agency's page), noindex in header and page, no sideways scroll, no page errors, the small buttons work |
+| Every 002 screen at 390 px, signed out | Collection book, Shinchi and Shimabara Castle Town sets, a place card, sign-up, terms and privacy, both languages | All fit with no sideways scroll or page errors. No art loads before it is earned. The place card offers a free account and does not say invite-only |
+| Signed in, temporary fictional member | Book, set, place card (looked at, never pressed), stamp book and account page, both languages | All fit, no page errors. The member was deleted afterwards, with its Clerk login |
+| SC-104 on the live site | The same fresh member opened the book while the owner has two dyed panels in Shimabara Castle Town | Every set read 0 of 6 and no art loaded. This is evidence, not a full second-person test |
+
+**Not reachable without writing or a steward:** the check-in result screen, the finished screen and the Share button, and the steward collection and waiting-places pages. Convex and unit tests cover them, and the owner's two real check-ins on 6 Nov passed with no problem reported.
+
+**Seen, not caused by this feature:** the map's zoom buttons on a place page are 29 px, and Clerk's sign-up inputs are 32 px tall. A full-page capture of a signed-in place page shows the fixed "Add your story" bar over the check-in card's location note, which a capture from the top of a real phone screen may also show. It was not checked with a viewport capture.
+
+**Gaps found when every task and requirement was reread:** listed under T071 in tasks.md.
+
