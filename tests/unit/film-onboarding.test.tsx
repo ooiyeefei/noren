@@ -3,6 +3,7 @@ import { renderToStaticMarkup as render } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FilmOnboarding, filmMayOpenHere } from "@/components/film/film-onboarding";
 import { shellMessages } from "@/lib/i18n/messages/shell";
+import { welcomeMessages } from "@/lib/i18n/messages/welcome";
 
 const state = vi.hoisted(() => ({
   authenticated: true,
@@ -86,6 +87,27 @@ describe("the welcome film", () => {
     expect(html).toContain('src="/film/noren-intro-ja.mp4"');
     expect(html).toContain('src="/film/noren-intro-ja.ja.vtt"');
     expect(html).not.toMatch(/<track[^>]*\bdefault\b/);
+  });
+
+  it("links to the Japanese video on YouTube below the Japanese film, in a new tab", () => {
+    state.pathname = "/ja/map";
+    const html = render(<FilmOnboarding locale="ja" />);
+    expect(html).toContain('href="https://www.youtube.com/watch?v=5qWkDLRznw0"');
+    expect(html).toContain(welcomeMessages.ja.watchOnYoutube);
+    expect(html).toContain('target="_blank" rel="noopener noreferrer"');
+    expect(html.indexOf("</video>")).toBeLessThan(html.indexOf("youtube.com"));
+    expect(html).not.toContain("cs5iDFAb-oI");
+    expect(html).not.toMatch(/<iframe|<script|\/embed\//i);
+  });
+
+  it("links to the English video on YouTube below the English film, in a new tab", () => {
+    const html = render(<FilmOnboarding locale="en" />);
+    expect(html).toContain('href="https://www.youtube.com/watch?v=cs5iDFAb-oI"');
+    expect(html).toContain(welcomeMessages.en.watchOnYoutube);
+    expect(html).toContain('target="_blank" rel="noopener noreferrer"');
+    expect(html.indexOf("</video>")).toBeLessThan(html.indexOf("youtube.com"));
+    expect(html).not.toContain("5qWkDLRznw0");
+    expect(html).not.toMatch(/<iframe|<script|\/embed\//i);
   });
 
   it("keeps the English-voice film on an English page", () => {

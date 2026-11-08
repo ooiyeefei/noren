@@ -4,6 +4,7 @@ import { AboutView, CONTACT_EMAIL, NAGASAKI_NOMAD_URL } from "@/components/about
 import { ExploreGuide } from "@/components/explore/guide";
 import { aboutMessages } from "@/lib/i18n/messages/about";
 import { publicMessages } from "@/lib/i18n/messages/public";
+import { welcomeMessages } from "@/lib/i18n/messages/welcome";
 
 const text = (html: string) => html.replace(/&#x27;/g, "'").replace(/&quot;/g, '"');
 
@@ -51,6 +52,16 @@ for (const locale of ["ja", "en"] as const) {
     expect(at('id="meaning-title"')).toBeLessThan(at('id="film-title"'));
     expect(at('id="film-title"')).toBeLessThan(at("<video"));
     expect(at("<video")).toBeLessThan(at('id="feel-title"'));
+    // A plain link to the same cut on YouTube sits under the player, with no embed.
+    const youtube =
+      locale === "ja"
+        ? "https://www.youtube.com/watch?v=5qWkDLRznw0"
+        : "https://www.youtube.com/watch?v=cs5iDFAb-oI";
+    expect(html).toContain(`href="${youtube}" target="_blank" rel="noopener noreferrer"`);
+    expect(html).toContain(welcomeMessages[locale].watchOnYoutube);
+    expect(at("</video>")).toBeLessThan(at(youtube));
+    expect(html.match(/https:\/\/www\.youtube\.com/g)).toHaveLength(1);
+    expect(html).not.toMatch(/<iframe|<script|\/embed\//i);
     // The app comparison table is gone; the film tells that part now.
     expect(html).not.toContain("data-compare");
     expect(html).not.toContain("<table");
@@ -66,7 +77,9 @@ for (const locale of ["ja", "en"] as const) {
 
   it(`calls the owner idea an idea, with no shop signed up and none named (${locale})`, () => {
     expect(m.ideaBody).toMatch(locale === "ja" ? /まだアイデアの段階/ : /still an idea/);
-    expect(m.ideaBody).toMatch(locale === "ja" ? /参加しているお店もまだありません/ : /no shop has signed up/);
+    expect(m.ideaBody).toMatch(
+      locale === "ja" ? /参加しているお店もまだありません/ : /no shop has signed up/,
+    );
     expect(`${m.noticedBody}${m.ideaBody}`).not.toMatch(/Bravo|Inohara|Honda|猪原|ブラボー/);
   });
 

@@ -49,6 +49,25 @@ for (const locale of ["ja", "en"] as const) {
     expect(html).not.toContain(otherFilm);
   });
 
+  // A plain link and nothing else: no embed, no frame, no script, so YouTube sets nothing here.
+  const youtube =
+    locale === "ja"
+      ? "https://www.youtube.com/watch?v=5qWkDLRznw0"
+      : "https://www.youtube.com/watch?v=cs5iDFAb-oI";
+  const otherYoutube = locale === "ja" ? "cs5iDFAb-oI" : "5qWkDLRznw0";
+
+  it(`links to its own language's video on YouTube in a new tab, without embedding it (${locale})`, () => {
+    const link =
+      html.match(/<a\b[^>]*href="https:\/\/www\.youtube\.com[^>]*>[^]*?<\/a>/)?.[0] ?? "";
+    expect(link).toContain(`href="${youtube}"`);
+    expect(link).toContain('target="_blank"');
+    expect(link).toContain('rel="noopener noreferrer"');
+    expect(link).toContain(m.watchOnYoutube);
+    expect(html.match(/https:\/\/www\.youtube\.com/g)).toHaveLength(1);
+    expect(html).not.toContain(otherYoutube);
+    expect(html).not.toMatch(/<iframe|<script|youtube-nocookie|ytimg|\/embed\//i);
+  });
+
   it(`starts with no captions on, because the voice speaks the page's language (${locale})`, () => {
     expect(html).not.toMatch(/<track[^>]*\bdefault\b/);
   });
