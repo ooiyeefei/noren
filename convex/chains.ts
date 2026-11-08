@@ -38,15 +38,76 @@ async function realSteward(ctx: QueryCtx, personId: Id<"person">) {
 export async function whyKept(
   ctx: QueryCtx,
   place: Doc<"place">,
-  { ignoreLinkedPosts = false }: { ignoreLinkedPosts?: boolean } = {},
+  {
+    ignoreLinkedPosts = false,
+    ignoreHidden = false,
+  }: {
+    ignoreLinkedPosts?: boolean;
+    /**
+     * Count only a story, post, note or claim that is still shown. One already hidden is not shown,
+     * and hiding the place changes none of it, so it need not keep the place on the map.
+     */
+    ignoreHidden?: boolean;
+  } = {},
 ): Promise<string | null> {
   const placeId = place._id;
   if (place.sharedAt !== undefined) return "added by a member";
-  const found = async (table: "story" | "source" | "note" | "claim") =>
-    (await ctx.db
-      .query(table)
-      .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId))
-      .first()) !== null;
+  const found = async (table: "story" | "source" | "note" | "claim") => {
+    if (!ignoreHidden)
+      return (
+        (await ctx.db
+          .query(table)
+          .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId))
+          .first()) !== null
+      );
+    switch (table) {
+      case "story":
+        return (
+          (await ctx.db
+            .query("story")
+            .withIndex("by_placeId_and_status", (q) =>
+              q.eq("placeId", placeId).eq("status", "live"),
+            )
+            .first()) !== null
+        );
+      case "source":
+        for (const status of ["live", "gone"] as const)
+          if (
+            (await ctx.db
+              .query("source")
+              .withIndex("by_placeId_and_status", (q) =>
+                q.eq("placeId", placeId).eq("status", status),
+              )
+              .first()) !== null
+          )
+            return true;
+        return false;
+      case "note":
+        for (const status of ["new", "held", "visible"] as const)
+          if (
+            (await ctx.db
+              .query("note")
+              .withIndex("by_placeId_and_status", (q) =>
+                q.eq("placeId", placeId).eq("status", status),
+              )
+              .first()) !== null
+          )
+            return true;
+        return false;
+      case "claim":
+        for (const status of ["proposed", "owner_confirmed", "published", "disputed"] as const)
+          if (
+            (await ctx.db
+              .query("claim")
+              .withIndex("by_placeId_and_status", (q) =>
+                q.eq("placeId", placeId).eq("status", status),
+              )
+              .first()) !== null
+          )
+            return true;
+        return false;
+    }
+  };
   if (await found("story")) return "has a story";
   if (!ignoreLinkedPosts && (await found("source"))) return "has a linked post";
   if (
@@ -207,6 +268,78 @@ export const hideClosed = internalMutation({
           visibility: { from: "public", to: "draft" },
           hiddenReason: "not_for_visitors",
           closed: { basis },
+        },
+      });
+      hidden++;
+    }
+    return { hidden, alreadyHidden, skipped };
+  },
+});
+
+/**
+ * Takes listings off the map because they are not places to visit: the town itself, a spot named for
+ * what to photograph, a survey marker, a plaque for a farm road. Open map data holds many such points.
+ * The steward decides from the listing, with the reason in `basis`, and the audit entry says so
+ * (`not_a_place.hide`, not "closed"). Same path as the others: a draft marked `not_for_visitors`,
+ * which a steward can put back with setVisibility. Nothing is deleted, and no member's story, post
+ * or note is changed: a place a member added, or one with a story, post, note, claim, page,
+ * interview or owner that is still shown, is skipped to look at. Content that is already hidden does not
+ * keep a place on the map (a story copy moved to another place, say), because hiding the place
+ * touches none of it.
+ */
+export const hideNotPlaces = internalMutation({
+  args: {
+    regionId: v.string(),
+    stewardPersonId: v.id("person"),
+    /** Why these are not places to visit, for the audit entry. */
+    basis: v.string(),
+    placeIds: v.array(v.id("place")),
+  },
+  returns: v.object({
+    hidden: v.number(),
+    alreadyHidden: v.number(),
+    skipped: v.array(v.object({ placeId: v.id("place"), reason: v.string() })),
+  }),
+  handler: async (ctx, { regionId, stewardPersonId, basis, placeIds }) => {
+    const steward = await realSteward(ctx, stewardPersonId);
+    if (placeIds.length > HIDE_BATCH) throw appError("invalid_input", `hide at most ${HIDE_BATCH}`);
+    regionConfig(regionId);
+    let hidden = 0;
+    let alreadyHidden = 0;
+    const skipped: { placeId: Id<"place">; reason: string }[] = [];
+    for (const placeId of placeIds) {
+      const place = await ctx.db.get("place", placeId);
+      if (!place || place.regionId !== regionId) {
+        skipped.push({ placeId, reason: "place not found in this region" });
+        continue;
+      }
+      if (place.hiddenReason !== undefined) {
+        alreadyHidden++;
+        continue;
+      }
+      if (place.visibility !== "public" || place.isMock) {
+        skipped.push({ placeId, reason: "not a real public place" });
+        continue;
+      }
+      const kept = await whyKept(ctx, place, { ignoreHidden: true });
+      if (kept) {
+        skipped.push({ placeId, reason: kept });
+        continue;
+      }
+      await ctx.db.patch("place", placeId, {
+        visibility: "draft",
+        hiddenReason: "not_for_visitors",
+      });
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: steward._id,
+        action: "not_a_place.hide",
+        targetType: "place",
+        targetId: placeId,
+        diff: {
+          visibility: { from: "public", to: "draft" },
+          hiddenReason: "not_for_visitors",
+          notAPlace: { basis },
         },
       });
       hidden++;
