@@ -153,9 +153,9 @@ Before writing any Convex code, read `convex/_generated/ai/guidelines.md`. All m
 
 **Independent Test**: Read every screen in both languages, finding the 見本 Mock label on each, sample names only, and the statement that nobody has agreed.
 
-- [ ] T046 [P] [US5] Create `src/lib/i18n/messages/proposal.ts` from the proposal in `.scratch/gamify/noren-collection.html`, in Japanese and English, with no real place names
-- [ ] T047 [US5] Create `src/app/[lang]/for-local-teams/page.tsx` and `src/components/proposal/proposal-view.tsx`, static with no Convex reads and no navigation link, carrying the 見本 Mock label on every screen
-- [ ] T048 [P] [US5] Add `tests/unit/proposal.test.tsx`: every screen has the label, the statement is there in both languages, and no name from `regions/nagasaki.json` or the Shinchi set appears
+- [X] T046 [P] [US5] Create `src/lib/i18n/messages/proposal.ts` from the proposal in `.scratch/gamify/noren-collection.html`, in Japanese and English, with no real place names
+- [X] T047 [US5] Create `src/app/[lang]/for-local-teams/page.tsx` and `src/components/proposal/proposal-view.tsx`, static with no Convex reads and no navigation link, carrying the 見本 Mock label on every screen Done 8 Nov 2026. The mock's phone demo is left out because it used real shops. The sample picture has 見本 on its gate instead of a place name, and the "Now" step says "Working today" because the collection is live.
+- [X] T048 [P] [US5] Add `tests/unit/proposal.test.tsx`: every screen has the label, the statement is there in both languages, and no name from `regions/nagasaki.json` or the Shinchi set appears
 
 **Checkpoint**: The owner has a link for local teams.
 
