@@ -308,3 +308,119 @@ describe("chains.hideClosed", () => {
     expect(await errorCode(hideClosed(b, [placeId], mock))).toBe("invalid_input");
   });
 });
+
+describe("chains.hideNotPlaces", () => {
+  const hideNotPlaces = (
+    b: Awaited<ReturnType<typeof setup>>,
+    placeIds: Id<"place">[],
+    stewardPersonId: Id<"person"> = b.steward,
+  ) =>
+    b.t.mutation(internal.chains.hideNotPlaces, {
+      regionId: "nagasaki",
+      stewardPersonId,
+      basis: "synthetic: a survey marker, not a place to visit",
+      placeIds,
+    });
+  const addStory = (
+    b: Awaited<ReturnType<typeof setup>>,
+    placeId: Id<"place">,
+    status: "live" | "hidden",
+  ) =>
+    b.run((ctx) =>
+      ctx.db.insert("story", {
+        placeId,
+        authorPersonId: b.steward,
+        body: "A synthetic story.",
+        lang: "en",
+        status,
+        isMock: false,
+      }),
+    );
+
+  it("hides a listing as a draft not for visitors, says why in the audit entry, and a rerun writes nothing", async () => {
+    const b = await setup();
+    const placeId = await b.listing();
+    expect(await hideNotPlaces(b, [placeId])).toEqual({
+      hidden: 1,
+      alreadyHidden: 0,
+      skipped: [],
+    });
+    expect(await b.run((ctx) => ctx.db.get("place", placeId))).toMatchObject({
+      visibility: "draft",
+      hiddenReason: "not_for_visitors",
+    });
+    const audits = (await b.run((ctx) => ctx.db.query("auditLog").collect())).filter(
+      (a) => a.action === "not_a_place.hide",
+    );
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      targetId: placeId,
+      diff: { notAPlace: { basis: "synthetic: a survey marker, not a place to visit" } },
+    });
+    expect(await hideNotPlaces(b, [placeId])).toEqual({
+      hidden: 0,
+      alreadyHidden: 1,
+      skipped: [],
+    });
+  });
+
+  it("hides a place whose only story is already hidden, and leaves that story as it was", async () => {
+    const b = await setup();
+    const placeId = await b.listing();
+    const storyId = await addStory(b, placeId, "hidden");
+    const before = await b.run((ctx) => ctx.db.get("story", storyId));
+    expect(await hideNotPlaces(b, [placeId])).toEqual({ hidden: 1, alreadyHidden: 0, skipped: [] });
+    expect(await b.run((ctx) => ctx.db.get("story", storyId))).toEqual(before);
+  });
+
+  it("leaves a place with a story, a linked post or a place a member added, and says why", async () => {
+    const b = await setup();
+    const withStory = await b.listing();
+    await addStory(b, withStory, "live");
+    const withPost = await b.listing();
+    await addSource(b, { placeId: withPost, addedBy: b.steward });
+    const added = await addPlace(b, { createdBy: b.steward, visibility: "public" });
+    await b.run((ctx) => ctx.db.patch("place", added, { sharedAt: Date.now() }));
+    expect(await hideNotPlaces(b, [withStory, withPost, added])).toEqual({
+      hidden: 0,
+      alreadyHidden: 0,
+      skipped: [
+        { placeId: withStory, reason: "has a story" },
+        { placeId: withPost, reason: "has a linked post" },
+        { placeId: added, reason: "added by a member" },
+      ],
+    });
+    for (const id of [withStory, withPost, added])
+      expect((await b.run((ctx) => ctx.db.get("place", id)))?.visibility).toBe("public");
+  });
+
+  it("counts a hidden linked post as not shown, and a live one as shown", async () => {
+    const b = await setup();
+    const hiddenPost = await b.listing();
+    await addSource(b, { placeId: hiddenPost, addedBy: b.steward, status: "hidden" });
+    const livePost = await b.listing();
+    await addSource(b, { placeId: livePost, addedBy: b.steward, status: "live" });
+    expect(await hideNotPlaces(b, [hiddenPost, livePost])).toEqual({
+      hidden: 1,
+      alreadyHidden: 0,
+      skipped: [{ placeId: livePost, reason: "has a linked post" }],
+    });
+  });
+
+  it("skips a place that is not public", async () => {
+    const b = await setup();
+    const draft = await addPlace(b, { createdBy: b.steward, visibility: "draft" });
+    expect(await hideNotPlaces(b, [draft])).toEqual({
+      hidden: 0,
+      alreadyHidden: 0,
+      skipped: [{ placeId: draft, reason: "not a real public place" }],
+    });
+  });
+
+  it("refuses a mock steward", async () => {
+    const b = await setup();
+    const placeId = await b.listing();
+    const mock = await addPerson(b, "synthetic-mock-steward", "steward", { isMock: true });
+    expect(await errorCode(hideNotPlaces(b, [placeId], mock))).toBe("invalid_input");
+  });
+});
