@@ -6,7 +6,10 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { localePath, messagesFor, type Locale, type MessageTable } from "@/lib/i18n";
 import { aboutMessages } from "@/lib/i18n/messages/about";
 
-export const REPO_URL = "https://github.com/ooiyeefei/noren";
+/** The residency programme Noren was made during, credited by name with a link. */
+export const NAGASAKI_NOMAD_URL = "https://www.nagasakinomad.com/";
+/** Where people write to collaborate; the owner chose to publish this address (8 Nov 2026). */
+export const CONTACT_EMAIL = "yeefei@yooi.me";
 
 type AboutMessages = MessageTable<keyof (typeof aboutMessages)["en"]>;
 
@@ -191,19 +194,33 @@ export function AboutView({ locale }: { locale: Locale }) {
               </div>
             ))}
           </div>
-          <p className="max-w-[40em] leading-[1.8] text-muted-foreground">{m.madeIn}</p>
+          <div className="max-w-[40em] space-y-2 leading-[1.8] text-muted-foreground">
+            <p>
+              {m.madeInBefore}
+              <a className="underline underline-offset-4 hover:text-ai" href={NAGASAKI_NOMAD_URL}>
+                {m.programName}
+              </a>
+              {m.madeInAfter}
+            </p>
+            <p>
+              {m.openBody}
+              {m.contactBefore}
+              <a
+                className="underline underline-offset-4 hover:text-ai"
+                href={`mailto:${CONTACT_EMAIL}`}
+              >
+                {CONTACT_EMAIL}
+              </a>
+              {m.contactAfter}
+            </p>
+          </div>
           <div className="space-y-6 rounded-[14px] bg-kamenozoki p-6 sm:p-10">
             <p className="text-[26px] leading-snug font-bold text-balance sm:text-[32px]">
               {m.ctaTitle}
             </p>
-            <div className="flex flex-wrap gap-3">
-              <Link href={map} className={primary}>
-                {m.openMap}
-              </Link>
-              <a href={REPO_URL} className={secondary}>
-                {m.seeCode}
-              </a>
-            </div>
+            <Link href={map} className={primary}>
+              {m.openMap}
+            </Link>
           </div>
         </section>
       </main>

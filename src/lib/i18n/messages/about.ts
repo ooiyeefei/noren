@@ -53,9 +53,13 @@ export const aboutMessages = defineMessages({
     ideaTitle: "次に取り組んでいるアイデア",
     ideaBody:
       "お店の人が Noren で自分のお店を登録すると、確認した話を英語と地元の言葉（今は日本語、広がれば他の国の言葉も）で受け取り、Google や Instagram などの SNS をはじめ、インターネットのどこにでも投稿でき、店先に貼るポスターも用意できる。そんな仕組みを考えています。まだアイデアの段階で、公開はしていません。参加しているお店もまだありません。",
-    madeIn:
-      "Nagasaki Nomad プログラムの期間中に、長崎でつくりました。誰でも関われるオープンなプロジェクトです。",
-    seeCode: "GitHub でコードを見る",
+    madeInBefore: "Noren は、",
+    programName: "Nagasaki Nomad",
+    madeInAfter: " のプログラムに参加して、長崎でつくりました。心から感謝しています。",
+    openBody:
+      "オープンソースのプロジェクトで、一緒につくってくれる人を歓迎しています。誰でも、ここから発展させることができます。",
+    contactBefore: "ご連絡は ",
+    contactAfter: " まで。",
     ctaTitle: "のれんの向こうの物語を探しに。",
   },
   en: {
@@ -111,9 +115,12 @@ export const aboutMessages = defineMessages({
     ideaTitle: "An idea we're working on next",
     ideaBody:
       "Owners could claim their place on Noren and get their own story back in English and their local language (Japanese for now, others as we expand), ready to share on Google, Instagram and other social media, or anywhere online, with a poster for the window. It's still an idea: it isn't live yet, and no shop has signed up.",
-    madeIn:
-      "Made in Nagasaki during the Nagasaki Nomad programme, as an open project anyone can build on.",
-    seeCode: "Read the code on GitHub",
+    madeInBefore: "Made in Nagasaki, with thanks to the ",
+    programName: "Nagasaki Nomad programme",
+    madeInAfter: ".",
+    openBody: "Noren is an open-source project, open for collaboration: anyone can build on it.",
+    contactBefore: " To get involved, write to ",
+    contactAfter: ".",
     ctaTitle: "Find the story behind the curtain.",
   },
 });

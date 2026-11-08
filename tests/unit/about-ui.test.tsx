@@ -1,6 +1,6 @@
 import { renderToStaticMarkup as render } from "react-dom/server";
 import { expect, it } from "vitest";
-import { AboutView, REPO_URL } from "@/components/about/about-view";
+import { AboutView, CONTACT_EMAIL, NAGASAKI_NOMAD_URL } from "@/components/about/about-view";
 import { ExploreGuide } from "@/components/explore/guide";
 import { aboutMessages } from "@/lib/i18n/messages/about";
 import { publicMessages } from "@/lib/i18n/messages/public";
@@ -24,7 +24,10 @@ for (const locale of ["ja", "en"] as const) {
     expect(html).toContain('id="film"');
     // It explains rather than pitches: no "why Noren exists" section.
     expect(html).not.toContain('id="why-title"');
-    expect(html).toContain(`href="${REPO_URL}"`);
+    // Credits the residency with a link, invites collaboration by email, and has no GitHub button.
+    expect(html).toContain(`href="${NAGASAKI_NOMAD_URL}">${m.programName}</a>`);
+    expect(html).toContain(`href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>`);
+    expect(html).not.toContain("github.com");
     for (const key of Object.keys(m) as (keyof typeof m)[])
       if (key !== "metaTitle") expect(html, key).toContain(m[key]);
   });
