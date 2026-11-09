@@ -156,7 +156,7 @@ export function ShareStory({
           {/* The picture is drawn on the server; this is that picture, not a lookalike. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={cardPath(storyId, size, { photo: false })}
+            src={cardPath(storyId, size)}
             alt={m.previewAlt}
             width={CARD_SIZES[size].width / 4}
             height={CARD_SIZES[size].height / 4}
@@ -189,7 +189,7 @@ export function ShareStory({
               disabled={status === "preparing"}
               onClick={() =>
                 void run("downloaded", async () => {
-                  await downloadPicture({ storyId, size, photo: false }, deps);
+                  await downloadPicture({ storyId, size }, deps);
                 })
               }
             >
@@ -202,7 +202,7 @@ export function ShareStory({
                 disabled={status === "preparing"}
                 onClick={() =>
                   void run("shared", () =>
-                    sharePicture({ storyId, size, caption, photo: false }, deps).then((outcome) =>
+                    sharePicture({ storyId, size, caption }, deps).then((outcome) =>
                       outcome === "cancelled" ? "idle" : outcome,
                     ),
                   )

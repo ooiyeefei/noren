@@ -84,7 +84,7 @@ function kit(props: Partial<Parameters<typeof ShareStory>[0]> & { viewer?: KitVi
 describe("the kit's panel", () => {
   it("shows a picture for a feed post without the story's photos, and the caption to copy", () => {
     const html = kit().html();
-    expect(html).toContain('src="/api/share/s1?size=feed&amp;photo=0"');
+    expect(html).toContain('src="/api/share/s1?size=feed"');
     expect(html).toContain(en.copyCaption);
     expect(html).toContain(en.download);
     expect(html).toContain("Story by Mika on Noren");
@@ -95,7 +95,7 @@ describe("the kit's panel", () => {
   it("can take the story size instead, still without the photos", () => {
     const view = kit();
     view.radio(1);
-    expect(view.html()).toContain('src="/api/share/s1?size=story&amp;photo=0"');
+    expect(view.html()).toContain('src="/api/share/s1?size=story"');
   });
 
   it("is shut until asked for, and says Share on Instagram", () => {
@@ -132,7 +132,7 @@ describe("the kit's panel", () => {
     const view = kit({ deps: { fetcher, download, nav: {} } });
     view.click(en.download);
     await vi.waitFor(() => expect(download).toHaveBeenCalledTimes(1));
-    expect(fetcher).toHaveBeenCalledWith("/api/share/s1?size=feed&photo=0");
+    expect(fetcher).toHaveBeenCalledWith("/api/share/s1?size=feed");
     expect((download.mock.calls[0] as unknown as [File])[0].name).toBe("noren-story-feed.png");
     await vi.waitFor(() => expect(view.html()).toContain(en.downloaded));
   });
@@ -212,7 +212,7 @@ describe("what each viewer sees beside the button", () => {
       expect(html).not.toContain(en.consentStop);
       expect(html).toContain(en.hintShared);
       expect(html).toContain(en.copyCaption);
-      expect(html).toContain('src="/api/share/s1?size=feed&amp;photo=0"');
+      expect(html).toContain('src="/api/share/s1?size=feed"');
     },
   );
 

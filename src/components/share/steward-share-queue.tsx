@@ -23,7 +23,6 @@ export type ShareQueueRow = {
   placeJapanese: string | null;
   /** The town in both languages, for the hashtags. */
   town: { en: string; ja: string };
-  hasPhoto: boolean;
   /** When a steward marked it posted, as a time in milliseconds. */
   postedAt: number | null;
 };
@@ -86,7 +85,6 @@ export function ShareQueueView(props: ShareQueueProps) {
               </p>
               <p className="text-[15px] text-muted-foreground">
                 {format(m.queueBy, { name: row.authorName })}
-                {row.hasPhoto && ` · ${m.queuePhoto}`}
               </p>
               <p className="line-clamp-4 whitespace-pre-wrap">{row.body}</p>
               <div className="flex flex-wrap gap-x-5">
@@ -158,7 +156,6 @@ export function ShareQueueContainer({ locale, regionId }: { locale: Locale; regi
         placeEnglish: entry.placeEnglish,
         placeJapanese: entry.placeJapanese,
         town: entry.town,
-        hasPhoto: entry.hasPhoto,
         postedAt: entry.postedAt,
       }))}
       onMarkPosted={(storyId) =>

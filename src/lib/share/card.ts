@@ -17,12 +17,10 @@ const FOOTER = 150;
 const GAP = 44;
 const LINE_HEIGHT = 1.6;
 const FONT_SIZES = [72, 64, 56, 48, 42, 36, 32] as const;
-const PHOTO_HEIGHT: Record<CardSize, number> = { story: 640, feed: 380 };
 
-/** The room for the photo and the words, in pixels. */
-export function cardLayout(size: CardSize, hasPhoto: boolean) {
+/** The room for the words, in pixels. A picture never carries a story's photo. */
+export function cardLayout(size: CardSize) {
   const { width, height } = CARD_SIZES[size];
-  const photoHeight = hasPhoto ? PHOTO_HEIGHT[size] : 0;
   return {
     width,
     height,
@@ -30,9 +28,8 @@ export function cardLayout(size: CardSize, hasPhoto: boolean) {
     header: HEADER,
     footer: FOOTER,
     gap: GAP,
-    photoHeight,
     textWidth: width - 2 * PADDING,
-    textHeight: height - 2 * PADDING - HEADER - FOOTER - (hasPhoto ? photoHeight + GAP : 0) - GAP,
+    textHeight: height - 2 * PADDING - HEADER - FOOTER - GAP,
   };
 }
 
@@ -64,9 +61,8 @@ function linesNeeded(text: string, fontSize: number, width: number): number {
 export function fitBody(
   body: string,
   size: CardSize,
-  hasPhoto: boolean,
 ): { text: string; fontSize: number; lineHeight: number; cut: boolean } {
-  const { textWidth, textHeight } = cardLayout(size, hasPhoto);
+  const { textWidth, textHeight } = cardLayout(size);
   const text = body.trim();
   const fits = (candidate: string, fontSize: number, room = textHeight) =>
     linesNeeded(candidate, fontSize, textWidth) * fontSize * LINE_HEIGHT <= room;
@@ -88,19 +84,13 @@ export function fitBody(
   return { text: `${kept}…`, fontSize, lineHeight: LINE_HEIGHT, cut: true };
 }
 
-/**
- * Where the picture route lives. `photo: false` leaves the story's photo out, as the Instagram kit
- * does because a photo may show faces; without it the picture carries a photo when the story has one.
- */
+/** Where the picture route lives. */
 export function cardPath(
   storyId: string,
   size: CardSize,
-  options: { download?: boolean; photo?: boolean } = {},
+  options: { download?: boolean } = {},
 ): string {
-  const query = [`size=${size}`];
-  if (options.photo === false) query.push("photo=0");
-  if (options.download) query.push("download=1");
-  return `/api/share/${encodeURIComponent(storyId)}?${query.join("&")}`;
+  return `/api/share/${encodeURIComponent(storyId)}?size=${size}${options.download ? "&download=1" : ""}`;
 }
 
 export function cardFileName(size: CardSize): string {

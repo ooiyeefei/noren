@@ -10,11 +10,11 @@ export type PictureDeps = {
 
 /** Makes the picture and offers it to the share sheet, or saves it. */
 export async function sharePicture(
-  input: { storyId: string; size: CardSize; caption: string; photo?: boolean },
+  input: { storyId: string; size: CardSize; caption: string },
   deps: PictureDeps = {},
 ): Promise<ShareOutcome> {
   const file = await fetchPicture(
-    cardPath(input.storyId, input.size, { photo: input.photo }),
+    cardPath(input.storyId, input.size),
     cardFileName(input.size),
     deps.fetcher,
   );
@@ -23,11 +23,11 @@ export async function sharePicture(
 
 /** Saves the picture without offering the share sheet. */
 export async function downloadPicture(
-  input: { storyId: string; size: CardSize; photo?: boolean },
+  input: { storyId: string; size: CardSize },
   deps: Pick<PictureDeps, "fetcher" | "download"> = {},
 ): Promise<void> {
   const file = await fetchPicture(
-    cardPath(input.storyId, input.size, { photo: input.photo }),
+    cardPath(input.storyId, input.size),
     cardFileName(input.size),
     deps.fetcher,
   );

@@ -3,9 +3,11 @@ import { defineMessages, type Locale } from "../index";
 // The terms and the privacy notice (FR-126). The owner approved them on 6 Nov 2026 (T059), with no
 // lawyer's read and no second person's review of the Japanese recorded. On 7 Nov they approved the
 // changes for sign-in by email and password, no Google, speech input, pictures of a story and Noren's
-// own accounts, also with no lawyer's read or review of the Japanese. Both pages answer 404 while
-// documentsVersion is null. Turning speech input or Noren's own accounts off makes this notice wrong,
-// so change the words and documentsVersion in the same change.
+// own accounts, also with no lawyer's read or review of the Japanese. On 9 Nov they approved the wording
+// for sharing on Instagram, which the writer now allows for Noren and the place's verified owner, with
+// the same caveats. Both pages answer 404 while documentsVersion is null. Turning speech input or
+// Noren's own accounts off makes this notice wrong, so change the words and documentsVersion in the
+// same change.
 //
 // Every {placeholder} is filled from regions/<id>.json by src/components/legal/documents.ts, so the
 // operator, the contact, the minimum age and the takedown times are never typed here.
@@ -95,7 +97,7 @@ export const legalDocuments: Readonly<
           heading: "あなたの権利と、運営者への許可",
           paragraphs: [
             "あなたが書いたものの権利は、あなたのものです。あなたは運営者に対し、それを保存し、あなたの名前とともに Noren に表示することを許可します。この許可は、あなたか運営担当者が削除するまで続きます。",
-            "Noren の公式アカウントで紹介してよいとチェックを入れた話については、本文、最初の写真、表示名をそこに投稿することも許可します。取り消す方法は、プライバシーポリシーに書いてあります。",
+            "Noren とこの場所が Instagram で紹介してよいとチェックを入れた話については、Noren と、Noren に確認済みのその場所のオーナーが、本文と表示名を Instagram に投稿することも許可します。取り消す方法は、プライバシーポリシーに書いてあります。",
             "追加した場所の名前とピンは、地図上の事実として扱います。アカウントを削除した後も、あなたの名前を外して地図に残ります。",
           ],
         },
@@ -214,9 +216,8 @@ export const legalDocuments: Readonly<
           id: "story-pictures",
           heading: "話の画像と Noren の公式アカウント",
           paragraphs: [
-            "ご自身が書いた話ごとに「画像でシェアする」を選べます。Noren は、話が Noren で表示されている間に限り、本文、場所の名前、最初の写真（ある場合）、表示名、Noren のウェブアドレスから画像を作ります。画像はご依頼のたびに作られ、Noren は保存しません。その後に Instagram などへ投稿するかどうかは、あなたとそのサービスとの間のことです。",
-            "話を書くときに「Norenの公式アカウントで、あなたの名前を添えて紹介してよい」にチェックを入れると、Noren の担当者が、あなたの話（本文、最初の写真、表示名）を画像にして、Noren の公式 SNS アカウントに、場所へのリンクを付けて投稿することがあります。投稿は担当者が手で行い、Noren が自動で投稿することはありません。チェックは任意で、入れない限りオフです。Noren は、チェックを入れたことと、その日時を記録します。チェックのない話が紹介されることはありません。",
-            "チェックはいつでも、ご自身の話から「取り消す」を選んで外せます。外した後は、Noren はその話を投稿しません。話を削除すると、紹介する話の一覧からすぐに消えます。すでに SNS に投稿したものは、Noren が削除するまでそこに残ります。{contact} にご連絡いただければ、14 日以内に削除します。他の人が保存・再共有したものは、Noren の管理の外にあります。",
+            "自分の話ごとに「Instagram でシェアする」を選べます。Noren は、話が Noren で表示されている間に限り、本文、場所の名前、表示名、Noren のウェブアドレスから画像を作り（写真は使いません）、キャプションも書きます。Instagram には何も送りません。キャプションをコピーし、画像を保存して、ご自身で投稿します。",
+            "話を書くときに「Noren とこの場所が、私の名前を添えて、この話を Instagram で紹介してもかまいません」にチェックを入れると、Noren の担当者、または Noren に確認済みのその場所のオーナーが、同じ画像とキャプションで、あなたの話（本文と表示名）を自分たちの Instagram アカウントに手で投稿することがあります。Noren が自動で投稿することはありません。チェックはご自身の選択で、入れない限りオフです。チェックを入れたこととその日時を Noren は記録します。いつでもご自身の話から「許可する」「許可をやめる」で変えられます。すでに投稿されたものは、投稿した方が削除するまで残ります。{contact} にご連絡いただければ、Noren が投稿したものは14日以内に削除し、場所のオーナーが投稿したものは削除を依頼します。",
           ],
         },
         {
@@ -412,7 +413,7 @@ export const legalDocuments: Readonly<
           heading: "What stays yours and what you allow",
           paragraphs: [
             "What you write stays yours. You allow the operator to store it and show it on Noren with your name, until you or a steward removes it.",
-            "If you tick that Noren may share a story on its own accounts, you also allow the operator to post its words, your first photo and your name there. The privacy notice says how to take this back.",
+            "If you tick that Noren and this place may share a story on Instagram, you also allow Noren, and the verified owner of the place, to post its words and your name on Instagram. The privacy notice says how to take this back.",
             "A place you add, with its name and pin, is a fact on the map. It stays on the map after you delete your account, without your name.",
           ],
         },
@@ -531,9 +532,8 @@ export const legalDocuments: Readonly<
           id: "story-pictures",
           heading: "Pictures of your story and Noren's own accounts",
           paragraphs: [
-            "On each of your own stories you can choose “Share as a picture”. Noren draws a picture from the words, the place name, your first photo (if the story has one), your display name and our web address, only while the story is shown on Noren. The picture is made when you ask for it and is not kept by Noren. What you do with it afterwards, for example posting it on Instagram, is between you and that service.",
-            "If you tick “Noren may share this on its own accounts, credited to you” when you write a story, a person at Noren may post your story (its words, your first photo and your display name) as a picture on Noren's own social media accounts, with a link to the place. A person posts it by hand; Noren never posts by itself. Ticking is your choice and is off unless you tick it. Noren records that you ticked it and when. Someone who has not ticked is never featured.",
-            "You can withdraw the tick at any time from your own story: choose “Take back”. After that Noren will not post the story. If you remove the story, it leaves the list of stories to share at once. A post already made on a social media account stays there until Noren deletes it; ask us at {contact} and we will delete it within 14 days. Copies that other people have saved or reshared are outside Noren's control.",
+            "On each of your own stories you can choose “Share on Instagram”. Noren draws a picture from the words, the place name, your display name and our web address, never your photos, only while the story is shown on Noren, and writes a caption for it. Nothing is sent to Instagram: you copy the caption and save the picture, and post it yourself.",
+            "If you tick “Noren and this place may share my story on Instagram, with my name” when you write a story, a person at Noren, or the place's verified owner on Noren, may post your story (its words and your display name) on their own Instagram account, using the same picture and caption. They post it by hand; Noren never posts by itself. Ticking is your choice and is off unless you tick it. Noren records that you ticked it and when. You can change it at any time from your own story: choose “Allow this” or “Stop allowing”. A post already made stays up until whoever made it takes it down. Ask us at {contact} and we will delete the ones Noren made within 14 days, and ask the place to remove theirs.",
           ],
         },
         {

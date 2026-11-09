@@ -7,7 +7,6 @@ import { currentPerson, requirePerson, requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
 import { readMapNames, readMapPin } from "./lib/mapCopies";
-import { placePhotoRules, storyPhotoViews } from "./lib/storyPhotos";
 import { regionConfig } from "./lib/region";
 import { townOf } from "../src/lib/region/neighbourhoods";
 import { placeLabel } from "../src/lib/share/caption";
@@ -15,7 +14,7 @@ import { placeLabel } from "../src/lib/share/caption";
 /** How many consenting stories the steward queue reads; newer ones come first. */
 const QUEUE_LIMIT = 50;
 
-/** What a picture of a story shows, and nothing else. */
+/** What a picture of a story shows, and nothing else. It never carries a photo. */
 const cardView = v.object({
   body: v.string(),
   lang: v.string(),
@@ -24,8 +23,6 @@ const cardView = v.object({
   /** The place in English, and in Japanese when it has a Japanese name. */
   placeEnglish: v.string(),
   placeJapanese: v.union(v.string(), v.null()),
-  /** The storage key of the story's first live photo, if it has one. */
-  photoKey: v.union(v.string(), v.null()),
 });
 
 /**
@@ -70,20 +67,13 @@ async function townOfPlace(ctx: QueryCtx, place: Doc<"place">) {
   return townOf(regionConfig(place.regionId), pin);
 }
 
-async function cardOf(ctx: QueryCtx, found: { story: Doc<"story">; place: Doc<"place"> }) {
-  // Seen as a signed-out visitor sees it: no waiting photo and none the owner has asked to be without.
-  const rules = await placePhotoRules(ctx, null, found.place);
-  const photos = await storyPhotoViews(ctx, found.story._id, false, rules);
-  return { ...(await describe(ctx, found)), photoKey: photos[0]?.key ?? null };
-}
-
 /** The same for every viewer: the words of a live, shown story for the picture route to draw. */
 export const card = query({
   args: { storyId: v.id("story") },
   returns: v.union(cardView, v.null()),
   handler: async (ctx, { storyId }) => {
     const found = await shareable(ctx, await ctx.db.get("story", storyId));
-    return found === null ? null : await cardOf(ctx, found);
+    return found === null ? null : await describe(ctx, found);
   },
 });
 
@@ -222,7 +212,6 @@ const queueEntry = v.object({
   placeSlug: v.string(),
   placeEnglish: v.string(),
   placeJapanese: v.union(v.string(), v.null()),
-  hasPhoto: v.boolean(),
   town: v.object({ en: v.string(), ja: v.string() }),
   consentAt: v.number(),
   postedAt: v.union(v.number(), v.null()),
@@ -245,7 +234,7 @@ export const queue = query({
     for (const story of consented) {
       const found = await shareable(ctx, story);
       if (found === null || found.place.regionId !== regionId) continue;
-      const card = await cardOf(ctx, found);
+      const card = await describe(ctx, found);
       entries.push({
         storyId: story._id,
         body: card.body,
@@ -254,7 +243,6 @@ export const queue = query({
         placeSlug: card.placeSlug,
         placeEnglish: card.placeEnglish,
         placeJapanese: card.placeJapanese,
-        hasPhoto: card.photoKey !== null,
         town: await townOfPlace(ctx, found.place),
         consentAt: story.shareConsentAt!,
         postedAt: story.sharePostedAt ?? null,
