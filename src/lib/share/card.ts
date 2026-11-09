@@ -88,9 +88,19 @@ export function fitBody(
   return { text: `${kept}…`, fontSize, lineHeight: LINE_HEIGHT, cut: true };
 }
 
-/** Where the picture route lives. */
-export function cardPath(storyId: string, size: CardSize, download = false): string {
-  return `/api/share/${encodeURIComponent(storyId)}?size=${size}${download ? "&download=1" : ""}`;
+/**
+ * Where the picture route lives. `photo: false` leaves the story's photo out, as the Instagram kit
+ * does because a photo may show faces; without it the picture carries a photo when the story has one.
+ */
+export function cardPath(
+  storyId: string,
+  size: CardSize,
+  options: { download?: boolean; photo?: boolean } = {},
+): string {
+  const query = [`size=${size}`];
+  if (options.photo === false) query.push("photo=0");
+  if (options.download) query.push("download=1");
+  return `/api/share/${encodeURIComponent(storyId)}?${query.join("&")}`;
 }
 
 export function cardFileName(size: CardSize): string {

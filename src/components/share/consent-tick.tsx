@@ -2,8 +2,9 @@ import { messagesFor, type Locale } from "@/lib/i18n";
 import { shareMessages } from "@/lib/i18n/messages/share";
 
 /**
- * The writer's own choice, off until ticked: Noren may feature the story on its own accounts, with
- * their name. The form shows it only while the region offers it. It is never kept through a reload.
+ * The writer's own choice, off until ticked: Noren and the place may share the story on Instagram,
+ * with their name. The form shows it only while the region offers it. It is never kept through a
+ * reload, and the writer can change it later on their story.
  */
 export function ConsentTick({
   locale,

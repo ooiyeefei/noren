@@ -176,6 +176,20 @@
     "accountsOpen": true,
     "documentsVersion": "2026-11-07"
   },
+  "towns": [
+    {
+      "id": "nagasaki",
+      "names": { "ja": "長崎", "en": "Nagasaki" },
+      "center": { "lat": 32.7503, "lng": 129.8777 },
+      "radiusMetres": 15000
+    },
+    {
+      "id": "shimabara",
+      "names": { "ja": "島原", "en": "Shimabara" },
+      "center": { "lat": 32.7875, "lng": 130.3685 },
+      "radiusMetres": 15000
+    }
+  ],
   "neighbourhoods": [
     {
       "id": "nagasaki-station",

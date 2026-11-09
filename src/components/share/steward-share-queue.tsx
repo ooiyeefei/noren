@@ -16,10 +16,13 @@ import type { Id } from "../../../convex/_generated/dataModel";
 export type ShareQueueRow = {
   storyId: string;
   body: string;
+  /** The language the story was written in. */
+  lang: string;
   authorName: string;
   placeEnglish: string;
   placeJapanese: string | null;
-  placeSlug: string;
+  /** The town in both languages, for the hashtags. */
+  town: { en: string; ja: string };
   hasPhoto: boolean;
   /** When a steward marked it posted, as a time in milliseconds. */
   postedAt: number | null;
@@ -31,14 +34,15 @@ export type ShareQueueProps = ActionState & {
   onMarkPosted: (storyId: string) => void;
 };
 
-/** The caption a steward posts with: the line, the place, hashtags, the link and the writer's name. */
-export function queueCaption(row: ShareQueueRow, locale: Locale): string {
+/** The caption a steward posts with: the same one the Instagram kit gives, crediting the writer. */
+export function queueCaption(row: ShareQueueRow): string {
   return buildCaption({
     body: row.body,
-    place: row.placeJapanese ? `${row.placeEnglish} ${row.placeJapanese}` : row.placeEnglish,
-    slug: row.placeSlug,
-    locale,
-    credit: { prefix: messagesFor(shareMessages, locale).captionCredit, name: row.authorName },
+    lang: row.lang,
+    authorName: row.authorName,
+    placeEnglish: row.placeEnglish,
+    placeJapanese: row.placeJapanese,
+    town: row.town,
   });
 }
 
@@ -48,7 +52,7 @@ function PictureLink({ row, size, label }: { row: ShareQueueRow; size: CardSize;
   return (
     <a
       className="inline-flex min-h-11 items-center text-ai underline"
-      href={cardPath(row.storyId, size, true)}
+      href={cardPath(row.storyId, size, { download: true })}
       download
     >
       {label}
@@ -69,7 +73,7 @@ export function ShareQueueView(props: ShareQueueProps) {
       {!rows.length && <p>{m.queueEmpty}</p>}
       <div className="grid gap-4 md:grid-cols-2">
         {rows.map((row) => {
-          const caption = queueCaption(row, locale);
+          const caption = queueCaption(row);
           return (
             <article
               key={row.storyId}
@@ -149,10 +153,11 @@ export function ShareQueueContainer({ locale, regionId }: { locale: Locale; regi
       rows={queue.map((entry) => ({
         storyId: entry.storyId,
         body: entry.body,
+        lang: entry.lang,
         authorName: entry.authorName,
         placeEnglish: entry.placeEnglish,
         placeJapanese: entry.placeJapanese,
-        placeSlug: entry.placeSlug,
+        town: entry.town,
         hasPhoto: entry.hasPhoto,
         postedAt: entry.postedAt,
       }))}
