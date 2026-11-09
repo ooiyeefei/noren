@@ -12,22 +12,20 @@ export type CardContent = {
   authorName: string;
   placeEnglish: string;
   placeJapanese: string | null;
-  /** A data: address of the first photo (JPEG or PNG), or null. */
-  photo: string | null;
   /** Said under cut words: the whole story is on Noren. */
   cutNote: string;
 };
 
 export type CardFont = { name: string; data: ArrayBuffer; weight: 400 | 700 };
 
-/** The picture of one story, in the size given. Pure: the route gathers what it draws. */
+/** The picture of one story, in the size given: words, place, name and site, never a photo. Pure: the route gathers what it draws. */
 export function renderCard(
   content: CardContent,
   size: CardSize,
   fonts: readonly CardFont[],
 ): ImageResponse {
-  const layout = cardLayout(size, content.photo !== null);
-  const fit = fitBody(content.body, size, content.photo !== null);
+  const layout = cardLayout(size);
+  const fit = fitBody(content.body, size);
   const place = fitPlace(content.placeEnglish, content.placeJapanese, layout.textWidth);
   const { width, height } = CARD_SIZES[size];
   const line = {
@@ -101,23 +99,6 @@ export function renderCard(
           )}
         </div>
       </div>
-      {content.photo && (
-        // eslint-disable-next-line @next/next/no-img-element -- drawn into the picture, not a page
-        <img
-          src={content.photo}
-          alt=""
-          width={layout.textWidth}
-          height={layout.photoHeight}
-          style={{
-            width: layout.textWidth,
-            height: layout.photoHeight,
-            objectFit: "cover",
-            borderRadius: 20,
-            marginBottom: layout.gap,
-            flexShrink: 0,
-          }}
-        />
-      )}
       <div
         style={{
           display: "flex",

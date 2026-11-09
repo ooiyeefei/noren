@@ -2,16 +2,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fetchQuery } from "convex/nextjs";
 import { jsonError } from "@/lib/http/handler";
-import { publicPhotoProps, photoUrl } from "@/lib/photos/settings";
-import { getActiveRegion } from "@/lib/region";
 import { isCardSize, cardFileName, type CardSize } from "@/lib/share/card";
 import { renderCard, type CardFont } from "@/lib/share/render";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 const FONT_DIR = path.join(process.cwd(), "src/lib/share/fonts");
-const PHOTO_WAIT_MS = 5000;
-const PHOTO_BYTES = 8_000_000;
 
 async function loadFonts(): Promise<CardFont[]> {
   const read = async (file: string) => {
@@ -24,26 +20,9 @@ async function loadFonts(): Promise<CardFont[]> {
   ];
 }
 
-/** The photo as a data address, or null when it can't be had: a card without a photo is still a card. */
-async function loadPhoto(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(PHOTO_WAIT_MS) });
-    const type = response.headers.get("content-type")?.split(";")[0]?.trim();
-    if (!response.ok || (type !== "image/jpeg" && type !== "image/png")) return null;
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > PHOTO_BYTES) return null;
-    return `data:${type};base64,${bytes.toString("base64")}`;
-  } catch (caught) {
-    console.warn(
-      `share card: photo not loaded (${caught instanceof Error ? caught.name : typeof caught})`,
-    );
-    return null;
-  }
-}
-
 /**
- * A picture of one live story: its words, the place in English with Japanese beside, the first
- * photo if it has one, the writer's name and the site. It is drawn on the server with next/og so
+ * A picture of one live story: its words, the place in English with Japanese beside, the writer's
+ * name and the site. It never carries a story's photo, which may show faces. It is drawn on the server with next/og so
  * the same Japanese font renders on every phone. Anything not shown on its place's page, a hidden
  * or removed story among them, has no picture.
  */
@@ -56,8 +35,6 @@ export async function GET(
   const sizeParam = url.searchParams.get("size") ?? "story";
   if (!isCardSize(sizeParam)) return jsonError("invalid_input", "size is story or feed");
   const size: CardSize = sizeParam;
-  // The Instagram kit asks for no photo: one may show faces its owner never agreed to share.
-  const withPhoto = url.searchParams.get("photo") !== "0";
   let card;
   try {
     card = await fetchQuery(api.storyShare.card, { storyId: storyId as Id<"story"> });
@@ -72,19 +49,12 @@ export async function GET(
     return jsonError("not_found", "no picture for this story");
   }
   if (card === null) return jsonError("not_found", "no picture for this story");
-  const region = getActiveRegion();
-  const photoBase = publicPhotoProps(region, process.env)?.baseUrl;
-  const photo =
-    withPhoto && card.photoKey && photoBase
-      ? await loadPhoto(photoUrl(photoBase, card.photoKey))
-      : null;
   const image = renderCard(
     {
       body: card.body,
       authorName: card.authorName,
       placeEnglish: card.placeEnglish,
       placeJapanese: card.placeJapanese,
-      photo,
       cutNote:
         card.lang === "ja" ? "全文は noren.yooi.me で読めます" : "Read it all on noren.yooi.me",
     },

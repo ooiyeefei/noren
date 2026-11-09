@@ -3,11 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const fetchQuery = vi.hoisted(() => vi.fn());
 vi.mock("convex/nextjs", () => ({ fetchQuery }));
 
-vi.mock("@/lib/photos/settings", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/photos/settings")>()),
-  publicPhotoProps: () => ({ baseUrl: "https://photos.test" }),
-}));
-
 import { GET } from "@/app/api/share/[storyId]/route";
 
 const call = (id: string, query = "") =>
@@ -47,7 +42,6 @@ describe("the picture route", () => {
       placeSlug: "hill-cafe",
       placeEnglish: "Fictional Hill Cafe",
       placeJapanese: "架空の坂カフェ",
-      photoKey: null,
     });
     const response = await call("s1", "?size=feed&download=1");
     expect(response.status).toBe(200);
@@ -58,7 +52,8 @@ describe("the picture route", () => {
     expect(bytes.length).toBeGreaterThan(20_000);
   });
 
-  it("draws the story's photo unless the Instagram kit asks for the picture without it", async () => {
+  it("never fetches or draws a story's photo, whatever the address asks for", async () => {
+    // A photo may show faces its owner never agreed to put in a picture, so no address brings one in.
     const card = {
       body: "A cat sleeps on the steps.",
       lang: "en",
@@ -66,19 +61,16 @@ describe("the picture route", () => {
       placeSlug: "hill-cafe",
       placeEnglish: "Fictional Hill Cafe",
       placeJapanese: null,
+      // An old deployment of the data layer may still send a photo's key; it is ignored.
       photoKey: "stories/one.jpg",
     };
-    const photoFetch = vi.fn(async () => new Response("no", { status: 404 }));
-    vi.stubGlobal("fetch", photoFetch);
+    const outside = vi.fn(async () => new Response("no", { status: 404 }));
+    vi.stubGlobal("fetch", outside);
     try {
       fetchQuery.mockResolvedValue(card);
-      expect((await call("s1", "?size=feed&photo=0")).status).toBe(200);
-      expect(photoFetch).not.toHaveBeenCalled();
-      expect((await call("s1", "?size=feed")).status).toBe(200);
-      expect(photoFetch).toHaveBeenCalledTimes(1);
-      expect(String((photoFetch.mock.calls[0] as unknown as [string])[0])).toContain(
-        "stories/one.jpg",
-      );
+      for (const query of ["?size=feed", "?size=feed&photo=0", "?size=feed&photo=1", "?size=story"])
+        expect((await call("s1", query)).status).toBe(200);
+      expect(outside).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }

@@ -131,8 +131,9 @@ describe("the steward queue", () => {
     expect(queue[0]).toMatchObject({
       authorName: "Test Person (writer)",
       postedAt: null,
-      hasPhoto: false,
     });
+    // The picture never carries a photo, so the queue has nothing to say about one.
+    expect(queue[0]).not.toHaveProperty("hasPhoto");
     await b.as("writer").mutation(api.stories.remove, { storyId: first });
     expect(
       (await steward.query(api.storyShare.queue, { regionId: "nagasaki" })).map((e) => e.storyId),
@@ -172,10 +173,14 @@ describe("the picture's data", () => {
     const { b, placeId } = await world();
     const storyId = await tell(b, placeId as never);
     const card = await b.t.query(api.storyShare.card, { storyId });
-    expect(card).toMatchObject({
+    // Exactly the words, the place and the name: no photo, ever.
+    expect(card).toEqual({
       body: "The tram stop here is older than the street.",
+      lang: "en",
       authorName: "Test Person (writer)",
-      photoKey: null,
+      placeSlug: expect.any(String),
+      placeEnglish: "Test Shop",
+      placeJapanese: "テスト店",
     });
     expect(await b.as("other").query(api.storyShare.card, { storyId })).toEqual(card);
   });

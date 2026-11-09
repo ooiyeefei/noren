@@ -32,23 +32,22 @@ describe("the picture's layout", () => {
       feed: { width: 1080, height: 1350 },
     });
     expect(cardPath("abc", "feed", { download: true })).toBe("/api/share/abc?size=feed&download=1");
-    expect(cardPath("abc", "feed", { photo: false })).toBe("/api/share/abc?size=feed&photo=0");
-    expect(cardPath("abc", "story", { photo: false, download: true })).toBe(
-      "/api/share/abc?size=story&photo=0&download=1",
-    );
+    expect(cardPath("abc", "story")).toBe("/api/share/abc?size=story");
   });
 
   it("gives short words big type and shrinks long ones, cutting only at the smallest", () => {
-    const short = fitBody("Short.", "story", false);
-    const middle = fitBody("あ".repeat(200), "story", true);
-    const huge = fitBody("あ".repeat(1000), "feed", true);
+    const short = fitBody("Short.", "story");
+    const middle = fitBody("あ".repeat(200), "feed");
+    const huge = fitBody("あ".repeat(1000), "feed");
     expect(short).toMatchObject({ fontSize: 72, cut: false });
     expect(middle.fontSize).toBeLessThan(72);
     expect(middle.cut).toBe(false);
     expect(huge).toMatchObject({ fontSize: 32, cut: true });
     expect(huge.text.endsWith("…")).toBe(true);
     expect(huge.text.length).toBeLessThan(1000);
-    expect(cardLayout("feed", true).textHeight).toBeGreaterThan(0);
+    expect(cardLayout("feed").textHeight).toBeGreaterThan(0);
+    // The room is the same whatever the story has: no space is kept for a photo.
+    expect(cardLayout("feed").textHeight).toBe(1350 - 2 * 88 - 300 - 150 - 44);
   });
 
   it("puts the Japanese name beside the English one, or under it when they do not fit", () => {
@@ -76,20 +75,6 @@ describe("Share on Instagram", () => {
     expect(sent.text).toBe("cap");
     expect(sent.files?.[0]?.name).toBe("noren-story-story.png");
     expect(download).not.toHaveBeenCalled();
-  });
-
-  it("asks for the picture without the story's photo when the kit says so", async () => {
-    const fetcher = vi.fn(async () => png());
-    await sharePicture(
-      { storyId: "s1", size: "feed", caption: "c", photo: false },
-      { fetcher, nav: { canShare: () => true, share: vi.fn(async () => {}) } },
-    );
-    expect(fetcher).toHaveBeenCalledWith("/api/share/s1?size=feed&photo=0");
-    await downloadPicture(
-      { storyId: "s2", size: "feed", photo: false },
-      { fetcher, download: vi.fn() },
-    );
-    expect(fetcher).toHaveBeenLastCalledWith("/api/share/s2?size=feed&photo=0");
   });
 
   it("downloads where there is no share sheet, or it can't take a file", async () => {

@@ -4,7 +4,7 @@
 
 **Written**: 9 Nov 2026, from the owner's decisions of 8 Nov 2026.
 
-**Status**: Phase 1 built and checked on the dev deployment. **Not deployed**: it changes the words the live terms and privacy notice quote, so the owner has to approve the notice first (see "The notice has to change with it"). Phase 2 is a plan only.
+**Status**: Phase 1 built, checked on the dev deployment, and shipped on 9 Nov 2026 together with the terms and privacy notice wording the owner approved that day (`documentsVersion` 2026-11-09). Phase 2 is a plan only.
 
 This folder shares the number 003 with `specs/003-story-photos`, as the owner asked for the path. Rename it if the clash matters.
 
@@ -44,34 +44,27 @@ The rule lives in one place, `kitViewer` in `convex/storyShare.ts`, behind the q
 
 What the kit gives:
 
-- **Picture:** 1080 x 1350, the existing feed size (the 1080 x 1920 story size stays a second choice). Drawn without the story's photos, because faces may be in them (`?photo=0`; the route still includes a photo where it is not asked to leave it out, as the steward queue does).
+- **Picture:** 1080 x 1350, the existing feed size (the 1080 x 1920 story size stays a second choice). Drawn without the story's photos, because faces may be in them. The owner approved the same for every picture on 9 Nov: the picture route no longer loads a photo at all, whatever the address says, so the steward queue's pictures are photo-free too and the notice can say "never your photos".
 - **Caption:** the story in its own language; the other language only where a translation passed its check; "Story by <name> on Noren", or 「<name> さんの物語（Noren より）」 for a Japanese story; the place in English with the Japanese beside it; `noren.yooi.me` as plain text; hashtags: the town in both languages (`#長崎 #Nagasaki` or `#島原 #Shimabara`), the place's name made hashtag-safe, in English and in Japanese, and `#Noren`. It is held under 2,200 characters and 30 hashtags: if room runs out, the translation goes first, then the end of the story, so the credit and the hashtags always stay.
 - **Buttons:** "Copy caption" and "Save picture". Where the browser can send a picture file to the share sheet (`navigator.canShare({ files })`), also "Share from this phone", so Instagram can be picked.
 - Noren calls neither Instagram nor Meta, and adds no outside service or script.
 
 Town comes from new `towns` data in `regions/nagasaki.json` (Nagasaki and Shimabara, 15 km circles; the nearest circle holding the pin; the region's own name where none does). The existing `neighbourhoods` were too small for this: Shimabara station is outside the castle-town circle.
 
-The steward queue now uses the same caption builder and carries the town, so a hand-posted story reads the same as a kit one.
+The steward queue uses the same caption builder and carries the town, so a hand-posted story reads the same as a kit one. Its "Has a photo" note is gone, because no picture uses a photo.
 
 ### Known limits
 
 - Written stories have no translations yet (only found posts and interview statements do), so a kit caption is in one language today. The caption builder takes a checked translation when one exists.
-- The steward queue's picture links still include the story's first photo, as the notice says. The owner may want them photo-free like the kit.
 - A demo story, a hidden story and a place that is not public get no kit.
 
 ### Tests
 
 Convex (`convex/storyShare.test.ts`): who may change the tick; audit entries; the kit's viewer matrix with a verified owner, an owner of another place, a steward, the pin-adder, another member and a visitor; opt-in default off; a story written before the tick; no kit for a found post; the town. Unit: the caption builder (both languages, credit, hashtags, both limits, translation dropped first), the kit panel (copy, save, share sheet, consent control per viewer, both languages), the feed (which stories ask), the picture route without photos. Dev flow: real signed-in members on the dev deployment (writer, owner, steward, another member, a visitor), through the real components, at 390 px and desktop.
 
-## The notice has to change with it
+## The notice changed with it (approved 9 Nov 2026)
 
-`src/lib/i18n/messages/legal-documents.ts` says to change its words and `documentsVersion` in the same change as anything that makes the sharing section wrong. Phase 1 does, and this work was told not to touch that file or `documentsVersion`. The live notice and terms:
-
-- quote the old words “Share as a picture”, “Noren may share this on its own accounts, credited to you” and “Take back”;
-- say only "a person at Noren" posts a ticked story, not the place's owner;
-- say the picture carries the first photo (still true of the steward queue, no longer of the writer's own picture).
-
-Proposed replacement for the privacy notice's second and third paragraphs of "Pictures of your story and Noren's own accounts", for the owner to approve (the Japanese is unreviewed):
+`src/lib/i18n/messages/legal-documents.ts` asks for its words and `documentsVersion` to change in the same change as anything that makes its sharing section wrong. Phase 1 did: the live notice and terms quoted the old words "Share as a picture", "Noren may share this on its own accounts, credited to you" and "Take back", said only "a person at Noren" posts a ticked story, and said the picture carries the first photo. The owner approved the wording below on 9 Nov 2026; it shipped with phase 1, `documentsVersion` went from 2026-11-07 to 2026-11-09, and `tests/unit/legal-sharing-words.test.ts` ties the notice's quotes to the words on screen. The proposed text, as approved (the Japanese is unreviewed):
 
 > On each of your own stories you can choose “Share on Instagram”. Noren draws a picture from the words, the place name, your display name and our web address, never your photos, only while the story is shown on Noren, and writes a caption for it. Nothing is sent to Instagram: you copy the caption and save the picture, and post it yourself.
 >
@@ -81,9 +74,9 @@ Proposed replacement for the privacy notice's second and third paragraphs of "Pi
 >
 > 話を書くときに「Noren とこの場所が、私の名前を添えて、この話を Instagram で紹介してもかまいません」にチェックを入れると、Noren の担当者、または Noren に確認済みのその場所のオーナーが、同じ画像とキャプションで、あなたの話（本文と表示名）を自分たちの Instagram アカウントに手で投稿することがあります。Noren が自動で投稿することはありません。チェックはご自身の選択で、入れない限りオフです。チェックを入れたこととその日時を Noren は記録します。いつでもご自身の話から「許可する」「許可をやめる」で変えられます。すでに投稿されたものは、投稿した方が削除するまで残ります。{contact} にご連絡いただければ、Noren が投稿したものは14日以内に削除し、場所のオーナーが投稿したものは削除を依頼します。
 
-The terms' line "you also allow the operator to post its words, your first photo and your name there" would read "you also allow Noren, and the verified owner of the place, to post its words and your name on Instagram".
+The terms' line about what you allow now reads, in English, "If you tick that Noren and this place may share a story on Instagram, you also allow Noren, and the verified owner of the place, to post its words and your name on Instagram. The privacy notice says how to take this back." The Japanese terms line says the same (「Noren と、Noren に確認済みのその場所のオーナーが、本文と表示名を Instagram に投稿することも許可します」). The other lines about posts already made on Noren's own accounts stay as they were, since they are still true of Noren's posts.
 
-Order to ship: the owner approves this wording, the file and `documentsVersion` change in one change, then phase 1 is merged and deployed.
+The proposed first paragraph replaced the old first one, and the second replaced the old second and third. The heading is unchanged.
 
 ## Phase 2 plan (not built)
 
