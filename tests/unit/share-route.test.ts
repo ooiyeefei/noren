@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const fetchQuery = vi.hoisted(() => vi.fn());
 vi.mock("convex/nextjs", () => ({ fetchQuery }));
 
+vi.mock("@/lib/photos/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/photos/settings")>()),
+  publicPhotoProps: () => ({ baseUrl: "https://photos.test" }),
+}));
+
 import { GET } from "@/app/api/share/[storyId]/route";
 
 const call = (id: string, query = "") =>
@@ -51,5 +56,31 @@ describe("the picture route", () => {
     const bytes = new Uint8Array(await response.arrayBuffer());
     expect([...bytes.slice(1, 4)]).toEqual([0x50, 0x4e, 0x47]);
     expect(bytes.length).toBeGreaterThan(20_000);
+  });
+
+  it("draws the story's photo unless the Instagram kit asks for the picture without it", async () => {
+    const card = {
+      body: "A cat sleeps on the steps.",
+      lang: "en",
+      authorName: "Test Person",
+      placeSlug: "hill-cafe",
+      placeEnglish: "Fictional Hill Cafe",
+      placeJapanese: null,
+      photoKey: "stories/one.jpg",
+    };
+    const photoFetch = vi.fn(async () => new Response("no", { status: 404 }));
+    vi.stubGlobal("fetch", photoFetch);
+    try {
+      fetchQuery.mockResolvedValue(card);
+      expect((await call("s1", "?size=feed&photo=0")).status).toBe(200);
+      expect(photoFetch).not.toHaveBeenCalled();
+      expect((await call("s1", "?size=feed")).status).toBe(200);
+      expect(photoFetch).toHaveBeenCalledTimes(1);
+      expect(String((photoFetch.mock.calls[0] as unknown as [string])[0])).toContain(
+        "stories/one.jpg",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

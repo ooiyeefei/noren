@@ -35,12 +35,19 @@ export function StoryFeed({
   frameOrigins,
   actions,
   photoBaseUrl,
+  canShareKit = false,
 }: {
   locale: Locale;
   entries: readonly StoryFeedEntry[];
   scriptOrigins: readonly string[];
   frameOrigins: readonly string[];
   actions?: StoryFeedActions;
+  /**
+   * The viewer runs this place or is a steward, so each written story may have an Instagram kit for
+   * them. The server decides: it gives one only where the writer allowed it. A member's own stories
+   * always ask. Posts, found ones among them, never do.
+   */
+  canShareKit?: boolean;
   /** Where photos are served from; unset while photos are off. */
   photoBaseUrl?: string;
 }) {
@@ -132,7 +139,7 @@ export function StoryFeed({
                           remove={actions?.removePhoto}
                         />
                       )}
-                      {moment.addedByMe && actions && (
+                      {actions && (moment.addedByMe || canShareKit) && (
                         <ShareStoryConnected locale={locale} storyId={moment._id} />
                       )}
                     </li>

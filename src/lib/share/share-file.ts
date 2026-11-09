@@ -35,6 +35,16 @@ export function canShareFile(file: File, nav: Partial<ShareNavigator> | undefine
   return typeof nav?.share === "function" && !!nav.canShare?.({ files: [file] });
 }
 
+/** Whether this browser can hand a picture to the share sheet, asked before the picture is made. */
+export function canShareFiles(
+  nav: Partial<ShareNavigator> | undefined = typeof navigator === "undefined"
+    ? undefined
+    : navigator,
+): boolean {
+  if (typeof File === "undefined") return false;
+  return canShareFile(new File([], "noren.png", { type: "image/png" }), nav);
+}
+
 /**
  * On a phone the share sheet takes the file, so Instagram is among its choices; anywhere else the
  * picture is saved. Closing the sheet is a choice, not a failure.

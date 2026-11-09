@@ -181,6 +181,7 @@ export function PlaceView({
                 frameOrigins={region.frameOrigins}
                 actions={story}
                 photoBaseUrl={region.photos?.baseUrl}
+                canShareKit={place.canManage}
               />
             </>
           )}

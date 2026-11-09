@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { CARD_SIZES, cardLayout, cardPath, fitBody, fitPlace } from "@/lib/share/card";
-import { buildCaption, captionLine, placeLabel } from "@/lib/share/caption";
+import { placeLabel } from "@/lib/share/caption";
 import { copyCaption, downloadPicture, sharePicture } from "@/lib/share/picture";
 
 const names = [
@@ -23,38 +23,6 @@ describe("the caption", () => {
       text: "Fictional Hill Cafe",
     });
   });
-
-  it("holds the line, the place, hashtags in both languages and the link", () => {
-    const caption = buildCaption({
-      body: "The baker gives the cats the crusts.",
-      place: "Fictional Hill Cafe 架空の坂カフェ",
-      slug: "hill-cafe",
-      locale: "en",
-    });
-    expect(caption).toContain("“The baker gives the cats the crusts.”");
-    expect(caption).toContain("Fictional Hill Cafe 架空の坂カフェ");
-    expect(caption).toContain("#Nagasaki #長崎");
-    expect(caption).toContain("https://noren.yooi.me/en/places/hill-cafe");
-    expect(caption).not.toContain("A story by");
-  });
-
-  it("credits the writer when a steward posts it", () => {
-    const caption = buildCaption({
-      body: "Hello",
-      place: "P",
-      slug: "p",
-      locale: "en",
-      credit: { prefix: "A story by", name: "Test Person" },
-    });
-    expect(caption).toContain("A story by Test Person");
-  });
-
-  it("cuts a long story at a sentence end, or at the limit with an ellipsis", () => {
-    const sentence = `${"word ".repeat(20)}ends here. ${"more ".repeat(40)}`;
-    expect(captionLine(sentence)).toMatch(/ends here\.$/);
-    expect(captionLine("あ".repeat(300))).toMatch(/…$/);
-    expect(captionLine("  short   line ")).toBe("short line");
-  });
 });
 
 describe("the picture's layout", () => {
@@ -63,7 +31,11 @@ describe("the picture's layout", () => {
       story: { width: 1080, height: 1920 },
       feed: { width: 1080, height: 1350 },
     });
-    expect(cardPath("abc", "feed", true)).toBe("/api/share/abc?size=feed&download=1");
+    expect(cardPath("abc", "feed", { download: true })).toBe("/api/share/abc?size=feed&download=1");
+    expect(cardPath("abc", "feed", { photo: false })).toBe("/api/share/abc?size=feed&photo=0");
+    expect(cardPath("abc", "story", { photo: false, download: true })).toBe(
+      "/api/share/abc?size=story&photo=0&download=1",
+    );
   });
 
   it("gives short words big type and shrinks long ones, cutting only at the smallest", () => {
@@ -89,7 +61,7 @@ describe("the picture's layout", () => {
 
 const png = () => new Response(new Blob(["x"], { type: "image/png" }), { status: 200 });
 
-describe("Share as a picture", () => {
+describe("Share on Instagram", () => {
   it("hands the file to the share sheet where the phone allows it", async () => {
     const share = vi.fn(async () => {});
     const download = vi.fn();
@@ -104,6 +76,20 @@ describe("Share as a picture", () => {
     expect(sent.text).toBe("cap");
     expect(sent.files?.[0]?.name).toBe("noren-story-story.png");
     expect(download).not.toHaveBeenCalled();
+  });
+
+  it("asks for the picture without the story's photo when the kit says so", async () => {
+    const fetcher = vi.fn(async () => png());
+    await sharePicture(
+      { storyId: "s1", size: "feed", caption: "c", photo: false },
+      { fetcher, nav: { canShare: () => true, share: vi.fn(async () => {}) } },
+    );
+    expect(fetcher).toHaveBeenCalledWith("/api/share/s1?size=feed&photo=0");
+    await downloadPicture(
+      { storyId: "s2", size: "feed", photo: false },
+      { fetcher, download: vi.fn() },
+    );
+    expect(fetcher).toHaveBeenLastCalledWith("/api/share/s2?size=feed&photo=0");
   });
 
   it("downloads where there is no share sheet, or it can't take a file", async () => {

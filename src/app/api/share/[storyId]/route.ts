@@ -56,6 +56,8 @@ export async function GET(
   const sizeParam = url.searchParams.get("size") ?? "story";
   if (!isCardSize(sizeParam)) return jsonError("invalid_input", "size is story or feed");
   const size: CardSize = sizeParam;
+  // The Instagram kit asks for no photo: one may show faces its owner never agreed to share.
+  const withPhoto = url.searchParams.get("photo") !== "0";
   let card;
   try {
     card = await fetchQuery(api.storyShare.card, { storyId: storyId as Id<"story"> });
@@ -73,7 +75,9 @@ export async function GET(
   const region = getActiveRegion();
   const photoBase = publicPhotoProps(region, process.env)?.baseUrl;
   const photo =
-    card.photoKey && photoBase ? await loadPhoto(photoUrl(photoBase, card.photoKey)) : null;
+    withPhoto && card.photoKey && photoBase
+      ? await loadPhoto(photoUrl(photoBase, card.photoKey))
+      : null;
   const image = renderCard(
     {
       body: card.body,

@@ -84,6 +84,21 @@ export const regionSchema = z
       )
       .min(1)
       .optional(),
+    /**
+     * The towns a shared story's hashtags name (#島原 #Shimabara). A place is in the nearest town whose
+     * circle holds its pin, and in none when no circle does; then the region's own name stands in.
+     */
+    towns: z
+      .array(
+        z.strictObject({
+          id: z.string().regex(/^[a-z][a-z0-9-]*$/, "lowercase letters, digits and hyphens"),
+          names: localised,
+          center: z.strictObject({ lat, lng }),
+          radiusMetres: z.number().positive(),
+        }),
+      )
+      .min(1)
+      .optional(),
     consent: z.strictObject({
       textVersion: z.string().min(1),
       text: localised,
@@ -305,6 +320,7 @@ export const regionSchema = z
 
 export type RegionConfig = z.infer<typeof regionSchema>;
 export type Neighbourhood = NonNullable<RegionConfig["neighbourhoods"]>[number];
+export type Town = NonNullable<RegionConfig["towns"]>[number];
 export type AerialPhoto = NonNullable<RegionConfig["geo"]["aerialPhoto"]>;
 
 export type RegionPolicy = {

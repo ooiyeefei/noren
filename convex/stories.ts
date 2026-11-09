@@ -68,7 +68,7 @@ export const add = mutation({
     body: v.string(),
     lang: v.string(),
     photoIds: v.optional(v.array(v.id("storyPhoto"))),
-    /** The writer's tick that Noren may feature this on its own accounts; only while the region offers it. */
+    /** The writer's tick that Noren and the place may share this on Instagram; only while the region offers it. */
     shareConsent: v.optional(v.boolean()),
   },
   returns: v.id("story"),
@@ -95,6 +95,15 @@ export const add = mutation({
         ...(shareConsent ? { shareConsentAt: Date.now() } : {}),
       }),
     );
+    if (shareConsent)
+      await writeAudit(ctx, {
+        actorKind: "person",
+        actorPersonId: person._id,
+        action: "story.share_consent_given",
+        targetType: "story",
+        targetId: storyId,
+        diff: { shareConsent: true },
+      });
     await attachPhotos(ctx, { person, place, storyId, photoIds: photoIds ?? [] });
     return storyId;
   },

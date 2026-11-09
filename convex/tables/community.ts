@@ -34,7 +34,10 @@ export const communityTables = {
     lang: v.string(),
     status: v.union(v.literal("live"), v.literal("hidden")),
     isMock: v.boolean(),
-    /** When the writer ticked that Noren may feature the story on its own accounts; absent when not, or withdrawn. */
+    /**
+     * When the writer ticked that Noren and the place may share the story on Instagram, with their
+     * name; absent when not ticked, or turned off since. Stories written before the tick have none.
+     */
     shareConsentAt: v.optional(v.number()),
     /** When a steward marked it as posted on Noren's accounts, by hand. */
     sharePostedAt: v.optional(v.number()),
