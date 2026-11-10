@@ -2,6 +2,7 @@ import { voiceTables } from "./tables/storyVoice";
 import { defineSchema } from "convex/server";
 import { collectionTables } from "./tables/collection";
 import { communityTables } from "./tables/community";
+import { connectorTables } from "./tables/connector";
 import { interviewTables } from "./tables/interviews";
 import { placeTables } from "./tables/places";
 import { storyFinderTables } from "./tables/storyFinder";
@@ -15,4 +16,5 @@ export default defineSchema({
   ...collectionTables,
   ...storyPhotoTables,
   ...voiceTables,
+  ...connectorTables,
 });

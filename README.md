@@ -159,6 +159,52 @@ Each neighbourhood in a region's file can have one noren: six panels of one orig
 - Stewards swap places, pick lines and set a set live on `/steward/collection`. An operator makes a set with `collection:createSet` and uploads its art with [scripts/upload-set-art.mts](scripts/upload-set-art.mts). The art stays out of this repository.
 - Rewards, QR codes, sets built by local teams and totals for shops aren't built. [`/en/for-local-teams`](src/components/proposal) is a mock that shows what they could be, with sample names, a 見本 Mock label on every screen and a note that nobody has agreed to it. Nothing links to it.
 
+## Use Noren from Claude or ChatGPT
+
+Noren has a connector. Add it to Claude or ChatGPT and the assistant can search Nagasaki's places, read a place's page, list the stamp collections, suggest a short walk and draw the day's omikuji, using Noren's own data.
+
+**Connector address:** `https://noren.yooi.me/api/mcp`
+
+The connector is switched off until the privacy notice names it (`features.connector` in [regions/nagasaki.json](regions/nagasaki.json)). While it is off, the address answers 404.
+
+It is read-only and needs no sign-in. The assistant sees only what a signed-out visitor sees on Noren. A member's story reaches the assistant only if its writer allowed that. Otherwise the assistant gets a count and a link to read the stories on Noren. The two draws keep one anonymous count of how often a place was suggested each week, so quieter places get their turn. No location, question, account or device is kept.
+
+| Tool               | What it does                                                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `search_places`    | Finds places by words in English, Japanese or romaji, by category or by neighbourhood.                                                                                               |
+| `get_place`        | Reads one place's page: names, cautions, stories with their writers, the story Noren's AI stitched, found public posts, photo credits and links.                                    |
+| `list_collections` | Lists the public stamp collections and their places. It shows nobody's progress.                                                                                                     |
+| `suggest_walk`     | Draws 1 to 5 stops from a neighbourhood or a place. It never takes coordinates. Hard rules (`avoid`) filter, interests only tilt the odds, and it says which rules it could not check. |
+| `draw_omikuji`     | Draws today's slip for a neighbourhood. Everyone gets the same slip that day. It leans toward places nobody has written about and links to the story form.                           |
+
+Noren has no ratings or rankings. A walk is a fair random draw ([src/lib/draw](src/lib/draw)), and the numbers that tilt it are in one short file, [src/lib/draw/weights.ts](src/lib/draw/weights.ts).
+
+### Add it in Claude (claude.ai and the desktop app)
+
+Steps from Anthropic's help page, [Get started with custom connectors using remote MCP](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp). The desktop app uses the same account settings.
+
+1. Open **Customize > Connectors**.
+2. Click **+ Add**, then **Add custom connector**.
+3. Enter the name `Noren` and the address `https://noren.yooi.me/api/mcp`, then click **Continue**.
+4. Under **Authentication**, choose **No sign in**, then click **Add**.
+5. In a chat, click **+** at the lower left, choose **Connectors**, and turn Noren on.
+
+Custom connectors work on every Claude plan; the Free plan allows one. On a Team or Enterprise plan, an owner adds the connector under **Organization settings > Connectors**. Members then open **Customize > Connectors** and click **Connect**. See also [Use connectors to extend Claude's capabilities](https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities).
+
+### Add it in ChatGPT
+
+Steps from OpenAI's developer guide, [Add custom MCP server](https://developers.openai.com/api/docs/guides/custom-mcp-server), and the help page [Connecting custom MCP servers in ChatGPT](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt). Use ChatGPT on the web.
+
+1. Open [ChatGPT Plugins](https://chatgpt.com/plugins).
+2. Select the plus button, then **Add custom MCP server**.
+3. Enter the name `Noren`.
+4. Under **Connection**, enter the server URL `https://noren.yooi.me/api/mcp`.
+5. For authentication, choose **No authentication**.
+6. Read the risk warning and select **I understand and want to continue**, then **Create as a plugin**.
+7. Install the plugin. In a new chat, type `@` and pick Noren.
+
+OpenAI changes these menus often, and which plans can add a custom server depends on your workspace's settings. If you do not see **Plugins**, read the help page above. Some accounts need Developer mode turned on first.
+
 ## Accounts
 
 - Sign-up asks for a tick that the person is 16 or over and accepts the terms and the privacy notice (`/terms`, `/privacy`). The notice names every service outside Japan that holds or processes account data.

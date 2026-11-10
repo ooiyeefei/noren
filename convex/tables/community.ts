@@ -41,6 +41,12 @@ export const communityTables = {
     shareConsentAt: v.optional(v.number()),
     /** When a steward marked it as posted on Noren's accounts, by hand. */
     sharePostedAt: v.optional(v.number()),
+    /**
+     * When the writer allowed the Noren connector to hand this story, with their name, to an AI
+     * assistant a visitor has connected (src/lib/connector/policy.ts). Absent means not allowed, as
+     * for every story written before the tick exists. Stories show on Noren regardless.
+     */
+    connectorAllowedAt: v.optional(v.number()),
   })
     .index("by_placeId_and_status", ["placeId", "status"])
     .index("by_status", ["status"])

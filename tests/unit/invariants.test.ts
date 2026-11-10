@@ -99,6 +99,8 @@ const notPersonCreated = [
   "translationCheckRun",
   // Storage keys waiting to be deleted, written by the system after a removal.
   "photoObjectRemoval",
+  // How often a real place was suggested in a week, written only by a connector draw. No person.
+  "placeExposure",
 ];
 
 it("no table or field is named like a rating, score or sentiment", () => {
