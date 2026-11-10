@@ -156,6 +156,11 @@ describe("region policy", () => {
     expect(region.legal.launchPackComplete).toBe(false);
   });
 
+  it("ships the connector, the planner and walk mode switched off until the notice names them", () => {
+    const { features } = loadRegions().get("nagasaki")!;
+    expect(features).toEqual({ connector: false, planner: false, walk: false });
+  });
+
   it("ships with accounts open and the documents the owner approved", () => {
     const { legal } = loadRegions().get("nagasaki")!;
     expect(legal.accountsOpen).toBe(true);
