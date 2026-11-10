@@ -130,13 +130,16 @@ export type StoryWriter = {
 const NO_REPORT = "the writer did not call report_story";
 
 /**
- * One tool call per draft. Meta's Model API accepts only tool_choice "auto", so the instructions ask
- * for the call, and a reply without one is asked once more (the same as the mention check).
+ * One tool call per draft. Meta's Model API accepts only tool_choice "auto", and Claude Sonnet 5.5 and
+ * Opus 5.5 reject a forced choice, so there the instructions ask for the call, and a reply without
+ * one is asked once more (the same as the mention check).
  */
 export function createStoryWriter(options: {
   model: LanguageModel;
   /** false for a provider that accepts only tool_choice "auto". */
   forceTool?: boolean;
+  /** Reasoning counts towards it. */
+  maxOutputTokens?: number;
   timeoutMs?: number;
 }): StoryWriter {
   return {
@@ -155,7 +158,7 @@ export function createStoryWriter(options: {
           toolChoice:
             options.forceTool === false ? "auto" : { type: "tool", toolName: "report_story" },
           // Reasoning counts towards it: a place with six long posts takes about 3,000.
-          maxOutputTokens: 8000,
+          maxOutputTokens: options.maxOutputTokens ?? 8000,
           reasoning: "low",
           maxRetries: 1,
           abortSignal: AbortSignal.timeout(options.timeoutMs ?? 150_000),

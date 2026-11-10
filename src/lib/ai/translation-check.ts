@@ -2,16 +2,20 @@ import {
   APICallError,
   generateText,
   jsonSchema,
+  NoObjectGeneratedError,
+  Output,
   tool,
   type JSONSchema7,
   type LanguageModel,
 } from "ai";
+import type { ReportMode } from "./config";
 
 /**
  * The translation check: a second model compares a machine translation with the person's own
- * words and lists the claims the translation adds and the claims it leaves out. It runs through
- * one forced tool call, never a JSON response format, because the SGLang server behind our Modal
- * endpoint can loop on whitespace when asked for a json_schema response.
+ * words and lists the claims the translation adds and the claims it leaves out. Except for Claude
+ * (see generateReport), it runs through one forced tool call, never a JSON response format, because
+ * the SGLang server behind our Modal endpoint can loop on whitespace when asked for a json_schema
+ * response.
  */
 export const CHECK_TOOL = "report_check";
 /**
@@ -20,6 +24,12 @@ export const CHECK_TOOL = "report_check";
  * look went unchecked. Those took 890 to 1,450 tokens; at about 140 a second, 3,000 fits the timeout.
  */
 export const CHECK_MAX_TOKENS = 3000;
+/**
+ * Claude thinks before it answers whatever the call, Claude Sonnet 5.5 cannot be told not to, and the
+ * thinking counts against max_tokens even when it is not returned. This leaves room for it at the
+ * default effort. A check that still runs out stops as unreadable and fails; it never passes.
+ */
+export const CHECK_MAX_TOKENS_NATIVE = 16_000;
 export const CHECK_TIMEOUT_MS = 60_000;
 const LIST_ITEMS = 5;
 const ITEM_LENGTH = 200;
@@ -50,6 +60,51 @@ export const CHECK_REPORT_SCHEMA: JSONSchema7 = {
 /** The model answered, but not with a usable report. Not worth a retry: it would generate again. */
 export class CheckOutputError extends Error {
   override name = "CheckOutputError";
+}
+
+/**
+ * Asks a Claude model for a report as native structured output (Output.object, sent as
+ * output_config.format) instead of a forced tool call, and returns the parsed JSON for the caller to
+ * read with its own parse function. A check fails closed: a refusal, a stop at max_tokens or at
+ * anything but a finished answer, text that is not JSON and an answer that does not fit the schema
+ * all throw CheckOutputError, so none of them can count as a pass. The schema's limits (list
+ * lengths, claim lengths) are for the model's guidance: Anthropic drops them from the schema it
+ * enforces, and the caller's parse function applies them.
+ */
+export async function generateReport(options: {
+  model: LanguageModel;
+  system: string;
+  prompt: string;
+  schema: JSONSchema7;
+  /** What was asked for, in the words of an error message: "the check", "the story check". */
+  label: string;
+  timeoutMs?: number;
+}): Promise<unknown> {
+  let result;
+  try {
+    result = await generateText({
+      model: options.model,
+      system: options.system,
+      prompt: options.prompt,
+      output: Output.object({ schema: jsonSchema<Record<string, unknown>>(options.schema) }),
+      maxOutputTokens: CHECK_MAX_TOKENS_NATIVE,
+      // A retry here would wait inside the action; the caller schedules retries instead.
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(options.timeoutMs ?? CHECK_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (NoObjectGeneratedError.isInstance(error))
+      throw new CheckOutputError(
+        `${options.label} returned a report that could not be read (finish reason ${error.finishReason})`,
+      );
+    throw error;
+  }
+  // Only "stop" is a finished answer. "content-filter" is a refusal, "length" ran out of tokens.
+  if (result.finishReason !== "stop")
+    throw new CheckOutputError(
+      `${options.label} did not finish its report (finish reason ${result.finishReason})`,
+    );
+  return result.output;
 }
 
 function languageName(code: string): string {
@@ -109,10 +164,23 @@ export function parseCheckReport(input: unknown): CheckReport {
 export function createTranslationChecker(options: {
   model: LanguageModel;
   timeoutMs?: number;
+  /** How the report is asked for (see reportMode); a forced tool call unless set. */
+  reportMode?: ReportMode;
 }): TranslationChecker {
   return {
     async check(input) {
       const { system, prompt } = checkPrompt(input);
+      if (options.reportMode === "native")
+        return parseCheckReport(
+          await generateReport({
+            model: options.model,
+            system,
+            prompt,
+            schema: CHECK_REPORT_SCHEMA,
+            label: "the check",
+            timeoutMs: options.timeoutMs,
+          }),
+        );
       const result = await generateText({
         model: options.model,
         system,
@@ -139,14 +207,15 @@ export function createTranslationChecker(options: {
 
 /**
  * "retry" for what clears up on its own: the endpoint waking from zero (503 "no upstreams
- * available"), a gateway error, a network failure or a timeout. Everything else, including every
- * 4xx and every answer that was not a usable report, is "fail": a retry would not change it.
+ * available"), a gateway error, Anthropic's 529 "overloaded", a network failure or a timeout.
+ * Everything else, including every 4xx and every answer that was not a usable report, is "fail": a
+ * retry would not change it.
  */
 export function classifyCheckError(error: unknown): "retry" | "fail" {
   if (APICallError.isInstance(error)) {
     const status = error.statusCode;
     if (status === undefined) return "retry";
-    return status === 502 || status === 503 || status === 504 ? "retry" : "fail";
+    return status === 502 || status === 503 || status === 504 || status === 529 ? "retry" : "fail";
   }
   if (error instanceof Error && ["AbortError", "TimeoutError", "TypeError"].includes(error.name))
     return "retry";

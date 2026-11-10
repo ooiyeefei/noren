@@ -26,6 +26,50 @@ export type AiModelConfig = {
   baseURL?: string;
 };
 
+/**
+ * How a step that needs a structured report asks for it.
+ *
+ * "tool" is one forced tool call, for Meta, Modal, the gateway and OpenAI-compatible endpoints: the
+ * SGLang server behind our Modal endpoint can loop on a json_schema response, so none of them is
+ * asked for one.
+ *
+ * "native" is the provider's own structured output, for Anthropic. Claude Sonnet 5.5 and Opus 5.5
+ * answer a forced tool_choice (any, or one named tool) with a 400, and the AI SDK then quietly
+ * downgrades it to "auto" with only a warning, so a forced call is no longer a promise. Structured
+ * output (output_config.format) is what Anthropic recommends when the call only existed to get JSON back.
+ */
+export type ReportMode = "tool" | "native";
+
+export function reportMode(config: Pick<AiModelConfig, "provider">): ReportMode {
+  return config.provider === "anthropic" ? "native" : "tool";
+}
+
+/**
+ * Whether a step that needs one tool call may name it in tool_choice. Meta's Model API accepts only
+ * "auto" (verified 2026-11-04). Anthropic is asked with "auto" too: Sonnet 5.5 and Opus 5.5 reject a
+ * forced choice, and Haiku 5.5 skips thinking when it is forced, where "auto" lets it think first.
+ * Those steps tell the model to call the tool, and a reply without the call is asked again.
+ */
+export function mayForceTool(config: Pick<AiModelConfig, "provider">): boolean {
+  return config.provider !== "meta" && config.provider !== "anthropic";
+}
+
+/**
+ * The two settings that depend on the provider for a step that makes one tool call (the mention check
+ * and the story writer): whether it may force the call, and, for Claude only, how many output tokens
+ * it may use, because Claude's thinking counts towards that limit. Other providers keep the step's own
+ * limit.
+ */
+export function toolStep(
+  config: Pick<AiModelConfig, "provider">,
+  claudeMaxOutputTokens: number,
+): { forceTool: boolean; maxOutputTokens?: number } {
+  return {
+    forceTool: mayForceTool(config),
+    ...(config.provider === "anthropic" ? { maxOutputTokens: claudeMaxOutputTokens } : {}),
+  };
+}
+
 export type CompatibleTranscriptionConfig = {
   provider: "openai-compatible";
   apiKey: string;

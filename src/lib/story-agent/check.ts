@@ -1,11 +1,17 @@
 import { generateText, jsonSchema, tool, type JSONSchema7, type LanguageModel } from "ai";
-import { CheckOutputError, CHECK_MAX_TOKENS, CHECK_TIMEOUT_MS } from "../ai/translation-check";
+import type { ReportMode } from "../ai/config";
+import {
+  CheckOutputError,
+  CHECK_MAX_TOKENS,
+  CHECK_TIMEOUT_MS,
+  generateReport,
+} from "../ai/translation-check";
 
 /**
  * The story agent's second reader: a different model compares one sentence with only the words it
- * cites, and lists what the sentence says that those words don't. It goes through one forced tool
- * call for the same reason as the translation check: the server behind our Modal endpoint can loop on
- * a json_schema response.
+ * cites, and lists what the sentence says that those words don't. Except for Claude (see
+ * generateReport) it goes through one forced tool call for the same reason as the translation check:
+ * the server behind our Modal endpoint can loop on a json_schema response.
  */
 export const STORY_CHECK_TOOL = "report_support";
 const LIST_ITEMS = 5;
@@ -94,10 +100,23 @@ export function parseSentenceReport(input: unknown): SentenceReport {
 export function createStoryChecker(options: {
   model: LanguageModel;
   timeoutMs?: number;
+  /** How the report is asked for (see reportMode); a forced tool call unless set. */
+  reportMode?: ReportMode;
 }): StoryChecker {
   return {
     async check(input) {
       const { system, prompt } = storyCheckPrompt(input);
+      if (options.reportMode === "native")
+        return parseSentenceReport(
+          await generateReport({
+            model: options.model,
+            system,
+            prompt,
+            schema: REPORT_SCHEMA,
+            label: "the story check",
+            timeoutMs: options.timeoutMs,
+          }),
+        );
       const result = await generateText({
         model: options.model,
         system,

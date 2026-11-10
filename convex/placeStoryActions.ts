@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { createLanguageModel } from "../src/lib/ai/claim-extractor";
-import { aiConfig } from "../src/lib/ai/config";
+import { aiConfig, reportMode, toolStep } from "../src/lib/ai/config";
 import { classifyCheckError } from "../src/lib/ai/translation-check";
 import { runStoryAgent } from "../src/lib/story-agent/agent";
 import { createStoryChecker } from "../src/lib/story-agent/check";
@@ -28,7 +28,10 @@ export const writeStory = internalAction({
       await ctx.runMutation(internal.placeStories.failRun, { runId, error });
       return null;
     }
-    const checker = createStoryChecker({ model: createLanguageModel(check.config) });
+    const checker = createStoryChecker({
+      model: createLanguageModel(check.config),
+      reportMode: reportMode(check.config),
+    });
     const started = await ctx.runMutation(internal.placeStories.beginRun, {
       runId,
       writer: process.env.AI_MODEL_WRITE_STORY?.trim() ?? write.config.modelId,
@@ -52,8 +55,8 @@ export const writeStory = internalAction({
       const sentences = await runStoryAgent(started, {
         writer: createStoryWriter({
           model: createLanguageModel(write.config),
-          // Meta's Model API accepts only tool_choice "auto" (see lib/story-finder/check.ts).
-          forceTool: write.config.provider !== "meta",
+          // Meta's Model API and Claude are asked with tool_choice "auto"; see toolStep.
+          ...toolStep(write.config, 16_000),
         }),
         checker,
         step: (step) =>

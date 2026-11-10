@@ -64,9 +64,10 @@ function refusedSetting(error: unknown, field: RegExp): boolean {
 /**
  * One tool call per post. Tool calling works on every model the settings can name, where a JSON
  * response format does not (the Glimmer server loops on it). The call is forced where the provider
- * allows it; Meta's Model API accepts only tool_choice "auto" (verified 2026-11-04), so there the
- * instructions ask for the call and a reply without one is asked once more. A provider that refuses
- * the forced choice or the reasoning setting with a 400 is asked again without it.
+ * allows it; Meta's Model API accepts only tool_choice "auto" (verified 2026-11-04), and Claude
+ * Sonnet 5.5 and Opus 5.5 reject a forced choice, so there the instructions ask for the call and a
+ * reply without one is asked once more. A provider that refuses the forced choice or the reasoning
+ * setting with a 400 is asked again without it.
  */
 export function createMentionChecker(options: {
   model: LanguageModel;

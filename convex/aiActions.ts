@@ -4,7 +4,7 @@ import { readWav } from "../src/lib/audio/wav";
 import { createGateway } from "ai";
 import { v } from "convex/values";
 import { createClaimExtractor, createLanguageModel } from "../src/lib/ai/claim-extractor";
-import { aiConfig, type TranscriptionConfig } from "../src/lib/ai/config";
+import { aiConfig, reportMode, type TranscriptionConfig } from "../src/lib/ai/config";
 import { createFollowUpAgent, type FollowUp, type FollowUpInput } from "../src/lib/ai/follow-ups";
 import { checkTranslationsJob, extractJob, transcribeJob, translateJob } from "../src/lib/ai/jobs";
 import { createMetaTranscriber } from "../src/lib/ai/meta";
@@ -214,7 +214,11 @@ export const checkTranslations = internalAction({
         log: (line) => console.error("translation check:", line),
         now: () => Date.now(),
         startBatch: () => ctx.runMutation(internal.translationChecks.startBatch, {}),
-        makeChecker: (config) => createTranslationChecker({ model: createLanguageModel(config) }),
+        makeChecker: (config) =>
+          createTranslationChecker({
+            model: createLanguageModel(config),
+            reportMode: reportMode(config),
+          }),
         makeTranslator: (config) =>
           createTranslator({
             model: createLanguageModel(config),
