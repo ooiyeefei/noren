@@ -56,6 +56,11 @@ const storyView = v.object({
   addedByMe: v.boolean(),
   canRemove: v.boolean(),
   photos: v.array(storyPhotoView),
+  /**
+   * The writer allowed the Noren connector to hand this story and their name to an AI assistant.
+   * It changes nothing on Noren's own pages; src/lib/connector/policy.ts reads it.
+   */
+  connectorAllowed: v.boolean(),
 });
 
 /**
@@ -154,6 +159,7 @@ export const listForPlace = query({
         addedByMe,
         canRemove: addedByMe || canEditPlace(viewer, place),
         photos: await storyPhotoViews(ctx, story._id, addedByMe, photoRules),
+        connectorAllowed: story.connectorAllowedAt !== undefined,
       });
     }
     return views;

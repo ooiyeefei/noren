@@ -187,6 +187,16 @@ export const regionSchema = z
         maxSeconds: z.number().int().positive().max(120),
       })
       .default({ enabled: false, maxSeconds: 120 }),
+    /**
+     * Switches for parts of the product that ship dark. `connector` is the read-only Noren
+     * connector at /api/mcp (people add it to Claude or ChatGPT by its address). Off, the route
+     * answers 404. It stays off until the privacy notice names the connector.
+     */
+    features: z
+      .strictObject({
+        connector: z.boolean(),
+      })
+      .default({ connector: false }),
     legal: z.strictObject({
       /** Named legal operator shown on notices; null until decided (blocks real people's stories). */
       operatorName: z.string().min(1).nullable(),

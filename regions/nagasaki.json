@@ -154,6 +154,7 @@
     }
   },
   "voice": { "enabled": true, "maxSeconds": 120 },
+  "features": { "connector": false },
   "photos": {
     "enabled": true,
     "maxPerStory": 4,
