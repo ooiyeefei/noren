@@ -1,4 +1,4 @@
-import { defineMessages } from "@/lib/i18n";
+import { defineMessages } from "../index";
 
 // Japanese copy awaits native-speaker review (T098).
 export const placePageMessages = defineMessages({
