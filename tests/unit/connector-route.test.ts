@@ -52,7 +52,7 @@ beforeEach(() => {
 
 describe("the region's switch", () => {
   it("is off in the shipped region file", () => {
-    expect(region.features).toEqual({ connector: false });
+    expect(region.features).toEqual({ connector: false, planner: false, walk: false });
   });
 
   it("makes the route a 404 while the connector is off, whatever is asked", async () => {

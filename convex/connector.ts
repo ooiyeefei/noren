@@ -469,7 +469,8 @@ const tags = v.array(v.string());
  * the Convex URL before the privacy notice names them.
  */
 export function drawsEnabled(regionId: string): boolean {
-  return regionConfig(regionId).features.connector;
+  const { connector, planner, walk } = regionConfig(regionId).features;
+  return connector || planner || walk;
 }
 
 function requireDraws(regionId: string): void {
