@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { legalDocuments } from "@/lib/i18n/messages/legal-documents";
+import { legalDocuments, lineText } from "@/lib/i18n/messages/legal-documents";
 import { shareMessages } from "@/lib/i18n/messages/share";
 
 // The notice quotes the words on the screen, and says who may post. The file asks for its words and
@@ -9,7 +9,9 @@ const quoted = (text: string) => text.replace(/[.。]$/, "");
 const section = (locale: "en" | "ja", kind: "terms" | "privacy", id: string) => {
   const found = legalDocuments[locale][kind].sections.find((s) => s.id === id);
   if (!found) throw new Error(`no section ${id}`);
-  return [...(found.paragraphs ?? []), ...(found.items ?? []), ...(found.closing ?? [])].join("\n");
+  return [...(found.paragraphs ?? []), ...(found.items ?? []), ...(found.closing ?? [])]
+    .map(lineText)
+    .join("\n");
 };
 const sharing = (locale: "en" | "ja") => section(locale, "privacy", "story-pictures");
 

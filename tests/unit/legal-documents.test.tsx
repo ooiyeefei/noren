@@ -12,9 +12,11 @@ import { cspDirectives } from "@/lib/security/csp";
 import type { AiModelConfig, CompatibleTranscriptionConfig } from "@/lib/ai/config";
 import {
   legalDocuments,
+  lineText,
   type LegalDocument,
   type LegalSection,
 } from "@/lib/i18n/messages/legal-documents";
+import { addStoryMessages } from "@/lib/i18n/messages/add-story";
 import { SUPPORTED_LOCALES, type Locale } from "@/lib/i18n";
 import type { RegionConfig } from "@/lib/region/schema";
 import { config } from "../fixtures/public-ui";
@@ -57,13 +59,19 @@ const text = (html: string) =>
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, "&");
 
+/** Every word of a section, switched lines included, so the house-style checks read them all. */
 function sectionText(section: LegalSection): string {
   return [
     section.heading,
-    ...(section.paragraphs ?? []),
-    ...(section.items ?? []),
-    ...(section.services ?? []).flatMap((s) => [s.name, s.country, s.does]),
-    ...(section.closing ?? []),
+    ...(section.paragraphs ?? []).map(lineText),
+    ...(section.items ?? []).map(lineText),
+    ...(section.services ?? []).flatMap((s) => [
+      s.name,
+      s.country,
+      s.does,
+      ...(s.more ?? []).map(lineText),
+    ]),
+    ...(section.closing ?? []).map(lineText),
   ].join("\n");
 }
 const documentText = (document: LegalDocument) =>
@@ -123,7 +131,7 @@ describe("the documents' text (T057)", () => {
       for (const kind of ["terms", "privacy"] as const)
         for (const s of legalDocuments[locale][kind].sections)
           for (const line of [...(s.paragraphs ?? []), ...(s.items ?? []), ...(s.closing ?? [])])
-            expect(placeholders(line).filter((p) => p === "contact").length).toBeLessThan(2);
+            expect(placeholders(lineText(line)).filter((p) => p === "contact").length).toBeLessThan(2);
   });
 
   it("labels AI text the way the site does", () => {
@@ -359,6 +367,101 @@ describe("the pages (T058)", () => {
     };
     expect(notice(false)).not.toContain("Amazon");
     expect(notice(true)).toContain("Amazon Web Services in Tokyo, Japan");
+  });
+
+  describe("the switched features (FR-126)", () => {
+    type Features = { connector?: boolean; planner?: boolean; walk?: boolean };
+    const page = (locale: Locale, kind: "terms" | "privacy", features: Features = {}) => {
+      const region = published((r) => {
+        r.features = { connector: false, planner: false, walk: false, ...features };
+      });
+      const html = render(
+        <LegalDocumentView locale={locale} kind={kind} values={documentValues(region, locale)!} />,
+      );
+      return { html, words: text(html) };
+    };
+    const ids = (html: string) => [...html.matchAll(/<h2 id="([^"]+)"/g)].map((m) => m[1] ?? "");
+    const NEW_PRIVACY = ["ai-reading", "planner", "walk", "connector"];
+
+    it.each(SUPPORTED_LOCALES)(
+      "says nothing about them while every switch is off (%s)",
+      (locale) => {
+        for (const kind of ["terms", "privacy"] as const) {
+          const { html, words } = page(locale, kind);
+          for (const id of NEW_PRIVACY) expect(ids(html)).not.toContain(id);
+          for (const word of [
+            "Plan my day",
+            "Walk mode",
+            "connector",
+            "一日のプラン",
+            "歩きモード",
+            "コネクタ",
+          ])
+            expect(words).not.toContain(word);
+        }
+        // The line about AI keeps its words from before the features existed.
+        expect(page("en", "privacy").words).toContain(
+          "Noren does not send stories you type, your display name or your email address to an AI service.",
+        );
+      },
+    );
+
+    it.each([
+      ["connector", { connector: true }, ["ai-reading", "connector"]],
+      ["planner", { planner: true }, ["ai-reading", "planner"]],
+      ["walk", { walk: true }, ["walk"]],
+    ] as const)("adds the %s sections only while it is on", (_name, features, expected) => {
+      for (const locale of SUPPORTED_LOCALES) {
+        const privacy = ids(page(locale, "privacy", features).html);
+        expect(privacy.filter((id) => NEW_PRIVACY.includes(id))).toEqual(expected);
+        const terms = ids(page(locale, "terms", features).html);
+        for (const id of ["planner", "walk", "connector"])
+          expect(terms.includes(id)).toBe(id in features);
+      }
+    });
+
+    it("lets AI read a story only on the writer's tick, and says so in place of the old line", () => {
+      const { words } = page("en", "privacy", { planner: true });
+      expect(words).not.toContain("Noren does not send stories you type, your display name");
+      expect(words).toContain("only if you allow it for that story");
+      expect(words).toContain("Plan my day may send the story's words");
+      expect(words).not.toContain("through Noren's connector");
+      expect(page("en", "privacy", { connector: true }).words).toContain(
+        "through Noren's connector",
+      );
+    });
+
+    it("tells the planner's AI provider rows apart only while the planner is on", () => {
+      expect(page("en", "privacy").words).not.toContain("what the planner sends");
+      const on = page("en", "privacy", { planner: true }).words;
+      expect(on.match(/what the planner sends/g)).toHaveLength(2);
+    });
+
+    it("keeps location, rules and likes on the device, in both languages", () => {
+      const en = page("en", "privacy", { planner: true, walk: true }).words;
+      expect(en).toContain("Only that neighbourhood goes to Noren.");
+      expect(en).toContain("Your location is not sent to Noren and is not kept.");
+      expect(en).toContain("Noren does not keep them and does not send them to the AI.");
+      expect(en).toContain("special care-required personal information");
+      const ja = page("ja", "privacy", { planner: true, walk: true }).words;
+      expect(ja).toContain("Noren に送るのはその地区だけです。");
+      expect(ja).toContain("現在地は Noren に送らず、保存もしません。");
+      expect(ja).toContain("保存はせず、AI にも送りません。");
+      expect(ja).toContain("要配慮個人情報");
+    });
+
+    it.each(SUPPORTED_LOCALES)(
+      "quotes the writer's tick and its buttons as the screen says them (%s)",
+      (locale) => {
+        const m = addStoryMessages[locale];
+        const tick = (m.connectorTick.split(/[:：（]/)[0] ?? "").replace(/[.。]$/, "");
+        const [open, close] = locale === "ja" ? ["「", "」"] : ["“", "”"];
+        const words = page(locale, "privacy", { connector: true }).words;
+        expect(words).toContain(`${open}${tick}${close}`);
+        expect(words).toContain(`${open}${m.connectorAllow}${close}`);
+        expect(words).toContain(`${open}${m.connectorStop}${close}`);
+      },
+    );
   });
 
   it("publishes only with a version, an operator and a contact", () => {
