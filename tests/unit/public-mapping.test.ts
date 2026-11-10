@@ -182,10 +182,16 @@ describe("public mapping", () => {
       checkIn: { checkInMetres: 50, accuracyAllowanceMetres: 30 },
       accountsOpen: true,
       shareToNoren: true,
+      connectorTick: false,
     });
     expect(region.scriptOrigins).toEqual(scriptHostsFor(config.enabledSourceAdapters));
     expect(region.frameOrigins).toEqual(frameHostsFor(config.enabledSourceAdapters));
     expect(publicRegionProps(config, "en")).toEqual(region);
     expect(noticePlatforms(changed, "en")).toEqual(["YouTube"]);
+  });
+  it("offers the connector tick only while the region's connector switch is on", () => {
+    const on = { ...config, features: { ...config.features, connector: true } };
+    expect(publicRegionProps(on, "en").connectorTick).toBe(true);
+    expect(publicRegionProps(config, "en").connectorTick).toBe(false);
   });
 });

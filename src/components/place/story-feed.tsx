@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { DemoBadge } from "@/components/badges/demo-badge";
 import { EmbedView } from "@/components/embeds/embed-view";
 import { ErrorMessage } from "@/components/layout/error-message";
+import { ConnectorChoiceConnected } from "@/components/share/connector-choice";
 import { ShareStoryConnected } from "@/components/share/share-story";
 import type { StoryFeedEntry } from "@/components/public/mapping";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
@@ -36,6 +37,7 @@ export function StoryFeed({
   actions,
   photoBaseUrl,
   canShareKit = false,
+  connectorOffered = false,
 }: {
   locale: Locale;
   entries: readonly StoryFeedEntry[];
@@ -48,6 +50,11 @@ export function StoryFeed({
    * always ask. Posts, found ones among them, never do.
    */
   canShareKit?: boolean;
+  /**
+   * The region has the connector on, so a member's own written stories show the choice of letting an
+   * AI assistant read them. Off, nothing is shown. The server answers only for the story's writer.
+   */
+  connectorOffered?: boolean;
   /** Where photos are served from; unset while photos are off. */
   photoBaseUrl?: string;
 }) {
@@ -138,6 +145,9 @@ export function StoryFeed({
                           authorName={moment.authorName}
                           remove={actions?.removePhoto}
                         />
+                      )}
+                      {actions && connectorOffered && moment.addedByMe && (
+                        <ConnectorChoiceConnected locale={locale} storyId={moment._id} />
                       )}
                       {actions && (moment.addedByMe || canShareKit) && (
                         <ShareStoryConnected locale={locale} storyId={moment._id} />

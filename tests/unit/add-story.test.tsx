@@ -22,6 +22,7 @@ import { PlaceView } from "@/components/public/place-view";
 import { format } from "@/lib/i18n";
 import type { LinkRead } from "@/lib/link-read/types";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
+import { ConnectorTick } from "@/components/share/connector-choice";
 import { ConsentTick } from "@/components/share/consent-tick";
 import { shareMessages } from "@/lib/i18n/messages/share";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
@@ -1078,7 +1079,10 @@ describe("the tick that lets Noren share a story on its own accounts", () => {
     form.type("textarea", 0, "A fictional story about a bridge.");
     form.submit();
     await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
-    expect(write).toHaveBeenLastCalledWith({ body: "A fictional story about a bridge.", lang: "en" });
+    expect(write).toHaveBeenLastCalledWith({
+      body: "A fictional story about a bridge.",
+      lang: "en",
+    });
   });
 
   it("sends the consent when ticked, and not for a linked post", async () => {
@@ -1095,5 +1099,80 @@ describe("the tick that lets Noren share a story on its own accounts", () => {
     });
     form.click(m.link);
     expect(form.html()).not.toContain(tickText);
+  });
+});
+
+describe("the tick that lets an AI assistant read a story through the connector", () => {
+  const m = addStoryMessages.en;
+  const mountWith = (
+    connectorTick: boolean,
+    write = vi.fn(async () => null),
+    locale: "en" | "ja" = "en",
+  ) => ({
+    write,
+    form: harness(() =>
+      AddStory({
+        locale,
+        region: { ...region, shareToNoren: true, connectorTick },
+        actions: { signedIn: true, add: async () => null, write },
+      }),
+    ),
+  });
+
+  it("is hidden while the region has the connector off", () => {
+    const { form } = mountWith(false);
+    form.click(m.write);
+    expect(form.html()).not.toContain("AI assistants such as Claude");
+    expect(form.html()).not.toContain("/privacy#connector");
+    expect(form.component(ConnectorTick)).toHaveLength(0);
+  });
+
+  it("is off by default, and a written story carries no connector choice until it is ticked", async () => {
+    const { form, write } = mountWith(true);
+    form.click(m.write);
+    expect(form.html()).toContain("AI assistants such as Claude");
+    expect(form.component(ConnectorTick)[0]?.props.checked).toBe(false);
+    form.type("textarea", 0, "A fictional story about a bridge.");
+    form.submit();
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    expect(write).toHaveBeenLastCalledWith({
+      body: "A fictional story about a bridge.",
+      lang: "en",
+    });
+  });
+
+  it("sends the choice when ticked, apart from the Instagram tick, and not for a linked post", async () => {
+    const { form, write } = mountWith(true);
+    form.click(m.write);
+    (form.component(ConnectorTick)[0]!.props.onChange as (on: boolean) => void)(true);
+    form.type("textarea", 0, "A fictional story about a bridge.");
+    form.submit();
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    expect(write).toHaveBeenLastCalledWith({
+      body: "A fictional story about a bridge.",
+      lang: "en",
+      connectorAllowed: true,
+    });
+    form.click(m.link);
+    expect(form.html()).not.toContain("AI assistants such as Claude");
+  });
+
+  it("says so in the writer's words in both languages and links to the connector section of the notice", () => {
+    const en = mountWith(true);
+    en.form.click(m.write);
+    expect(en.form.html()).toContain(
+      "AI assistants such as Claude or ChatGPT may read this story, with my name, through Noren&#x27;s connector.",
+    );
+    expect(en.form.html()).toContain('href="/en/privacy#connector"');
+    const ja = mountWith(
+      true,
+      vi.fn(async () => null),
+      "ja",
+    );
+    ja.form.click(addStoryMessages.ja.write);
+    expect(ja.form.html()).toContain(
+      "Claude や ChatGPT などの AI アシスタントが、Noren のコネクタを通じて、私の名前とともにこの話を読むことを許可します。",
+    );
+    expect(ja.form.html()).toContain('href="/ja/privacy#connector"');
   });
 });
