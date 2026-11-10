@@ -22,8 +22,13 @@ export const MAX_PLACE_LOOKUPS = 8;
 const MACHINE_TRANSLATION = badgeMessages.en.machineTranslation;
 
 /** A place a tool returned: its slug, its display name and each name it has, in any script. */
-export type KnownPlace = { slug: string; name: string; names: string[] };
-type PlaceLike = { slug: string; name: string; names: readonly { value: string }[] };
+export type KnownPlace = { slug: string; name: string; names: string[]; hasStory: boolean };
+type PlaceLike = {
+  slug: string;
+  name: string;
+  names: readonly { value: string }[];
+  hasStory?: boolean;
+};
 
 export class TurnLedger {
   readonly quotes = new Map<string, PlannerQuote>();
@@ -33,6 +38,8 @@ export class TurnLedger {
   omikuji: Extract<OmikujiResult, { ok: true }> | null = null;
   /** The bundles read this turn, for what the formatted result leaves out (how many posts were read). */
   readonly bundles = new Map<string, PlaceBundle>();
+  /** Reads started by code (a drawn stop's page); settle them before the answer is checked. */
+  readonly pending: Promise<unknown>[] = [];
   walkDraws = 0;
   omikujiDraws = 0;
   lookups = 0;
@@ -41,6 +48,10 @@ export class TurnLedger {
   /** A tool failed in a way the person should be told about (Noren's data could not be read). */
   dataFailed = false;
   private counter = 0;
+
+  async settled(): Promise<void> {
+    await Promise.all(this.pending);
+  }
 
   nextQuoteId(): string {
     return `q${++this.counter}`;
@@ -52,6 +63,7 @@ export class TurnLedger {
         slug: row.slug,
         name: row.name,
         names: row.names.map((name) => name.value),
+        hasStory: row.hasStory ?? false,
       });
     }
   }
@@ -62,6 +74,19 @@ export class TurnLedger {
    */
   chosenWalk(): WalkRecord | null {
     return this.walks.findLast((walk) => walk.result.stops.length > 0) ?? this.walks.at(-1) ?? null;
+  }
+
+  /**
+   * Whether anyone has written about this place, counting what the model was not allowed to see: a
+   * story whose writer did not tick the box still means "somebody wrote about this".
+   */
+  hasWordsAt(slug: string): boolean {
+    if (this.quotesAt(slug).length > 0 || this.places.get(slug)?.hasStory === true) return true;
+    const bundle = this.bundles.get(slug);
+    return (
+      bundle !== undefined &&
+      (bundle.stories.length > 0 || bundle.sources.length > 0 || bundle.placeStory !== null)
+    );
   }
 
   quotesAt(slug: string): PlannerQuote[] {

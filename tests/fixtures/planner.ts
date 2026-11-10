@@ -62,7 +62,7 @@ export const PLACES: ListedPlace[] = [
   }),
 ];
 
-const story = (n: number, writer: string, body: string, lang = "en") => ({
+const story = (n: number, writer: string, body: string, ticked: boolean, lang = "en") => ({
   _id: `story-${n}`,
   body,
   lang,
@@ -73,14 +73,22 @@ const story = (n: number, writer: string, body: string, lang = "en") => ({
   addedByMe: false,
   canRemove: false,
   photos: [],
-  // The planner reads under "all-shown", so a writer who never ticked the connector box still counts.
-  connectorAllowed: false,
+  // The writer's tick that AI may read the story. The model sees a story only when this is true.
+  connectorAllowed: ticked,
 });
 
+/** Ai Tanaka ticked the box that lets AI read her story. The other writers did not. */
 export const STORY_TEXT = {
   ai: "The cat on the steps lets you stroke it if you bring fish.",
   mika: "Mika's grandmother taught me to fold the paper crane here.",
   noodles: "The broth is the same one the founder boiled in 1952.",
+  tom: "Before the museum, this was a rice warehouse; my father unloaded barges here.",
+};
+export const WRITERS = {
+  ai: "Ai Tanaka",
+  mika: "Mika Sato",
+  noodles: "Ken Mori",
+  tom: "Tom Older",
 };
 
 /** The place pages the tools can open. Dejima has every layer; the noodle shop has one story. */
@@ -108,9 +116,12 @@ export function bundleFor(slug: string): PlaceBundle | null {
     set: null,
   };
   if (slug === "dejima-museum") {
+    // Newest first, as the place page lists them. Only Ai Tanaka's is ticked; Tom's is too old to
+    // be shown under a stop.
     base.stories = [
-      story(1, "Ai Tanaka", STORY_TEXT.ai),
-      story(2, "Mika Sato", STORY_TEXT.mika, "en"),
+      story(1, WRITERS.ai, STORY_TEXT.ai, true),
+      story(2, WRITERS.mika, STORY_TEXT.mika, false),
+      story(4, WRITERS.tom, STORY_TEXT.tom, false),
     ];
     base.sources = [
       {
@@ -161,7 +172,7 @@ export function bundleFor(slug: string): PlaceBundle | null {
     };
   }
   if (slug === "shinchi-noodles") {
-    base.stories = [story(3, "Ken Mori", STORY_TEXT.noodles)];
+    base.stories = [story(3, WRITERS.noodles, STORY_TEXT.noodles, false)];
   }
   return as<PlaceBundle>(base);
 }

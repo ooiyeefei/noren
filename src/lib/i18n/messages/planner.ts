@@ -72,6 +72,7 @@ export const plannerMessages = defineMessages({
     whyMatched: "Matches your interest in {list}",
     whyRandomHad: "Drawn at random. It does not match your interests, which only tilt the odds",
     whyRandom: "Drawn at random from places near the start",
+    peopleWroteHere: "What people wrote here",
     openPage: "Open the page",
     nobodyWroteHere: "Nobody has written about this place yet.",
     writeFirst: "Write the first story",
@@ -186,6 +187,7 @@ export const plannerMessages = defineMessages({
     whyRandomHad:
       "無作為に選ばれた場所です。興味は確率を傾けるだけなので、合っていないこともあります",
     whyRandom: "出発地の近くから無作為に選ばれました",
+    peopleWroteHere: "ここで書かれた話",
     openPage: "ページを開く",
     nobodyWroteHere: "この場所について、まだ誰も書いていません。",
     writeFirst: "最初のストーリーを書く",

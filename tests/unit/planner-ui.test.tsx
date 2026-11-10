@@ -102,9 +102,12 @@ const planScript = (
         stops: [
           {
             slug: "dejima-museum",
-            quoteIds: [idOf(prompt, STORY_TEXT.ai), idOf(prompt, STORY_TEXT.mika)],
+            // The AI's picks at the museum: a public post and a stitched sentence.
+            quoteIds: [
+              idOf(prompt, "二階の窓"),
+              idOf(prompt, "Visitors talk about the harbour view."),
+            ],
           },
-          { slug: "shinchi-noodles", quoteIds: [idOf(prompt, STORY_TEXT.noodles)] },
         ],
         ...extra(prompt),
       },
@@ -141,6 +144,9 @@ describe("a planned walk on the page", () => {
       expect(body).toContain(words);
     for (const writer of ["By Ai Tanaka", "By Mika Sato", "By Ken Mori"])
       expect(body).toContain(writer);
+    // Under each stop, the stories members wrote there, put in by code; the oldest is not shown.
+    expect(body).toContain("What people wrote here");
+    expect(body).not.toContain(STORY_TEXT.tom);
     // The draw's reasons, in its own words.
     expect(body).toContain("Matches your interest in history");
     expect(body).toContain("Wild card — not picked for you");
@@ -166,7 +172,10 @@ describe("a planned walk on the page", () => {
     expect(body).toContain("couldn't be checked against members' stories");
     expect(body).toContain("3 stops, about 14 minutes on foot, 1 wild card.");
     expect(body).not.toContain("Picked by Noren's AI");
-    expect(html).not.toContain("<blockquote");
+    // The stories members wrote are still there, put in by code, but none is the AI's pick.
+    expect(html.match(/<blockquote/g)).toHaveLength(3);
+    expect(html).not.toContain('data-quote-kind="found"');
+    expect(html).not.toContain('data-quote-kind="stitched"');
     expect(html).toContain('data-label="drawn"');
   });
 
@@ -365,7 +374,9 @@ describe("a planned walk on the page", () => {
       const body = text(
         render(<ReplyView {...viewProps(await realReply(planScript()), { locale })} />),
       );
-      expect(body).not.toMatch(/\bscores?\b|\d\s?%|\bratings?\b|\brated\b|top \d|\d\/10|[★☆]/i);
+      expect(body).not.toMatch(
+        /\bscores?\b|\d\s?%|\bratings?\b|\brated\b|top \d|\b\d{1,2}\/10\b|[★☆]/i,
+      );
       expect(body).not.toMatch(/\p{Extended_Pictographic}/u);
     }
   });

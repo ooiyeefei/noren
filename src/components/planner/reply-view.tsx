@@ -116,6 +116,18 @@ function StopView({
       </h3>
       <PlaceTags locale={locale} place={place} />
       <p className="text-[16px]">{whyText(locale, stop.why, interestLabel)}</p>
+      {stop.stories.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="font-bold">{m.peopleWroteHere}</h4>
+          <ul className="space-y-3">
+            {stop.stories.map((story) => (
+              <li key={story.id}>
+                <QuoteView locale={locale} quote={story} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {stop.quotes.length > 0 && (
         <ul className="space-y-3">
           {stop.quotes.map((quote) => (

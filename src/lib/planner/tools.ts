@@ -1,16 +1,17 @@
 import { tool } from "ai";
 import { normaliseTag } from "../draw/rules";
 import type { PlaceResult } from "../connector/place";
-import type { ConnectorOptions } from "../connector/policy";
+import { CONNECTOR_DEFAULTS, type ConnectorOptions } from "../connector/policy";
 import type { PlaceRow } from "../connector/present";
 import {
   drawOmikuji,
   getPlace,
   searchPlaces,
   suggestWalk,
+  whyStop,
   type ToolResult,
 } from "../connector/tools";
-import type { ConnectorData, ToolContext } from "../connector/types";
+import type { ConnectorData, PlaceBundle, ToolContext, WalkResult } from "../connector/types";
 import type { RegionConfig } from "../region/schema";
 import {
   annotatePlace,
@@ -23,14 +24,19 @@ import type { PlannerRequest } from "./request";
 
 // The tools the planner's model may call: Noren's shared tools (src/lib/connector/tools.ts), wrapped.
 // The wrapper does four things the model cannot be trusted with:
-//   - it forces the page's language and gives the in-app planner its own story policy;
+//   - it forces the page's language and applies the story policy: a member's story reaches the model
+//     only when its writer ticked the box that lets AI read it (src/lib/connector/policy.ts);
 //   - it merges the visitor's hard rules and tastes into the draw, so a rule on their device applies
 //     whatever the model remembers to pass;
 //   - it writes down what came back (the ledger), so the model's answer can be checked against it;
 //   - it adds an id to every quotable passage, so the model can point at a quote without retyping it.
 
-/** The in-app planner shows stories on Noren itself, so every story the page shows may be used. */
-export const PLANNER_OPTIONS: ConnectorOptions = { memberStories: "all-shown" };
+/**
+ * The planner's model is a third-party AI service, so it gets exactly what the connector's
+ * assistants get: member stories only from writers who ticked the box. The person asking still
+ * sees every story under the stop it belongs to, attached by code (resolve.ts), never by the model.
+ */
+export const PLANNER_OPTIONS: ConnectorOptions = CONNECTOR_DEFAULTS;
 
 export type PlannerEnv = {
   data: ConnectorData;
@@ -61,23 +67,46 @@ export function mergeTags(
   return merged.slice(0, MAX_TAGS);
 }
 
-/** The data the tools read, with the draws recorded and today's trip left out of them. */
+/**
+ * The data the tools read, with the draws recorded and today's trip left out of them. A drawn stop's
+ * page is read at once, by code, so the person can be shown the stories written there whether or not
+ * the model ever opens it; the model's own `get_place` shares that read.
+ */
 export function recordingData(env: PlannerEnv, ledger: TurnLedger): ConnectorData {
   const exclude = env.memory.done.flatMap((entry) =>
     entry.slug === undefined ? [] : [entry.slug],
   );
+  const reads = new Map<string, Promise<PlaceBundle | null>>();
+  const read = (slug: string) => {
+    let pending = reads.get(slug);
+    if (pending === undefined) {
+      pending = env.data.placeBundle(slug).then((bundle) => {
+        if (bundle !== null) ledger.bundles.set(bundle.place.slug, bundle);
+        return bundle;
+      });
+      reads.set(slug, pending);
+    }
+    return pending;
+  };
   return {
     listPlaces: () => env.data.listPlaces(),
     listSets: () => env.data.listSets(),
-    async placeBundle(slug) {
-      const bundle = await env.data.placeBundle(slug);
-      if (bundle !== null) ledger.bundles.set(bundle.place.slug, bundle);
-      return bundle;
-    },
+    placeBundle: read,
     async walk(request) {
       const sent = exclude.length > 0 ? { ...request, exclude } : request;
       const result = await env.data.walk(sent);
-      if (result.ok) ledger.walks.push({ request: sent, result });
+      if (result.ok) {
+        ledger.walks.push({ request: sent, result });
+        // A page that cannot be read leaves that stop without stories; it never fails the walk.
+        for (const stop of result.stops) {
+          ledger.pending.push(
+            read(stop.slug).then(
+              () => undefined,
+              () => undefined,
+            ),
+          );
+        }
+      }
       return result;
     },
     async omikuji(request) {
@@ -156,9 +185,10 @@ export function plannerTools(context: PlannerToolContext) {
 
     get_place: tool({
       description:
-        "Get one place as its Noren page shows it: names, what members wrote (each passage has a quoteId), public posts Noren found, " +
-        "the story Noren's AI stitched, and the owner's own words. Quote only by quoteId. Call it for each stop of a walk, in the same step, " +
-        "so you can attach what people wrote to that stop.",
+        "Get one place as its Noren page shows it to an AI: names, public posts Noren found, the story Noren's AI stitched, the owner's own words, " +
+        "and the stories of members who allowed AI to read them (each passage has a quoteId). Stories of other members are held back and only counted: " +
+        "the page shows them to the person itself, so never say nobody has written about a place that has held-back stories. Quote only by quoteId. " +
+        "Call it for each stop of a walk, in the same step, so you can attach what you may quote to that stop.",
       inputSchema: getPlace.inputSchema.omit({ language: true }),
       execute: async (input): Promise<ModelResult> => {
         if (ledger.lookups >= MAX_PLACE_LOOKUPS) {
@@ -196,6 +226,19 @@ export function plannerTools(context: PlannerToolContext) {
               : { startPlace: start.slug }
             : {};
         ledger.walkDraws++;
+        // This call's own draw, so the reasons below are worked out from the right one.
+        let drawn: Extract<WalkResult, { ok: true }> | undefined;
+        const tapped: ToolContext = {
+          ...ctx,
+          data: {
+            ...ctx.data,
+            walk: async (request) => {
+              const result = await ctx.data.walk(request);
+              if (result.ok) drawn = result;
+              return result;
+            },
+          },
+        };
         const { outcome } = await run(context, "suggest_walk", () =>
           suggestWalk.run(
             {
@@ -205,12 +248,16 @@ export function plannerTools(context: PlannerToolContext) {
               avoid: mergeTags(env.memory.avoid, input.avoid),
               interests: mergeTags(input.interests ?? [], env.memory.interests),
             },
-            ctx,
+            tapped,
           ),
         );
         if (!outcome.ok) return asError(outcome.message);
         const result = outcome.result as {
-          stops: (PlaceRow & { wildCard: boolean; walkFromPrevious: { minutes: number } })[];
+          stops: (PlaceRow & {
+            wildCard: boolean;
+            why: string;
+            walkFromPrevious: { minutes: number };
+          })[];
           notes?: string[];
         } & Record<string, unknown>;
         ledger.addPlaces(result.stops);
@@ -220,9 +267,26 @@ export function plannerTools(context: PlannerToolContext) {
         const { rules, interestsNotMatched, ...visible } = result;
         void rules;
         void interestsNotMatched;
+        // A stop's reason names interests, and the draw also leaned on the visitor's saved likes.
+        // The model hears only the interests it passed this turn, which the person just said.
+        const said = new Set((input.interests ?? []).map(normaliseTag));
+        const matched = new Map(
+          (drawn?.stops ?? []).map((stop) => [
+            stop.slug,
+            stop.matchedInterests.filter((tag) => said.has(normaliseTag(tag))),
+          ]),
+        );
+        const stops = result.stops.map((stop) => ({
+          ...stop,
+          why: whyStop(
+            { wildCard: stop.wildCard, matchedInterests: matched.get(stop.slug) ?? [] },
+            said.size > 0,
+          ),
+        }));
         // The model writes a logistics line from these three numbers and no others.
         return {
           ...visible,
+          stops,
           notes: (result.notes ?? []).filter((note) => !note.includes("rules.notChecked")),
           summary: {
             stops: result.stops.length,

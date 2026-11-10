@@ -51,8 +51,8 @@ export function StoryFeed({
    */
   canShareKit?: boolean;
   /**
-   * The region has the connector on, so a member's own written stories show the choice of letting an
-   * AI assistant read them. Off, nothing is shown. The server answers only for the story's writer.
+   * The region has the connector or the planner on, so a member's own written stories show the choice
+   * of letting AI read them. Off, nothing is shown. The server answers only for the story's writer.
    */
   connectorOffered?: boolean;
   /** Where photos are served from; unset while photos are off. */

@@ -42,9 +42,10 @@ export const communityTables = {
     /** When a steward marked it as posted on Noren's accounts, by hand. */
     sharePostedAt: v.optional(v.number()),
     /**
-     * When the writer allowed the Noren connector to hand this story, with their name, to an AI
-     * assistant a visitor has connected (src/lib/connector/policy.ts). Absent means not allowed, as
-     * for every story written before the tick exists. Stories show on Noren regardless.
+     * When the writer allowed AI to read this story, with their name: Noren's in-app planner, and
+     * assistants such as Claude or ChatGPT through the connector (src/lib/connector/policy.ts).
+     * Absent means not allowed, as for every story written before the tick exists. Stories show on
+     * Noren, to people, regardless.
      */
     connectorAllowedAt: v.optional(v.number()),
   })

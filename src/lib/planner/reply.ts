@@ -75,7 +75,13 @@ export const stopValidator = v.object({
   metres: v.number(),
   /** Where the leg starts: the previous stop's name, or the start. */
   from: v.string(),
+  /** What the AI picked to show here: public posts, stitched sentences, owners' words, opted-in stories. */
   quotes: v.array(quoteValidator),
+  /**
+   * The newest stories members wrote here, attached by code whether or not their writer let AI read
+   * them, as the place page shows them. No model chose or saw them.
+   */
+  stories: v.array(quoteValidator),
 });
 
 export const walkValidator = v.object({

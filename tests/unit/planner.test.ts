@@ -14,18 +14,21 @@ import { INTRO_MAX_CHARS, checkIntro, numbersIn } from "@/lib/planner/intro";
 import { NEAREST_MAX_METRES, nearestNeighbourhoodId } from "@/lib/planner/nearest";
 import { RequestError } from "@/lib/planner/request";
 import { checkableTags } from "@/lib/planner/checkable";
-import { mergeTags, plannerContext, plannerTools } from "@/lib/planner/tools";
+import { CONNECTOR_DEFAULTS } from "@/lib/connector/policy";
+import { PLANNER_OPTIONS, mergeTags, plannerContext, plannerTools } from "@/lib/planner/tools";
 import { TurnLedger } from "@/lib/planner/ledger";
 import { createMeta } from "@/lib/ai/meta";
 import {
   NOW,
   ORIGIN,
   STORY_TEXT,
+  WRITERS,
   emptySubmit,
   fakePlannerData,
   idOf,
   region,
   scriptedModel,
+  stop,
   walkOf,
   type Script,
 } from "../fixtures/planner";
@@ -59,7 +62,10 @@ const submit =
   (build: (prompt: Parameters<Script>[0]["prompt"]) => unknown): Script =>
   ({ prompt }) => [{ name: "submit_plan", input: build(prompt) }];
 
-/** The ordinary good run: draw, open two stops, hand over quotes under them. */
+/**
+ * The ordinary good run: draw, open every stop, hand over what the model may quote under them. That
+ * is a public post and the stitched story at the museum; the members' stories are shown by code.
+ */
 function goodRun(
   over: (prompt: Parameters<Script>[0]["prompt"]) => Record<string, unknown> = () => ({}),
 ) {
@@ -72,9 +78,11 @@ function goodRun(
       stops: [
         {
           slug: "dejima-museum",
-          quoteIds: [idOf(prompt, STORY_TEXT.ai), idOf(prompt, STORY_TEXT.mika)],
+          quoteIds: [
+            idOf(prompt, "二階の窓"),
+            idOf(prompt, "Visitors talk about the harbour view."),
+          ],
         },
-        { slug: "shinchi-noodles", quoteIds: [idOf(prompt, STORY_TEXT.noodles)] },
       ],
       ...over(prompt),
     })),
@@ -108,13 +116,19 @@ describe("a planned walk", () => {
     ]);
     expect(walk.totalMinutes).toBe(14);
     expect(walk.wildCards).toBe(1);
-    const museum = walk.stops[1]!.quotes;
-    expect(museum.map((quote) => [quote.by, quote.text, quote.kind])).toEqual([
-      ["Ai Tanaka", STORY_TEXT.ai, "story"],
-      ["Mika Sato", STORY_TEXT.mika, "story"],
-    ]);
-    expect(walk.stops[0]!.quotes[0]).toMatchObject({ by: "Ken Mori", text: STORY_TEXT.noodles });
+    // What the AI picked: a public post and a stitched sentence, never a member's story.
+    expect(walk.stops[1]!.quotes.map((quote) => quote.kind)).toEqual(["found", "stitched"]);
+    expect(walk.stops[0]!.quotes).toEqual([]);
     expect(walk.stops[2]!.quotes).toEqual([]);
+    // What code attached: the newest two stories at the museum, ticked or not, with the writers' names.
+    expect(walk.stops[1]!.stories.map((story) => [story.by, story.text, story.kind])).toEqual([
+      [WRITERS.ai, STORY_TEXT.ai, "story"],
+      [WRITERS.mika, STORY_TEXT.mika, "story"],
+    ]);
+    expect(walk.stops[0]!.stories.map((story) => [story.by, story.text])).toEqual([
+      [WRITERS.noodles, STORY_TEXT.noodles],
+    ]);
+    expect(walk.stops[2]!.stories).toEqual([]);
     expect(reply.leftOut).toBe(0);
   });
 
@@ -385,24 +399,26 @@ describe("dropping what the tools never returned", () => {
         stops: [
           {
             slug: "dejima-museum",
-            // q999 was never returned; the noodle shop's story belongs under the noodle shop.
-            quoteIds: ["q999", idOf(prompt, STORY_TEXT.noodles), idOf(prompt, STORY_TEXT.ai)],
+            // q999 was never returned; the stitched sentence is the museum's and stays.
+            quoteIds: ["q999", idOf(prompt, "Visitors talk about the harbour view.")],
           },
+          // The museum's public post, filed under the noodle shop.
+          { slug: "shinchi-noodles", quoteIds: [idOf(prompt, "二階の窓")] },
           // A place that exists but was not in the draw, and one that does not exist at all.
           { slug: "not-in-the-walk", quoteIds: [] },
-          { slug: "dejima-museum-2", quoteIds: [idOf(prompt, STORY_TEXT.mika)] },
+          { slug: "dejima-museum-2", quoteIds: [] },
         ],
       })),
     ]);
     const reply = await planReply(request(), deps(model).deps);
     expect(reply.state).toBe("ai");
     const museum = reply.walk!.stops.find((stop) => stop.place.slug === "dejima-museum")!;
-    expect(museum.quotes.map((quote) => quote.text)).toEqual([STORY_TEXT.ai]);
+    expect(museum.quotes.map((quote) => quote.kind)).toEqual(["stitched"]);
     expect(reply.walk!.stops.flatMap((stop) => stop.quotes)).toHaveLength(1);
     expect(reply.leftOut).toBe(4);
   });
 
-  it("caps the quotes under one stop and ignores a repeat", async () => {
+  it("caps the quotes under one stop, ignores a repeat, and does not show a story twice", async () => {
     const model = scriptedModel([
       draw(),
       openAll(["dejima-museum"]),
@@ -412,17 +428,22 @@ describe("dropping what the tools never returned", () => {
           {
             slug: "dejima-museum",
             quoteIds: [
+              // Ai Tanaka ticked her story, so the model may point at it; the page shows it already.
               idOf(prompt, STORY_TEXT.ai),
-              idOf(prompt, STORY_TEXT.ai),
-              idOf(prompt, STORY_TEXT.mika),
               idOf(prompt, "二階の窓"),
+              idOf(prompt, "二階の窓"),
+              idOf(prompt, "Visitors talk about the harbour view."),
+              idOf(prompt, "Another visitor mentions the cat."),
             ],
           },
         ],
       })),
     ]);
     const reply = await planReply(request(), deps(model).deps);
-    expect(reply.walk!.stops[1]!.quotes).toHaveLength(2);
+    const museum = reply.walk!.stops[1]!;
+    expect(museum.quotes.map((quote) => quote.kind)).toEqual(["found", "stitched"]);
+    expect(museum.stories.filter((story) => story.text === STORY_TEXT.ai)).toHaveLength(1);
+    expect(reply.leftOut).toBe(0);
   });
 
   it("drops an answer whose quotes were never returned, and says so with a count", async () => {
@@ -912,5 +933,236 @@ describe("which saved rules the draw can check", () => {
       expect.arrayContaining(["no-alcohol", "step-free", "cash-free", "no-reservation"]),
     );
     expect(checkableTags(launched)).not.toContain("vegetarian");
+  });
+});
+
+describe("a member's story and an AI that was not allowed to read it", () => {
+  /** Everything a model was sent over the whole question: instructions, messages, tools, results. */
+  const allInput = (model: ReturnType<typeof scriptedModel>) =>
+    JSON.stringify(model.doGenerateCalls);
+  const unticked = [
+    STORY_TEXT.mika,
+    WRITERS.mika,
+    STORY_TEXT.noodles,
+    WRITERS.noodles,
+    STORY_TEXT.tom,
+    WRITERS.tom,
+  ];
+
+  it("never sends an un-ticked story's words or its writer's name to the model, and sends a ticked one", async () => {
+    const model = goodRun();
+    await planReply(request(), deps(model).deps);
+    expect(model.doGenerateCalls.length).toBeGreaterThan(2);
+    const sent = allInput(model);
+    for (const secret of unticked) expect(sent, secret).not.toContain(secret);
+    // Ai Tanaka ticked the box, so the model may read her story and her name.
+    expect(sent).toContain(STORY_TEXT.ai);
+    expect(sent).toContain(WRITERS.ai);
+  });
+
+  it("only counts the stories it holds back, so the model can tell people have written there", async () => {
+    const model = goodRun();
+    await planReply(request(), deps(model).deps);
+    const sent = allInput(model);
+    // Two of the museum's three stories are un-ticked, and one of the noodle shop's one.
+    expect(sent).toMatch(/"total":3/);
+    expect(sent).toMatch(/"heldBack":2/);
+    expect(sent).toMatch(/"heldBack":1/);
+    expect(sent).toContain("have not allowed Noren to hand their words to AI assistants");
+  });
+
+  it("still shows the person every story, under its stop, with the writer's name", async () => {
+    const reply = await planReply(request(), deps(goodRun()).deps);
+    const [noodles, museum] = reply.walk!.stops;
+    expect(museum!.stories.map((story) => [story.by, story.text])).toEqual([
+      [WRITERS.ai, STORY_TEXT.ai],
+      [WRITERS.mika, STORY_TEXT.mika],
+    ]);
+    expect(noodles!.stories.map((story) => [story.by, story.text])).toEqual([
+      [WRITERS.noodles, STORY_TEXT.noodles],
+    ]);
+    // The third story at the museum is older than the two shown; the page's own link has it.
+    expect(JSON.stringify(reply)).not.toContain(STORY_TEXT.tom);
+    // They are not the AI's picks: the label would not be needed for them alone.
+    expect(museum!.stories.every((story) => story.id.startsWith("story:"))).toBe(true);
+  });
+
+  it("shows them without the AI label when the AI picked nothing", async () => {
+    const model = scriptedModel([draw(), () => "text"]);
+    const reply = await planReply(request(), deps(model).deps);
+    expect(reply.state).toBe("plain");
+    expect(reply.pickedByAi).toBe(false);
+    expect(reply.walk!.stops[1]!.stories.map((story) => story.by)).toEqual([
+      WRITERS.ai,
+      WRITERS.mika,
+    ]);
+    expect(allInput(model)).not.toContain(STORY_TEXT.mika);
+  });
+
+  it("shows them even when the model never opens the stops, and when it fails", async () => {
+    const quiet = scriptedModel([draw(), submit(() => emptySubmit)]);
+    const reply = await planReply(request(), deps(quiet).deps);
+    expect(reply.walk!.stops[1]!.stories).toHaveLength(2);
+    const failing = scriptedModel([
+      draw(),
+      () => {
+        throw new TypeError("down");
+      },
+    ]);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const afterFailure = await planReply(request(), deps(failing).deps);
+    expect(afterFailure.walk!.stops[1]!.stories).toHaveLength(2);
+    log.mockRestore();
+  });
+
+  it("reads each drawn stop's page once, however often the model also opens it", async () => {
+    const { deps: d, calls } = deps(goodRun());
+    await planReply(request(), d);
+    expect(calls.bundles.toSorted()).toEqual(["dejima-museum", "quiet-kiosk", "shinchi-noodles"]);
+  });
+
+  it("leaves a stop without stories, and keeps the walk, when its page cannot be read", async () => {
+    const real = fakePlannerData();
+    const data = fakePlannerData({
+      placeBundle: async (slug) => {
+        if (slug === "dejima-museum") throw new TypeError("could not read");
+        return real.data.placeBundle(slug);
+      },
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reply = await planReply(request(), deps(goodRun(), data).deps);
+    log.mockRestore();
+    expect(reply.walk!.stops.map((stop) => stop.stories.length)).toEqual([1, 0, 0]);
+  });
+
+  it("does not take 'nobody has written about it' from the model where stories exist that it could not see", async () => {
+    const model = scriptedModel([
+      openAll(["shinchi-noodles"]),
+      submit(() => ({
+        ...emptySubmit,
+        answers: [{ notWritten: true, slug: "shinchi-noodles", quoteIds: [] }],
+      })),
+    ]);
+    const reply = await planReply(
+      request({}, "What do people say about the noodle shop?"),
+      deps(model).deps,
+    );
+    expect(reply.answers).toEqual([]);
+    expect(reply.leftOut).toBe(1);
+  });
+
+  it("holds back a member's note on a post they shared, since no tick covers it", async () => {
+    const real = fakePlannerData();
+    const note = {
+      _id: "src-9",
+      platform: "instagram",
+      canonicalUrl: "https://example.test/p/9",
+      creatorNote: "My own line about the kiosk, which only I wrote.",
+      noteLang: "en",
+      sharedBy: "Rina Ota",
+      isMock: false,
+    };
+    const data = fakePlannerData({
+      placeBundle: async (slug) => {
+        const bundle = await real.data.placeBundle(slug);
+        return slug === "quiet-kiosk" && bundle !== null
+          ? ({ ...bundle, sources: [note] } as typeof bundle)
+          : bundle;
+      },
+    });
+    const model = goodRun();
+    await planReply(request(), deps(model, data).deps);
+    const sent = allInput(model);
+    expect(sent).not.toContain("My own line about the kiosk");
+    expect(sent).not.toContain("Rina Ota");
+    expect(sent).toMatch(/"heldBack":1/);
+  });
+
+  it("runs the planner under the same story policy as the connector", () => {
+    expect(PLANNER_OPTIONS).toEqual(CONNECTOR_DEFAULTS);
+    expect(PLANNER_OPTIONS.memberStories).toBe("opted-in");
+  });
+});
+
+describe("the visitor's saved likes and the model", () => {
+  const known = ["history", "old tram lines", "halal food"];
+  /** A draw that, like the real one, says the museum matches each interest it was given that it knows. */
+  const echoing = () =>
+    fakePlannerData({
+      walk: async (asked) =>
+        walkOf({
+          stops: [
+            stop("shinchi-noodles"),
+            stop("dejima-museum", {
+              matchedInterests: asked.interests.filter((tag) => known.includes(tag.toLowerCase())),
+            }),
+            stop("quiet-kiosk", { wildCard: true }),
+          ],
+        }),
+    });
+  const saved = { avoid: ["halal"], interests: known, done: [] };
+  const inputOf = (model: ReturnType<typeof scriptedModel>) =>
+    JSON.stringify(model.doGenerateCalls);
+  const promptsOf = (model: ReturnType<typeof scriptedModel>) =>
+    JSON.stringify(model.doGenerateCalls.map((call) => call.prompt));
+
+  it("never reach the model, in any step of a turn, though the draw uses them", async () => {
+    const model = scriptedModel([draw(), openAll(["dejima-museum"]), submit(() => emptySubmit)]);
+    const reply = await planReply(
+      request({ memory: saved }, "Three stops near Shinchi"),
+      deps(model, echoing()).deps,
+    );
+    // The draw leaned on them, and the page can say so from code.
+    expect(reply.walk!.stops[1]!.why).toEqual({ kind: "matched", interests: known });
+    // The model heard none of them: not in the messages, the results or the tool definitions.
+    const everything = inputOf(model);
+    for (const like of ["old tram lines", "halal food"])
+      expect(everything, like).not.toContain(like);
+    // The tool definitions name "history" as an example; the messages and results must not.
+    const prompts = promptsOf(model);
+    for (const like of ["history", "halal", "tram"])
+      expect(prompts, like).not.toMatch(new RegExp(like, "i"));
+    // What it was told about the stop is neutral.
+    expect(prompts).toContain("Drawn at random from places near the start");
+  });
+
+  it("let an interest the person typed in this message through", async () => {
+    const model = scriptedModel([
+      draw({ interests: ["old tram lines"] }),
+      openAll(["dejima-museum"]),
+      submit(() => emptySubmit),
+    ]);
+    await planReply(
+      request({ memory: saved }, "Three stops near Shinchi, I like old tram lines"),
+      deps(model, echoing()).deps,
+    );
+    const prompts = promptsOf(model);
+    expect(prompts).toContain("Matches your interest in old tram lines");
+    for (const like of ["history", "halal", "halal food"]) {
+      expect(prompts, like).not.toMatch(new RegExp(like, "i"));
+    }
+  });
+
+  it("do not make the model think the person's interests failed to match", async () => {
+    // The model passed none; the page's "does not match your interests" wording would have told it
+    // that the person has some.
+    const model = scriptedModel([draw(), submit(() => emptySubmit)]);
+    await planReply(request({ memory: saved }, "Three stops"), deps(model, echoing()).deps);
+    expect(promptsOf(model)).not.toContain("does not match your interests");
+  });
+
+  it("are still named in the reasons the person reads", async () => {
+    const model = scriptedModel([
+      draw({ interests: ["old tram lines"] }),
+      submit(() => emptySubmit),
+    ]);
+    const reply = await planReply(
+      request({ memory: saved }, "Three stops, I like old tram lines"),
+      deps(model, echoing()).deps,
+    );
+    expect(reply.walk!.stops[1]!.why).toEqual({
+      kind: "matched",
+      interests: ["old tram lines", "history", "halal food"],
+    });
   });
 });

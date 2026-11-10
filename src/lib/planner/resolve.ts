@@ -7,6 +7,7 @@ import type { OmikujiResult } from "../connector/types";
 import type { RegionConfig } from "../region/schema";
 import type { Submit } from "./agent";
 import { checkIntro } from "./intro";
+import { memberStories } from "./stories";
 import type { TurnLedger, WalkRecord } from "./ledger";
 import { toPlannerPlace } from "./ledger";
 import { latestUserText, type PlannerRequest } from "./request";
@@ -71,6 +72,7 @@ function walkOf(
   record: WalkRecord,
   region: RegionConfig,
   quotes: ReadonlyMap<string, PlannerQuote[]>,
+  ledger: TurnLedger,
 ): PlannerWalk {
   const { result, request } = record;
   const facts = stopFacts(record);
@@ -95,6 +97,11 @@ function walkOf(
       metres: stop.leg.metres,
       from,
       quotes: quotes.get(stop.slug) ?? [],
+      stories: memberStories(
+        ledger.bundles.get(stop.slug),
+        { slug: stop.slug, name: row.name },
+        region.collection.utcOffsetHours,
+      ),
     };
     from = row.name;
     return entry;
@@ -136,7 +143,7 @@ function omikujiOf(
 /** The draw alone: no words from the model, nothing it picked. */
 function plainReply(input: ResolveInput, leftOut = 0): PlannerReply {
   const record = input.ledger.chosenWalk();
-  const walk = record === null ? null : walkOf(record, input.region, new Map());
+  const walk = record === null ? null : walkOf(record, input.region, new Map(), input.ledger);
   const omikuji = omikujiOf(input.ledger.omikuji, input.region);
   return {
     state: walk === null && omikuji === null ? "empty" : "plain",
@@ -217,6 +224,12 @@ function resolveAi(input: ResolveInput, submit: Submit): PlannerReply {
   const record = ledger.chosenWalk();
   const stopSlugs = new Set(record?.result.stops.map((stop) => stop.slug) ?? []);
 
+  // The stories shown under each stop by code, which the model's picks must not repeat.
+  const isAttached = (slug: string, quote: PlannerQuote) =>
+    memberStories(ledger.bundles.get(slug), { slug, name: quote.placeName }, 0).some(
+      (story) => story.text === quote.text && story.by === quote.by,
+    );
+
   // Quotes under the stops: only the draw's stops, only quotes from that very place.
   const byStop = new Map<string, PlannerQuote[]>();
   for (const entry of submit.stops) {
@@ -232,6 +245,8 @@ function resolveAi(input: ResolveInput, submit: Submit): PlannerReply {
       }
       const list = byStop.get(entry.slug) ?? [];
       if (list.some((existing) => existing.id === id) || list.length >= QUOTES_PER_STOP) continue;
+      // A story the page already shows under this stop is not shown a second time as the AI's pick.
+      if (quote.kind === "story" && isAttached(entry.slug, quote)) continue;
       byStop.set(entry.slug, [...list, quote]);
     }
   }
@@ -240,7 +255,7 @@ function resolveAi(input: ResolveInput, submit: Submit): PlannerReply {
   for (const answer of submit.answers.slice(0, MAX_ANSWERS)) {
     if (answer.notWritten) {
       const known = answer.slug === "" ? undefined : ledger.places.get(answer.slug);
-      const contradicted = known !== undefined && ledger.quotesAt(known.slug).length > 0;
+      const contradicted = known !== undefined && ledger.hasWordsAt(known.slug);
       // The claim needs a lookup behind it, and a place to tie it to when it names one.
       if (ledger.searches === 0 || (answer.slug !== "" && known === undefined) || contradicted) {
         leftOut++;
@@ -279,7 +294,7 @@ function resolveAi(input: ResolveInput, submit: Submit): PlannerReply {
           placeNames: [...ledger.places.values()].flatMap((place) => place.names),
         });
 
-  const walk = record === null ? null : walkOf(record, region, byStop);
+  const walk = record === null ? null : walkOf(record, region, byStop, ledger);
   const omikuji = omikujiOf(ledger.omikuji, region);
   const pickedByAi =
     intro !== null || answers.length > 0 || [...byStop.values()].some((list) => list.length > 0);
