@@ -1,29 +1,12 @@
 import { fetchMutation, fetchQuery } from "convex/nextjs";
-import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
-import { ConnectorDataError, type ConnectorData } from "./types";
+import { guarded } from "./guarded";
+import type { ConnectorData } from "./types";
 
 // The tools' data, read from Convex the way a signed-out visitor's browser reads it. No call here
 // takes a token, so Convex sees no person: a draft, a private field or a steward's view cannot
 // come back, however the tools are called. The only writes are the two draws in
 // convex/connector.ts, which record their own exposure.
-
-/** A rate limit or a bad argument becomes an error the tools can word; anything else is ours. */
-async function guarded<T>(call: Promise<T>): Promise<T> {
-  try {
-    return await call;
-  } catch (error) {
-    if (error instanceof ConvexError) {
-      const data: unknown = error.data;
-      if (typeof data === "object" && data !== null && "code" in data) {
-        const message = "message" in data && typeof data.message === "string" ? data.message : "";
-        if (data.code === "rate_limited") throw new ConnectorDataError("rate_limited", message);
-        if (data.code === "invalid_input") throw new ConnectorDataError("invalid_input", message);
-      }
-    }
-    throw error;
-  }
-}
 
 export function convexConnectorData(regionId: string): ConnectorData {
   return {

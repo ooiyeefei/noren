@@ -17,7 +17,7 @@ export function normaliseTag(tag: string): string {
     .replace(/[\s_]+/g, "-");
 }
 
-type AvoidRule = {
+export type AvoidRule = {
   /** The tags that mean this rule, already normalised. */
   tags: readonly string[];
   /** What Noren checks, in plain words, for the traveller. */
@@ -26,7 +26,7 @@ type AvoidRule = {
   limit: string;
 } & ({ caution: string; category?: never } | { category: string; caution?: never });
 
-const AVOID_RULES: readonly AvoidRule[] = [
+export const AVOID_RULES: readonly AvoidRule[] = [
   {
     tags: ["cash-free", "cashless", "no-cash", "card-only"],
     caution: "cash_only",

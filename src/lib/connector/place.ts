@@ -229,6 +229,9 @@ export function buildPlace(bundle: PlaceBundle, ctx: ToolContext, language: UrlL
   };
 }
 
+/** What get_place returns, as the planner reads it to find the words it may quote. */
+export type PlaceResult = ReturnType<typeof buildPlace>;
+
 /** A member's shared post counts as a story to read, as the map's dot treats it. */
 function placeHasPeopleSources(bundle: PlaceBundle): boolean {
   return bundle.sources.length > 0;

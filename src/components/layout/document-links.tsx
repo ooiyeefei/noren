@@ -22,22 +22,5 @@ export function useDocumentLinks(): boolean {
   return useContext(DocumentLinks);
 }
 
-const FeatureLinks = createContext({ walk: false });
-
-/**
- * Which optional pages are switched on in the region file (features.*), so the footer and the
- * account menu link to a page only while it exists. Off, the page is a 404 and nothing links to it.
- */
-export function FeatureLinksProvider({
-  walk,
-  children,
-}: {
-  walk: boolean;
-  children: React.ReactNode;
-}) {
-  return <FeatureLinks value={{ walk }}>{children}</FeatureLinks>;
-}
-
-export function useFeatureLinks(): { walk: boolean } {
-  return useContext(FeatureLinks);
-}
+// The switched pages' links live in ./features; re-exported for older imports.
+export { FeatureLinksProvider, useFeatureLinks } from "./features";

@@ -56,6 +56,9 @@ const PRUNE_BATCH = 200;
 const MAX_TAGS = 10;
 const MAX_TAG_LENGTH = 40;
 const MAX_STOPS = 5;
+/** Places a request may ask the draw to leave out (today's trip), and the longest slug. */
+const MAX_EXCLUDED = 12;
+const MAX_SLUG_LENGTH = 200;
 /** Published cautions read for one place when a rule asks for them; a place has a handful. */
 const CAUTIONS_READ = 50;
 
@@ -255,6 +258,8 @@ type WalkRequest = {
   avoid: string[];
   interests: string[];
   adventurousness: (typeof ADVENTUROUSNESS)[number];
+  /** Slugs to leave out of the draw, such as places the visitor has already been to today. */
+  exclude?: string[];
 };
 
 /**
@@ -272,6 +277,13 @@ export async function runWalk(
   }
   checkTags("avoid", args.avoid);
   checkTags("interests", args.interests);
+  const exclude = new Set(args.exclude ?? []);
+  if (
+    (args.exclude?.length ?? 0) > MAX_EXCLUDED ||
+    args.exclude?.some((slug) => slug.length > MAX_SLUG_LENGTH)
+  ) {
+    throw appError("invalid_input", `exclude: at most ${MAX_EXCLUDED} places`);
+  }
   const region = regionConfig(args.regionId);
   const offsetHours = region.collection.utcOffsetHours;
   await limitDraws(ctx, now);
@@ -321,6 +333,7 @@ export async function runWalk(
   const nearby = pool.filter(
     (place) =>
       place.id !== start.excluding &&
+      !exclude.has(place.slug) &&
       distanceMetres(start.pin, place.pin) <= WALK_RADIUS_METRES &&
       !(place.category !== undefined && avoid.excludedCategories.has(place.category)),
   );
@@ -475,6 +488,7 @@ export const walk = mutation({
     avoid: tags,
     interests: tags,
     adventurousness: v.union(v.literal("familiar"), v.literal("mixed"), v.literal("surprise")),
+    exclude: v.optional(v.array(v.string())),
   },
   returns: walkResult,
   handler: async (ctx, args) => {

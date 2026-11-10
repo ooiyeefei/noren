@@ -5,6 +5,8 @@ import { pathToFileURL } from "node:url";
 import { createClaimExtractor, createLanguageModel } from "../src/lib/ai/claim-extractor";
 import { aiConfig, reportMode, toolStep, type AiModelConfig } from "../src/lib/ai/config";
 import { createFollowUpAgent } from "../src/lib/ai/follow-ups";
+import { runPlanner } from "../src/lib/planner/agent";
+import { resolveReply } from "../src/lib/planner/resolve";
 import { createMeta } from "../src/lib/ai/meta";
 import { createModal } from "../src/lib/ai/modal";
 import { createTranslationChecker, describeCheckError } from "../src/lib/ai/translation-check";
@@ -13,6 +15,7 @@ import { createNoteDrafter } from "../src/lib/link-read/draft";
 import { activeRegionConfig } from "../src/lib/region/registry";
 import { createStoryChecker } from "../src/lib/story-agent/check";
 import { createStoryWriter, verifyStory } from "../src/lib/story-agent/story";
+import { fakePlannerData, NOW, ORIGIN } from "../tests/fixtures/planner";
 import { createMentionChecker } from "../src/lib/story-finder/check";
 
 /**
@@ -27,6 +30,7 @@ export const SMOKE_CAPABILITIES = [
   "write_story",
   "extract",
   "followup",
+  "plan",
 ] as const;
 type SmokeCapability = (typeof SMOKE_CAPABILITIES)[number];
 
@@ -233,6 +237,47 @@ const CASES: Record<SmokeCapability, (modelSetting: string) => SmokeCase[]> = {
           regionConfig: activeRegionConfig(),
         });
         return { ok: true, detail: `${claims.length} claim(s) kept by the quote check` };
+      },
+    },
+  ],
+  plan: () => [
+    {
+      name: "a three-stop walk over made-up places, with every quote checked against the tools",
+      async run(model, config) {
+        const { data } = fakePlannerData();
+        const region = activeRegionConfig();
+        const request = {
+          turns: [{ role: "user" as const, text: "Three stops near Shinchi. I like history." }],
+          memory: { avoid: [], interests: [], done: [] },
+          start: { kind: "neighbourhood" as const, id: "shinchi" },
+          language: "en" as const,
+        };
+        const run = await runPlanner(
+          request,
+          {
+            data,
+            region,
+            origin: ORIGIN,
+            now: () => NOW,
+            locale: "en",
+            memory: request.memory,
+            start: request.start,
+          },
+          {
+            model,
+            ...(toolStep(config, 8000).maxOutputTokens === undefined
+              ? {}
+              : { maxOutputTokens: 8000 }),
+          },
+        );
+        if (run.modelFailed) return { ok: false, detail: "the model call failed" };
+        const reply = resolveReply({ submit: run.submit, ledger: run.ledger, request, region });
+        const stops = reply.walk?.stops ?? [];
+        const quotes = stops.reduce((sum, stop) => sum + stop.quotes.length, 0);
+        return {
+          ok: run.submit !== null && reply.state === "ai" && stops.length > 0,
+          detail: `${run.submit === null ? "no usable submit_plan" : `state ${reply.state}`}, ${stops.length} stop(s), ${quotes} quote(s) shown, ${reply.leftOut} left out, intro ${reply.intro === null ? "dropped" : "kept"}`,
+        };
       },
     },
   ],
