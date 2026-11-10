@@ -1,6 +1,13 @@
 import { PageContainer } from "@/components/layout/page-container";
 import { format, type Locale } from "@/lib/i18n";
-import { legalDocuments, legalMessages } from "@/lib/i18n/messages/legal-documents";
+import {
+  legalDocuments,
+  legalMessages,
+  lineShown,
+  lineText,
+  type LegalLine,
+  type NoticeSwitch,
+} from "@/lib/i18n/messages/legal-documents";
 import type { DocumentValues } from "./documents";
 
 /** A web address becomes a link. A role address stays as text. */
@@ -38,7 +45,10 @@ export function LegalDocumentView({
   values: DocumentValues;
 }) {
   const legal = legalDocuments[locale][kind];
-  const shown = legal.sections.filter(({ id }) => id !== "photos" || values.photos === "on");
+  const on = (key: NoticeSwitch) => values[key] === "on";
+  const lines = (list: readonly LegalLine[] | undefined) =>
+    (list ?? []).filter((line) => lineShown(line, on)).map(lineText);
+  const shown = legal.sections.filter((section) => section.when === undefined || on(section.when));
   return (
     <PageContainer locale={locale} title={legal.title}>
       <div lang={locale} className="max-w-prose space-y-8 leading-[1.8]">
@@ -53,14 +63,14 @@ export function LegalDocumentView({
             <h2 id={section.id} className="text-[20px] leading-snug font-bold">
               <Filled text={section.heading} values={values} />
             </h2>
-            {section.paragraphs?.map((text, index) => (
+            {lines(section.paragraphs).map((text, index) => (
               <p key={index}>
                 <Filled text={text} values={values} />
               </p>
             ))}
             {section.items && (
               <ul className="list-disc space-y-2 pl-6">
-                {section.items.map((text, index) => (
+                {lines(section.items).map((text, index) => (
                   <li key={index}>
                     <Filled text={text} values={values} />
                   </li>
@@ -74,12 +84,12 @@ export function LegalDocumentView({
                     <dt className="font-bold">
                       {service.name} ({service.country})
                     </dt>
-                    <dd>{service.does}</dd>
+                    <dd>{[service.does, ...lines(service.more)].join(" ")}</dd>
                   </div>
                 ))}
               </dl>
             )}
-            {section.closing?.map((text, index) => (
+            {lines(section.closing).map((text, index) => (
               <p key={index}>
                 <Filled text={text} values={values} />
               </p>
