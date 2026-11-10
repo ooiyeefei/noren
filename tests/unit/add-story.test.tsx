@@ -1102,7 +1102,7 @@ describe("the tick that lets Noren share a story on its own accounts", () => {
   });
 });
 
-describe("the tick that lets an AI assistant read a story through the connector", () => {
+describe("the tick that lets AI read a story, in the planner and through the connector", () => {
   const m = addStoryMessages.en;
   const mountWith = (
     connectorTick: boolean,
@@ -1119,18 +1119,18 @@ describe("the tick that lets an AI assistant read a story through the connector"
     ),
   });
 
-  it("is hidden while the region has the connector off", () => {
+  it("is hidden while the region has the connector and the planner both off", () => {
     const { form } = mountWith(false);
     form.click(m.write);
-    expect(form.html()).not.toContain("AI assistants such as Claude");
-    expect(form.html()).not.toContain("/privacy#connector");
+    expect(form.html()).not.toContain("Let AI read this story");
+    expect(form.html()).not.toContain("/privacy#ai-reading");
     expect(form.component(ConnectorTick)).toHaveLength(0);
   });
 
   it("is off by default, and a written story carries no connector choice until it is ticked", async () => {
     const { form, write } = mountWith(true);
     form.click(m.write);
-    expect(form.html()).toContain("AI assistants such as Claude");
+    expect(form.html()).toContain("Let AI read this story");
     expect(form.component(ConnectorTick)[0]?.props.checked).toBe(false);
     form.type("textarea", 0, "A fictional story about a bridge.");
     form.submit();
@@ -1154,16 +1154,16 @@ describe("the tick that lets an AI assistant read a story through the connector"
       connectorAllowed: true,
     });
     form.click(m.link);
-    expect(form.html()).not.toContain("AI assistants such as Claude");
+    expect(form.html()).not.toContain("Let AI read this story");
   });
 
-  it("says so in the writer's words in both languages and links to the connector section of the notice", () => {
+  it("says so in the writer's words in both languages, covering both uses, and links to the notice's AI section", () => {
     const en = mountWith(true);
     en.form.click(m.write);
     expect(en.form.html()).toContain(
-      "AI assistants such as Claude or ChatGPT may read this story, with my name, through Noren&#x27;s connector.",
+      "Let AI read this story, with my name: Noren&#x27;s planner, and assistants such as Claude or ChatGPT through Noren&#x27;s connector.",
     );
-    expect(en.form.html()).toContain('href="/en/privacy#connector"');
+    expect(en.form.html()).toContain('href="/en/privacy#ai-reading"');
     const ja = mountWith(
       true,
       vi.fn(async () => null),
@@ -1171,8 +1171,8 @@ describe("the tick that lets an AI assistant read a story through the connector"
     );
     ja.form.click(addStoryMessages.ja.write);
     expect(ja.form.html()).toContain(
-      "Claude や ChatGPT などの AI アシスタントが、Noren のコネクタを通じて、私の名前とともにこの話を読むことを許可します。",
+      "AI がこの話を私の名前とともに読むことを許可します（Noren のプランナーと、Noren のコネクタを通じた Claude や ChatGPT などのアシスタント）。",
     );
-    expect(ja.form.html()).toContain('href="/ja/privacy#connector"');
+    expect(ja.form.html()).toContain('href="/ja/privacy#ai-reading"');
   });
 });

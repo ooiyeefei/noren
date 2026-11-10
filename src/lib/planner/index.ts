@@ -48,6 +48,8 @@ export async function planReply(request: PlannerRequest, deps: PlannerDeps): Pro
       ...(deps.timeoutMs === undefined ? {} : { timeoutMs: deps.timeoutMs }),
     },
   );
+  // The drawn stops' pages were read by code while the model worked; wait for the last of them.
+  await run.ledger.settled();
   const reply = resolveReply({
     submit: run.submit,
     ledger: run.ledger,

@@ -1,4 +1,5 @@
 import { v, type Infer } from "convex/values";
+import { aiReadingOffered } from "../src/lib/connector/policy";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import {
@@ -57,8 +58,9 @@ const storyView = v.object({
   canRemove: v.boolean(),
   photos: v.array(storyPhotoView),
   /**
-   * The writer allowed the Noren connector to hand this story and their name to an AI assistant.
-   * It changes nothing on Noren's own pages; src/lib/connector/policy.ts reads it.
+   * The writer allowed AI to read this story with their name: Noren's planner, and assistants such as
+   * Claude or ChatGPT through the connector. It changes nothing on Noren's own pages;
+   * src/lib/connector/policy.ts reads it.
    */
   connectorAllowed: v.boolean(),
 });
@@ -75,7 +77,7 @@ export const add = mutation({
     photoIds: v.optional(v.array(v.id("storyPhoto"))),
     /** The writer's tick that Noren and the place may share this on Instagram; only while the region offers it. */
     shareConsent: v.optional(v.boolean()),
-    /** The writer's tick that the Noren connector may hand this story, with their name, to an AI assistant; only while the region has the connector on. */
+    /** The writer's tick that AI may read this story, with their name (the planner and the connector); only while either is on. */
     connectorAllowed: v.optional(v.boolean()),
   },
   returns: v.id("story"),
@@ -90,8 +92,8 @@ export const add = mutation({
       throw appError("invalid_input", "lang must be a region locale");
     if (shareConsent && !regionConfig(place.regionId).sharing.norenAccount)
       throw appError("invalid_input", "this region does not offer sharing on Noren's accounts");
-    if (connectorAllowed && !regionConfig(place.regionId).features.connector)
-      throw appError("invalid_input", "this region does not offer the Noren connector");
+    if (connectorAllowed && !aiReadingOffered(regionConfig(place.regionId).features))
+      throw appError("invalid_input", "this region does not offer AI reading of stories");
     await limitContribution(ctx, person, "story", place.regionId);
     const storyId = await ctx.db.insert(
       "story",

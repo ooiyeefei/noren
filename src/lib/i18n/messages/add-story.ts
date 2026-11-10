@@ -50,18 +50,18 @@ export const addStoryMessages = defineMessages({
     signInToAdd: "Have a story about this place?",
     signIn: "Sign in to share it",
     connectorTick:
-      "AI assistants such as Claude or ChatGPT may read this story, with my name, through Noren's connector.",
+      "Let AI read this story, with my name: Noren's planner, and assistants such as Claude or ChatGPT through Noren's connector.",
     connectorHint:
-      "Optional, and off unless you tick it. You can change this on your story at any time.",
-    connectorLink: "What the Noren connector is (privacy notice)",
+      "Optional, and off unless you tick it. Your story is still shown to visitors on Noren either way. You can change this on your story at any time.",
+    connectorLink: "What letting AI read a story means (privacy notice)",
     connectorOn:
-      "AI assistants such as Claude or ChatGPT may read this story, with your name, through Noren's connector.",
-    connectorOff: "AI assistants may not read this story through Noren's connector.",
+      "AI may read this story, with your name: Noren's planner, and assistants such as Claude or ChatGPT through Noren's connector.",
+    connectorOff: "AI may not read this story.",
     connectorAllow: "Allow this",
     connectorStop: "Stop allowing",
     connectorAllowed:
-      "Done. AI assistants may read this story, with your name, through Noren's connector.",
-    connectorStopped: "Done. AI assistants may not read this story through Noren's connector.",
+      "Done. AI may read this story, with your name: Noren's planner, and assistants such as Claude or ChatGPT through Noren's connector.",
+    connectorStopped: "Done. AI may not read this story.",
   },
   ja: {
     prompt: "訪れたことがありますか？聞いたこと、見たこと、味わったことを共有してください。",
@@ -109,17 +109,17 @@ export const addStoryMessages = defineMessages({
     signInToAdd: "この場所の話をご存じですか？",
     signIn: "サインインして共有",
     connectorTick:
-      "Claude や ChatGPT などの AI アシスタントが、Noren のコネクタを通じて、私の名前とともにこの話を読むことを許可します。",
-    connectorHint: "任意です。チェックしない限りオフです。いつでもご自身の話から変更できます。",
-    connectorLink: "Noren のコネクタとは（プライバシー通知）",
+      "AI がこの話を私の名前とともに読むことを許可します（Noren のプランナーと、Noren のコネクタを通じた Claude や ChatGPT などのアシスタント）。",
+    connectorHint:
+      "任意です。チェックしない限りオフです。チェックしなくても、話は Noren 上で訪れた人に表示されます。いつでもご自身の話から変更できます。",
+    connectorLink: "AI が話を読むとは（プライバシーポリシー）",
     connectorOn:
-      "Claude や ChatGPT などの AI アシスタントが、Noren のコネクタを通じて、あなたの名前とともにこの話を読むことを許可しています。",
-    connectorOff: "AI アシスタントが、Noren のコネクタを通じてこの話を読むことは許可していません。",
+      "AI があなたの名前とともにこの話を読むことを許可しています（Noren のプランナーと、Noren のコネクタを通じた Claude や ChatGPT などのアシスタント）。",
+    connectorOff: "AI がこの話を読むことは許可していません。",
     connectorAllow: "許可する",
     connectorStop: "許可をやめる",
     connectorAllowed:
-      "許可しました。AI アシスタントが、Noren のコネクタを通じて、あなたの名前とともにこの話を読むことがあります。",
-    connectorStopped:
-      "許可をやめました。AI アシスタントは、Noren のコネクタを通じてこの話を読みません。",
+      "許可しました。AI があなたの名前とともにこの話を読むことがあります（Noren のプランナーと、Noren のコネクタを通じた Claude や ChatGPT などのアシスタント）。",
+    connectorStopped: "許可をやめました。AI はこの話を読みません。",
   },
 });

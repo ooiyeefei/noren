@@ -40,7 +40,10 @@ afterEach(() => {
 });
 
 const SHINCHI = { lat: 32.7415, lng: 129.8755 };
+// Written by someone who did not tick the box that lets AI read their story.
 const WRITTEN = "The old woman at the counter still folds every paper bag by hand.";
+// Written by someone who did.
+const TICKED = "On rainy days the owner hands out umbrellas with the bill.";
 const PRIVATE_QUESTION = "Three stops near Shinchi, I am allergic to prawns and I like history";
 
 async function world() {
@@ -48,6 +51,7 @@ async function world() {
   const creator = await addPerson(b, "creator", "creator");
   const walker = await addPerson(b, "walker", "user");
   const writer = await addPerson(b, "writer", "user");
+  const ticker = await addPerson(b, "ticker", "user");
   const places: Id<"place">[] = [];
   for (const [slug, lat] of [
     ["near-a", SHINCHI.lat],
@@ -71,17 +75,27 @@ async function world() {
     });
     places.push(placeId);
   }
-  // One story, whose writer never ticked the connector box: the in-app planner may still show it.
-  await b.run((ctx) =>
-    ctx.db.insert("story", {
+  // One story whose writer never ticked the box (the person asking may read it, the model may not)
+  // and one whose writer did.
+  await b.run(async (ctx) => {
+    await ctx.db.insert("story", {
       placeId: places[0]!,
       authorPersonId: writer,
       body: WRITTEN,
       lang: "en",
       status: "live",
       isMock: false,
-    }),
-  );
+    });
+    await ctx.db.insert("story", {
+      placeId: places[1]!,
+      authorPersonId: ticker,
+      body: TICKED,
+      lang: "en",
+      status: "live",
+      isMock: false,
+      connectorAllowedAt: Date.now(),
+    });
+  });
   return { b, creator, walker, writer, places };
 }
 
@@ -93,18 +107,18 @@ const baseRequest = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-/** Draw, open the first stop, hand over its story under it. */
+/** Draw, open two stops, point at the ticked story (the page shows it once, not twice). */
 function goodScript(): Script[] {
   return [
     () => [{ name: "suggest_walk", input: { stops: 3 } }],
-    ({ prompt }) => [
+    () => [
       { name: "get_place", input: { slug: "near-a" } },
-      ...(prompt.length > 0 ? [] : []),
+      { name: "get_place", input: { slug: "near-b" } },
     ],
     ({ prompt }) => [
       {
         name: "submit_plan",
-        input: { ...emptySubmit, stops: [{ slug: "near-a", quoteIds: [idOf(prompt, WRITTEN)] }] },
+        input: { ...emptySubmit, stops: [{ slug: "near-b", quoteIds: [idOf(prompt, TICKED)] }] },
       },
     ],
   ];
@@ -206,14 +220,15 @@ describe("a question, on each provider", () => {
     for (const [name, value] of Object.entries(key)) vi.stubEnv(name, value);
     vi.stubEnv("AI_MODEL_PLAN", setting);
     const w = await world();
-    const factory = spyModel(scriptedModel(goodScript()));
+    const model = scriptedModel(goodScript());
+    const factory = spyModel(model);
     const before = await counts(w.b);
     const reply = await w.b.as("walker").action(api.plannerActions.ask, baseRequest());
-    return { ...w, reply, factory, before };
+    return { ...w, reply, factory, before, model };
   }
 
   it("Claude: runs the tools against Noren's data and returns the checked answer", async () => {
-    const { reply, factory, b, before, places } = await ask("claude-sonnet-5-5", {});
+    const { reply, factory, b, before, places, model } = await ask("claude-sonnet-5-5", {});
     expect(factory).toHaveBeenCalledExactlyOnceWith({
       provider: "anthropic",
       apiKey: "mock-anthropic-key",
@@ -229,10 +244,25 @@ describe("a question, on each provider", () => {
     // The saved allergy went to the draw, which said it cannot check it. The model never saw it.
     expect(reply.walk!.rulesNotChecked.map((rule) => rule.tag)).toEqual(["allergy:prawns"]);
     const nearA = reply.walk!.stops.find((stop) => stop.place.slug === "near-a")!;
-    expect(nearA.quotes).toEqual([
+    const nearB = reply.walk!.stops.find((stop) => stop.place.slug === "near-b")!;
+    expect(nearA.place.name).toBe("Test Shop (テスト店)");
+    // The person reads both stories under their stops, with the writers' names, as the page shows
+    // them, whether or not the writer ticked the box. None is the AI's pick.
+    expect(nearA.stories).toEqual([
       expect.objectContaining({ kind: "story", text: WRITTEN, by: "Test Person (writer)" }),
     ]);
-    expect(nearA.place.name).toBe("Test Shop (テスト店)");
+    expect(nearB.stories).toEqual([
+      expect.objectContaining({ kind: "story", text: TICKED, by: "Test Person (ticker)" }),
+    ]);
+    expect(nearA.quotes).toEqual([]);
+    expect(nearB.quotes).toEqual([]);
+    expect(reply.pickedByAi).toBe(false);
+    // The model was sent the ticked story and its writer, and nothing of the other.
+    const sent = JSON.stringify(model.doGenerateCalls);
+    expect(sent).toContain(TICKED);
+    expect(sent).toContain("Test Person (ticker)");
+    expect(sent).not.toContain(WRITTEN);
+    expect(sent).not.toContain("Test Person (writer)");
 
     // The draw recorded its anonymous exposure, one for each stop.
     const exposure = await b.run((ctx) => ctx.db.query("placeExposure").take(20));

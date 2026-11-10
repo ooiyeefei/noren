@@ -36,6 +36,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   features().connector = false;
+  features().planner = false;
 });
 
 describe("the connector tick when a story is written", () => {
@@ -152,5 +153,63 @@ describe("changing the connector choice on a story already written", () => {
     for (const who of ["other", "steward", "editor", null]) expect(await ask(who)).toBeNull();
     features().connector = false;
     expect(await ask("writer")).toBeNull();
+  });
+});
+
+describe("the tick is offered while either the connector or the planner is on", () => {
+  const setSwitches = (connector: boolean, planner: boolean) => {
+    features().connector = connector;
+    features().planner = planner;
+  };
+
+  it("is accepted with only the connector on, with only the planner on, and with both", async () => {
+    for (const [connector, planner] of [
+      [true, false],
+      [false, true],
+      [true, true],
+    ] as const) {
+      setSwitches(connector, planner);
+      const w = await world();
+      const ticked = await tell(w, true);
+      expect((await row(w, ticked))?.connectorAllowedAt, `${connector}/${planner}`).toEqual(
+        expect.any(Number),
+      );
+    }
+  });
+
+  it("is refused at writing time, and for turning on later, only when both are off", async () => {
+    const w = await world();
+    const storyId = await tell(w);
+    setSwitches(false, false);
+    expect(await errorCode(tell(w, true))).toBe("invalid_input");
+    expect(
+      await errorCode(
+        w.b.as("writer").mutation(api.storyConnector.setAllowed, { storyId, on: true }),
+      ),
+    ).toBe("invalid_input");
+    setSwitches(false, true);
+    await w.b.as("writer").mutation(api.storyConnector.setAllowed, { storyId, on: true });
+    expect((await row(w, storyId))?.connectorAllowedAt).toEqual(expect.any(Number));
+  });
+
+  it("shows the writer their choice with only the planner on, and nobody's with both off", async () => {
+    const w = await world();
+    const storyId = await tell(w, true);
+    const ask = () => w.b.as("writer").query(api.storyConnector.choiceOf, { storyId });
+    setSwitches(false, true);
+    expect(await ask()).toEqual({ allowed: true });
+    setSwitches(true, false);
+    expect(await ask()).toEqual({ allowed: true });
+    setSwitches(false, false);
+    expect(await ask()).toBeNull();
+  });
+
+  it("can still be turned off with both switches off", async () => {
+    const w = await world();
+    setSwitches(false, true);
+    const storyId = await tell(w, true);
+    setSwitches(false, false);
+    await w.b.as("writer").mutation(api.storyConnector.setAllowed, { storyId, on: false });
+    expect((await row(w, storyId))?.connectorAllowedAt).toBeUndefined();
   });
 });

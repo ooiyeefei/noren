@@ -68,26 +68,27 @@ const en = addStoryMessages.en;
 const ja = addStoryMessages.ja;
 
 describe("the connector choice on a writer's own story", () => {
-  it("renders nothing while the region has the connector off", () => {
+  it("renders nothing while the region has the connector and the planner both off", () => {
     const view = mount(() =>
       ConnectorChoice({ locale: "en", offered: false, allowed: true, onSet: async () => null }),
     );
     expect(view.html()).toBe("");
   });
 
-  it("says where the story stands, and links to the connector section of the notice", () => {
+  it("says where the story stands, covering both uses, and links to the notice's AI section", () => {
     const off = mount(() =>
       ConnectorChoice({ locale: "en", offered: true, allowed: false, onSet: async () => null }),
     ).html();
     expect(off).toContain(esc(en.connectorOff));
+    expect(en.connectorOff).toBe("AI may not read this story.");
     expect(off).toContain(en.connectorAllow);
-    expect(off).toContain('href="/en/privacy#connector"');
+    expect(off).toContain('href="/en/privacy#ai-reading"');
     const on = mount(() =>
       ConnectorChoice({ locale: "ja", offered: true, allowed: true, onSet: async () => null }),
     ).html();
     expect(on).toContain(esc(ja.connectorOn));
     expect(on).toContain(ja.connectorStop);
-    expect(on).toContain('href="/ja/privacy#connector"');
+    expect(on).toContain('href="/ja/privacy#ai-reading"');
   });
 
   it("turns it on, then off, and says what it did", async () => {

@@ -189,9 +189,18 @@ describe("public mapping", () => {
     expect(publicRegionProps(config, "en")).toEqual(region);
     expect(noticePlatforms(changed, "en")).toEqual(["YouTube"]);
   });
-  it("offers the connector tick only while the region's connector switch is on", () => {
-    const on = { ...config, features: { ...config.features, connector: true } };
-    expect(publicRegionProps(on, "en").connectorTick).toBe(true);
-    expect(publicRegionProps(config, "en").connectorTick).toBe(false);
+  it("offers the tick that lets AI read a story while either the connector or the planner is on", () => {
+    const withFeatures = (features: Partial<typeof config.features>) => ({
+      ...config,
+      features: { ...config.features, connector: false, planner: false, ...features },
+    });
+    expect(publicRegionProps(withFeatures({ connector: true }), "en").connectorTick).toBe(true);
+    expect(publicRegionProps(withFeatures({ planner: true }), "en").connectorTick).toBe(true);
+    expect(
+      publicRegionProps(withFeatures({ connector: true, planner: true }), "en").connectorTick,
+    ).toBe(true);
+    expect(publicRegionProps(withFeatures({}), "en").connectorTick).toBe(false);
+    // The walk switch alone puts no story in front of an AI.
+    expect(publicRegionProps(withFeatures({ walk: true }), "en").connectorTick).toBe(false);
   });
 });

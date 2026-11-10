@@ -1,3 +1,4 @@
+import { aiReadingOffered } from "@/lib/connector/policy";
 import { categoryOptions, labelForCategory } from "./category";
 import type { EmbedSourceView } from "@/components/embeds/embed-view";
 import type { MapMarker } from "@/components/map/map-helpers";
@@ -35,7 +36,7 @@ export type PublicRegionProps = {
   accountsOpen: boolean;
   /** The region offers the tick that lets Noren share a story on its own accounts. */
   shareToNoren: boolean;
-  /** The region has the connector on, so a writer is offered the tick that lets an AI assistant read their story. */
+  /** The connector or the planner is on, so a writer is offered the tick that lets an AI read their story. */
   connectorTick: boolean;
   /** Set only on the place page, while the region has photos on and every setting is in place. */
   photos?: PublicPhotoProps;
@@ -148,7 +149,7 @@ export function publicRegionProps(region: RegionConfig, locale: Locale): PublicR
     },
     accountsOpen: region.legal.accountsOpen,
     shareToNoren: region.sharing.norenAccount,
-    connectorTick: region.features.connector,
+    connectorTick: aiReadingOffered(region.features),
   };
 }
 

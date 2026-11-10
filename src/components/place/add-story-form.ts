@@ -17,7 +17,7 @@ export type WrittenStoryArgs = {
   photoIds?: string[];
   /** The writer's tick that Noren may feature the story on its own accounts. */
   shareConsent?: boolean;
-  /** The writer's tick that the Noren connector may hand the story, with their name, to an AI assistant. */
+  /** The writer's tick that AI may read the story with their name: the planner and the connector. */
   connectorAllowed?: boolean;
 };
 export type StoryRegion = {
@@ -28,7 +28,7 @@ export type StoryRegion = {
   frameOrigins: readonly string[];
   /** The region offers the tick that lets Noren share a story on its own accounts. */
   shareToNoren?: boolean;
-  /** The region has the connector on, so the form offers the tick that lets an AI assistant read a story. */
+  /** The region has the connector or the planner on, so the form offers the tick that lets AI read a story. */
   connectorTick?: boolean;
 };
 

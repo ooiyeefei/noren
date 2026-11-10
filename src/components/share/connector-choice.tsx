@@ -8,8 +8,8 @@ import { addStoryMessages } from "@/lib/i18n/messages/add-story";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
-/** The privacy notice's section on the connector. */
-export const CONNECTOR_NOTICE_ID = "connector";
+/** The privacy notice's section on letting AI read a story (the planner and the connector). */
+export const CONNECTOR_NOTICE_ID = "ai-reading";
 
 function NoticeLink({ locale }: { locale: Locale }) {
   const m = messagesFor(addStoryMessages, locale);
@@ -26,9 +26,10 @@ function NoticeLink({ locale }: { locale: Locale }) {
 }
 
 /**
- * The writer's own choice, off until ticked: AI assistants such as Claude or ChatGPT may read the
- * story, with their name, through Noren's connector. The form shows it only while the region has the
- * connector on. It is never kept through a reload, and the writer can change it later on their story.
+ * The writer's own choice, off until ticked: AI may read the story, with their name. One tick covers
+ * Noren's planner and assistants such as Claude or ChatGPT through the connector. The form shows it
+ * only while the region has the connector or the planner on. It is never kept through a reload, and
+ * the writer can change it later on their story.
  */
 export function ConnectorTick({
   locale,
@@ -64,7 +65,7 @@ export function ConnectorTick({
 
 /**
  * Where the writer sees the choice on their own story and changes it, as they can for Instagram.
- * It shows nothing unless the region has the connector on.
+ * It shows nothing unless the region has the connector or the planner on.
  */
 export function ConnectorChoice({
   locale,
@@ -73,7 +74,7 @@ export function ConnectorChoice({
   onSet,
 }: {
   locale: Locale;
-  /** The region has the connector on. */
+  /** The region has the connector or the planner on. */
   offered: boolean;
   allowed: boolean;
   onSet: (on: boolean) => Promise<unknown>;
@@ -120,7 +121,7 @@ export function ConnectorChoice({
 
 /**
  * The choice wired to Convex. The server answers only for the story's writer, on a live story, in a
- * region that has the connector on; for everyone else this shows nothing.
+ * region that has the connector or the planner on; for everyone else this shows nothing.
  */
 export function ConnectorChoiceConnected({ locale, storyId }: { locale: Locale; storyId: string }) {
   const id = storyId as Id<"story">;
