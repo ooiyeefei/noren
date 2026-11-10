@@ -7,6 +7,7 @@ import {
   AccountMenuView,
   type AccountState,
 } from "@/components/layout/account-menu";
+import { FeatureLinksProvider } from "@/components/layout/document-links";
 import { errorParts, errorText } from "@/components/layout/error-text";
 import { LanguageSwitcherView } from "@/components/layout/language-switcher";
 import { PageContainer } from "@/components/layout/page-container";
@@ -478,5 +479,47 @@ describe("error parts", () => {
     expect(errorParts(error, "ja").text).toBe(
       "問題が発生しました。ページを再読み込みしてください。",
     );
+  });
+});
+
+describe("the link to walk mode", () => {
+  const withWalk = (walk: boolean, children: ReactNode) => (
+    <FeatureLinksProvider walk={walk}>{children}</FeatureLinksProvider>
+  );
+
+  it("shows in the footer and the account menu only while features.walk is on", () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      const off = render(withWalk(false, <SiteFooter locale={locale} />));
+      expect(off).not.toContain(`href="/${locale}/walk"`);
+      const on = render(withWalk(true, <SiteFooter locale={locale} />));
+      expect(on).toContain(`href="/${locale}/walk"`);
+      expect(on).toContain(shellMessages[locale].walkMode);
+      const menuOff = render(
+        withWalk(
+          false,
+          <AccountMenuView
+            locale={locale}
+            state={signedIn("user")}
+            signOut={<button>Out</button>}
+          />,
+        ),
+      );
+      expect(menuOff).not.toContain(`href="/${locale}/walk"`);
+      const menuOn = render(
+        withWalk(
+          true,
+          <AccountMenuView
+            locale={locale}
+            state={signedIn("user")}
+            signOut={<button>Out</button>}
+          />,
+        ),
+      );
+      expect(menuOn).toContain(`href="/${locale}/walk"`);
+    }
+  });
+
+  it("is not in the page without a provider, which is how every other page renders", () => {
+    expect(render(<SiteFooter locale="en" />)).not.toContain("/walk");
   });
 });

@@ -18,6 +18,7 @@ import type { Role } from "@/lib/domain/constants";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
 import { api } from "../../../convex/_generated/api";
+import { useFeatureLinks } from "./document-links";
 
 export type AccountState =
   | { kind: "loading" }
@@ -51,6 +52,7 @@ export function AccountMenuView({
   pathname?: string | null;
 }): React.JSX.Element | null {
   const m = messagesFor(shellMessages, locale);
+  const features = useFeatureLinks();
   if (state.kind === "signedOut") {
     const signInPath = localePath(locale, "/sign-in");
     if (pathname === signInPath || pathname?.startsWith(`${signInPath}/`)) return null;
@@ -119,6 +121,11 @@ export function AccountMenuView({
         <DropdownMenuItem asChild>
           <Link href={localePath(locale, "/map")}>{m.exploreMap}</Link>
         </DropdownMenuItem>
+        {features.walk && (
+          <DropdownMenuItem asChild>
+            <Link href={localePath(locale, "/walk")}>{m.walkMode}</Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <Link href={localePath(locale, "/account")}>{m.account}</Link>
         </DropdownMenuItem>
