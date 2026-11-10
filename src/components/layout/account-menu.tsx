@@ -18,7 +18,7 @@ import type { Role } from "@/lib/domain/constants";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
 import { api } from "../../../convex/_generated/api";
-import { useFeatureLinks } from "./document-links";
+import { useFeatureLinks } from "./features";
 
 export type AccountState =
   | { kind: "loading" }
@@ -105,6 +105,16 @@ export function AccountMenuView({
         <DropdownMenuItem asChild>
           <Link href={localePath(locale, "/collection")}>{m.collection}</Link>
         </DropdownMenuItem>
+        {features.planner && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href={localePath(locale, "/plan")}>{m.planMyDay}</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={localePath(locale, "/remembers")}>{m.whatNorenRemembers}</Link>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuItem asChild>
           <Link href={localePath(locale, "/creator")}>{m.creatorPages}</Link>
         </DropdownMenuItem>

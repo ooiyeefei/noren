@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
-import { useDocumentLinks, useFeatureLinks } from "./document-links";
+import { useDocumentLinks } from "./document-links";
+import { useFeatureLinks } from "./features";
 
 export function SiteFooter({
   locale,
@@ -43,6 +44,22 @@ export function SiteFooter({
           >
             {m.whatIsNoren}
           </Link>
+          {features.planner && (
+            <>
+              <Link
+                className="flex min-h-11 items-center underline underline-offset-4 hover:text-ai"
+                href={localePath(locale, "/plan")}
+              >
+                {m.planMyDay}
+              </Link>
+              <Link
+                className="flex min-h-11 items-center underline underline-offset-4 hover:text-ai"
+                href={localePath(locale, "/remembers")}
+              >
+                {m.whatNorenRemembers}
+              </Link>
+            </>
+          )}
           {features.walk && (
             <Link
               className="flex min-h-11 items-center underline underline-offset-4 hover:text-ai"

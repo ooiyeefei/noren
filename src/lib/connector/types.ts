@@ -33,6 +33,8 @@ export type WalkRequest = {
   avoid: string[];
   interests: string[];
   adventurousness: "familiar" | "mixed" | "surprise";
+  /** Slugs the draw must leave out, such as places the visitor has been to today. */
+  exclude?: string[];
 };
 export type OmikujiRequest = { neighbourhoodId?: string };
 export type { OmikujiResult, WalkResult };

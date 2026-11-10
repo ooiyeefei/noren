@@ -58,6 +58,8 @@ import type * as people from "../people.js";
 import type * as placeStories from "../placeStories.js";
 import type * as placeStoryActions from "../placeStoryActions.js";
 import type * as places from "../places.js";
+import type * as planner from "../planner.js";
+import type * as plannerActions from "../plannerActions.js";
 import type * as seed from "../seed.js";
 import type * as sourceChecks from "../sourceChecks.js";
 import type * as sources from "../sources.js";
@@ -141,6 +143,8 @@ declare const fullApi: ApiFromModules<{
   placeStories: typeof placeStories;
   placeStoryActions: typeof placeStoryActions;
   places: typeof places;
+  planner: typeof planner;
+  plannerActions: typeof plannerActions;
   seed: typeof seed;
   sourceChecks: typeof sourceChecks;
   sources: typeof sources;

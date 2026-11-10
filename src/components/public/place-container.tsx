@@ -4,6 +4,7 @@ import { use, useState } from "react";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { PageContainer } from "@/components/layout/page-container";
+import { useTasteLearning } from "@/components/memory/taste-learning";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { AddStoryActions } from "@/components/place/add-story";
 import type { WrittenStoryArgs } from "@/components/place/add-story-form";
@@ -100,6 +101,13 @@ function PlaceQuery({
   const removePhoto = useMutation(api.storyPhotos.remove);
   const previewLink = useAction(api.linkRead.previewLink);
   const draftNote = useAction(api.linkRead.draftNote);
+  // Opening a place counts toward a taste on the visitor's own device (only while the planner is on).
+  const learnFromSave = useTasteLearning(place?.category, place?.slug);
+  const saved = async <T,>(work: Promise<T>) => {
+    const result = await work;
+    learnFromSave();
+    return result;
+  };
   if (place === undefined)
     return (
       <PageContainer locale={locale}>
@@ -117,8 +125,8 @@ function PlaceQuery({
     ? {
         signedIn: isLoading ? undefined : isAuthenticated,
         sharedHere: [...(stories ?? []), ...(sources ?? [])].some((entry) => entry.addedByMe),
-        add: (args) => pressing("story", () => addSource({ ...args, placeId: place._id })),
-        write: (args) => pressing("story", () => writeStory(writtenStory(args, place._id))),
+        add: (args) => pressing("story", () => saved(addSource({ ...args, placeId: place._id }))),
+        write: (args) => pressing("story", () => saved(writeStory(writtenStory(args, place._id)))),
         shownAs,
         photos:
           photoLimits && canAddPhotos?.allowed
@@ -150,7 +158,7 @@ function PlaceQuery({
           actions: {
             signedIn: isLoading ? undefined : isAuthenticated,
             locate: () => readLocation(navigator.geolocation),
-            checkIn: () => pressing("checkIn", () => checkIn({ placeId: place._id })),
+            checkIn: () => pressing("checkIn", () => saved(checkIn({ placeId: place._id }))),
             writeLine: (args) => writeStory(writtenStory(args, place._id)),
             shownAs,
             stillHere: () => confirm({ placeId: place._id }),

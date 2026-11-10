@@ -13,6 +13,10 @@ export const AI_CAPABILITIES = [
   // a member's line from a post they tick as their own.
   "write_story",
   "check_story",
+  // The in-app planner (AI_MODEL_PLAN): chooses what to ask Noren's tools and hands over a structured
+  // answer that code checks. It needs tool calling and runs with tool_choice "auto" (Anthropic's
+  // Sonnet 5.5 refuses a forced choice and Meta accepts only "auto").
+  "plan",
 ] as const;
 export type AiCapability = (typeof AI_CAPABILITIES)[number];
 // Each capability names its model in AI_MODEL_<CAPABILITY>, so switching provider is a settings

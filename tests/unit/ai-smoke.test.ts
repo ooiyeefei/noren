@@ -75,7 +75,7 @@ describe("ai-smoke", () => {
   });
 
   it("a dry run of a step that catches its own errors still sends nothing", async () => {
-    for (const capability of ["translate", "write_story", "extract", "followup"]) {
+    for (const capability of ["translate", "write_story", "extract", "followup", "plan"]) {
       const { code, fetch, output } = await smoke(
         ["--capability", capability, "--model", "claude-sonnet-5-5", "--dry-run"],
         [],

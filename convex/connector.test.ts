@@ -157,6 +157,22 @@ describe("walk: who may be suggested", () => {
     expect(result.stops.map((stop) => stop.slug).toSorted()).toEqual(["other-1", "other-2"]);
   });
 
+  it("leaves out the places it is told to, such as today's trip, and refuses a long list", async () => {
+    const { b, creator } = await world();
+    await place(b, creator, { slug: "been-1" });
+    await place(b, creator, { slug: "been-2", lat: 32.7425 });
+    await place(b, creator, { slug: "new-1", lng: 129.8765 });
+    for (let seed = 0; seed < 10; seed++) {
+      const slugs = stopsOf(
+        await walk(b, walkArgs({ count: 5, exclude: ["been-1", "been-2", "not-a-place"] }), seed),
+      ).map((stop) => stop.slug);
+      expect(slugs).toEqual(["new-1"]);
+    }
+    await expect(
+      walk(b, walkArgs({ exclude: Array.from({ length: 13 }, (_, n) => `p${n}`) })),
+    ).rejects.toMatchObject({ data: { code: "invalid_input" } });
+  });
+
   it("will not start from a draft, a demo place or a place that does not exist", async () => {
     const { b, creator } = await world();
     await place(b, creator, { slug: "a-draft", visibility: "draft" });

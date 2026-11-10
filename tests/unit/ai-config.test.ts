@@ -473,3 +473,41 @@ describe("how a step asks for a structured report", () => {
     expect(toolStep(provider("openai/gpt-6-astra"), 8000)).toEqual({ forceTool: true });
   });
 });
+
+describe("the planner capability", () => {
+  const env = { ANTHROPIC_API_KEY: "mock-anthropic-key", META_API_KEY: "mock-meta-key" };
+
+  it("is declared, and reads AI_MODEL_PLAN", () => {
+    expect(AI_CAPABILITIES).toContain("plan");
+    expect(aiConfig("plan", {})).toEqual({
+      ok: false,
+      reason: expect.stringContaining("AI_MODEL_PLAN"),
+    });
+  });
+
+  it("runs on Claude and on Meta, each with the tool choice left on auto", () => {
+    const claude = aiConfig("plan", { ...env, AI_MODEL_PLAN: "claude-sonnet-5-5" });
+    expect(claude).toEqual({
+      ok: true,
+      config: { provider: "anthropic", apiKey: "mock-anthropic-key", modelId: "claude-sonnet-5-5" },
+    });
+    const meta = aiConfig("plan", { ...env, AI_MODEL_PLAN: "meta:muse-spark-1.3" });
+    expect(meta).toEqual({
+      ok: true,
+      config: { provider: "meta", apiKey: "mock-meta-key", modelId: "muse-spark-1.3" },
+    });
+    if (!claude.ok || !meta.ok) throw new Error("expected both to resolve");
+    // Sonnet 5.5 refuses a forced tool_choice and Meta accepts only "auto".
+    expect(mayForceTool(claude.config)).toBe(false);
+    expect(mayForceTool(meta.config)).toBe(false);
+    expect(toolStep(claude.config, 8000).maxOutputTokens).toBe(8000);
+    expect(toolStep(meta.config, 8000).maxOutputTokens).toBeUndefined();
+  });
+
+  it("refuses a Meta model that trains on what it receives", () => {
+    expect(aiConfig("plan", { ...env, AI_MODEL_PLAN: "meta:muse-spark-1.3-contributor" })).toEqual({
+      ok: false,
+      reason: expect.stringContaining("-contributor"),
+    });
+  });
+});

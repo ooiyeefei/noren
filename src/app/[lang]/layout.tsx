@@ -2,7 +2,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { BIZ_UDPGothic, Geist_Mono, Shippori_Mincho_B1 } from "next/font/google";
 import { DraftsProvider } from "@/components/drafts/drafts";
-import { DocumentLinksProvider, FeatureLinksProvider } from "@/components/layout/document-links";
+import { DocumentLinksProvider } from "@/components/layout/document-links";
+import { FeatureLinksProvider } from "@/components/layout/features";
 import { SiteHeader } from "@/components/layout/site-header";
 import { documentsPublished } from "@/components/legal/documents";
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider";
@@ -69,7 +70,7 @@ export default async function RootLayout({ children }: LayoutProps<"/[lang]">) {
           <ConvexClientProvider>
             <DraftsProvider>
               <DocumentLinksProvider published={documentsPublished(region)}>
-                <FeatureLinksProvider walk={region.features.walk}>
+                <FeatureLinksProvider planner={region.features.planner} walk={region.features.walk}>
                   <SiteHeader
                     locale={locale}
                     regionName={region.name[locale] ?? region.id}
