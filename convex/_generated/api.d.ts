@@ -63,6 +63,7 @@ import type * as sources from "../sources.js";
 import type * as stampBook from "../stampBook.js";
 import type * as stewardPeople from "../stewardPeople.js";
 import type * as stories from "../stories.js";
+import type * as storyConnector from "../storyConnector.js";
 import type * as storyFinder from "../storyFinder.js";
 import type * as storyFinderActions from "../storyFinderActions.js";
 import type * as storyPhotoActions from "../storyPhotoActions.js";
@@ -143,6 +144,7 @@ declare const fullApi: ApiFromModules<{
   stampBook: typeof stampBook;
   stewardPeople: typeof stewardPeople;
   stories: typeof stories;
+  storyConnector: typeof storyConnector;
   storyFinder: typeof storyFinder;
   storyFinderActions: typeof storyFinderActions;
   storyPhotoActions: typeof storyPhotoActions;

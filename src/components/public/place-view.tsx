@@ -182,6 +182,7 @@ export function PlaceView({
                 actions={story}
                 photoBaseUrl={region.photos?.baseUrl}
                 canShareKit={place.canManage}
+                connectorOffered={region.connectorTick}
               />
             </>
           )}

@@ -4,6 +4,7 @@ import { VoiceInput } from "@/components/voice/voice-input";
 import { useId, useRef, useState } from "react";
 import { useDraft, usePhotoDrafts } from "@/components/drafts/drafts";
 import { ErrorMessage } from "@/components/layout/error-message";
+import { ConnectorTick } from "@/components/share/connector-choice";
 import { ConsentTick } from "@/components/share/consent-tick";
 import { ShareStoryConnected } from "@/components/share/share-story";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
@@ -83,6 +84,7 @@ export function AddStory({
   const [sharedId, setSharedId] = useState<string | null>(null);
   // Not kept through a reload: a tick is made with the form in front of the writer.
   const [consent, setConsent] = useState(false);
+  const [connectorConsent, setConnectorConsent] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [photos, setPhotos] = useState<PhotoDraft>(NO_PHOTOS);
   const keptPhotos = usePhotoDrafts(draftName);
@@ -117,6 +119,7 @@ export function AddStory({
         ...result.args,
         ...(photoIds.length ? { photoIds } : {}),
         ...(consent && region.shareToNoren ? { shareConsent: true } : {}),
+        ...(connectorConsent && region.connectorTick ? { connectorAllowed: true } : {}),
       };
       return { ok: true as const, run: () => send.write(args) };
     }
@@ -139,6 +142,7 @@ export function AddStory({
       void keptPhotos?.store.save(keptPhotos.key, []);
       setAdded(true);
       setConsent(false);
+      setConnectorConsent(false);
       setSharedId(current === "write" && typeof result === "string" ? result : null);
     } catch (caught) {
       setError(caught);
@@ -338,6 +342,14 @@ export function AddStory({
                 hintId={`${id}-consent-hint`}
                 checked={consent}
                 onChange={setConsent}
+              />
+            )}
+            {mode === "write" && region.connectorTick && (
+              <ConnectorTick
+                locale={locale}
+                hintId={`${id}-connector-hint`}
+                checked={connectorConsent}
+                onChange={setConnectorConsent}
               />
             )}
             {/* Sharing is the agreement to show it; saying so beside the button is the consent. */}
