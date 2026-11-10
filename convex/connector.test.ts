@@ -396,13 +396,14 @@ describe("the exposure ledger", () => {
   it("has no public function that adds to it by itself", async () => {
     const { b, creator } = await world();
     await place(b, creator, { slug: "one" });
-    // Only the two draws are callable from outside; the helpers and the clean-up are not.
+    // Only the draws are callable from outside (walk mode's omikujiToday records nothing, see
+    // walk.test.ts); the helpers and the clean-up are not.
     const isPublic = (value: unknown) =>
       typeof value === "function" && (value as { isPublic?: boolean }).isPublic === true;
     const callable = Object.entries(connectorModule)
       .filter(([, value]) => isPublic(value))
       .map(([name]) => name);
-    expect(callable.toSorted()).toEqual(["omikuji", "walk"]);
+    expect(callable.toSorted()).toEqual(["omikuji", "omikujiToday", "walk"]);
     // Nothing is written until a draw returns stops.
     expect(await rows(b)).toEqual([]);
   });

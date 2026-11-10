@@ -29,6 +29,7 @@ import type * as lib_gate from "../lib/gate.js";
 import type * as lib_liveStory from "../lib/liveStory.js";
 import type * as lib_mapCopies from "../lib/mapCopies.js";
 import type * as lib_mock from "../lib/mock.js";
+import type * as lib_publicPool from "../lib/publicPool.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_region from "../lib/region.js";
 import type * as lib_rules_claims from "../lib/rules/claims.js";
@@ -81,6 +82,7 @@ import type * as tables_storyVoice from "../tables/storyVoice.js";
 import type * as takedown from "../takedown.js";
 import type * as trail from "../trail.js";
 import type * as translationChecks from "../translationChecks.js";
+import type * as walk from "../walk.js";
 
 import type {
   ApiFromModules,
@@ -110,6 +112,7 @@ declare const fullApi: ApiFromModules<{
   "lib/liveStory": typeof lib_liveStory;
   "lib/mapCopies": typeof lib_mapCopies;
   "lib/mock": typeof lib_mock;
+  "lib/publicPool": typeof lib_publicPool;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/region": typeof lib_region;
   "lib/rules/claims": typeof lib_rules_claims;
@@ -162,6 +165,7 @@ declare const fullApi: ApiFromModules<{
   takedown: typeof takedown;
   trail: typeof trail;
   translationChecks: typeof translationChecks;
+  walk: typeof walk;
 }>;
 
 /**

@@ -2,15 +2,15 @@ import { v, type Infer } from "convex/values";
 import { MAP_PLACE_LIMIT } from "../src/lib/domain/constants";
 import {
   ADVENTUROUSNESS,
+  chooseOmikuji,
   drawStops,
-  drawWeight,
   interestsFor,
   isoWeekKey,
   isoWeekday,
-  keyedUniform,
   legsOf,
   localDay,
   needsCautions,
+  omikujiSeed,
   orderAsWalk,
   passesAvoid,
   previousWeekKey,
@@ -18,23 +18,19 @@ import {
   resolveAvoid,
   withoutCautionRules,
   resolveInterests,
-  sampleWithoutReplacement,
   WALK_RADIUS_METRES,
   type Rng,
 } from "../src/lib/draw";
 import { distanceMetres } from "../src/lib/overture/dedupe";
-import { neighbourhoodAt } from "../src/lib/region/neighbourhoods";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { type MutationCtx } from "./_generated/server";
 import { isPublicSafeClaim, publicStoriesAllowed } from "./lib/access";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
-import { readHasPublishedPage, readMapNames, readMapPin } from "./lib/mapCopies";
 import { consumeRateLimit } from "./lib/rateLimit";
+import { nameView, publicPool, type Pin, type PoolPlace } from "./lib/publicPool";
 import { regionConfig, regionPolicy } from "./lib/region";
-import { scriptValidator } from "./lib/validators";
-import { readablePlaces } from "./lib/visibility";
 
 // The draws behind the connector's suggest_walk and draw_omikuji tools.
 //
@@ -62,13 +58,6 @@ const MAX_TAG_LENGTH = 40;
 const MAX_STOPS = 5;
 /** Published cautions read for one place when a rule asks for them; a place has a handful. */
 const CAUTIONS_READ = 50;
-
-const nameView = v.object({
-  lang: v.string(),
-  script: scriptValidator,
-  value: v.string(),
-  isPrimary: v.boolean(),
-});
 
 /** What a draw says about a place it picked. No weight, score or rank is ever in here. */
 const pickedPlace = v.object({
@@ -127,52 +116,23 @@ const omikujiResult = v.union(
   }),
 );
 
+/** One day's slips for walk mode: a slip per neighbourhood, and one for the whole region. */
+const todaysSlips = v.object({
+  /** The date in the region's time that the slips belong to, YYYY-MM-DD. */
+  day: v.string(),
+  slips: v.array(
+    v.object({
+      /** Unset for the slip drawn from the whole region. */
+      neighbourhoodId: v.optional(v.string()),
+      /** The pin is Noren's public map pin; the phone works out the distance and direction. */
+      place: pickedPlace.extend({ pin: v.object({ lat: v.number(), lng: v.number() }) }),
+    }),
+  ),
+});
+
 export type WalkResult = Infer<typeof walkResult>;
 export type OmikujiResult = Infer<typeof omikujiResult>;
-
-type Pin = { lat: number; lng: number };
-
-/** A place the connector may suggest: real, on the public map, with a pin. */
-type PoolPlace = {
-  id: Id<"place">;
-  slug: string;
-  category: string | undefined;
-  names: Infer<typeof nameView>[];
-  pin: Pin;
-  confirmedAt: number | undefined;
-  hasStory: boolean;
-  neighbourhoodId: string | undefined;
-};
-
-/**
- * The places a signed-out visitor can see on the map, which are the only places a draw may pick.
- * Demo (fictional) places are left out: a suggestion is for a real walk. A place a steward took off
- * the map is left out, as the map leaves it out. `hasStory` follows the map's dot (listForMap).
- */
-async function publicPool(ctx: MutationCtx, regionId: string): Promise<PoolPlace[]> {
-  const region = regionConfig(regionId);
-  const places = await readablePlaces(ctx, null, { regionId, limit: MAP_PLACE_LIMIT });
-  const pool: PoolPlace[] = [];
-  for (const place of places) {
-    if (place.isMock || place.hiddenReason !== undefined) continue;
-    const pin = place.mapPin !== undefined ? place.mapPin : await readMapPin(ctx, place._id);
-    if (pin === null) continue;
-    pool.push({
-      id: place._id,
-      slug: place.slug,
-      category: place.category,
-      names: place.mapNames ?? (await readMapNames(ctx, place._id)),
-      pin,
-      confirmedAt: place.confirmedAt,
-      hasStory:
-        (publicStoriesAllowed(place) &&
-          (place.hasPublishedPage ?? (await readHasPublishedPage(ctx, place._id)))) ||
-        place.hasPeopleStories === true,
-      neighbourhoodId: neighbourhoodAt(region, pin)?.id,
-    });
-  }
-  return pool;
-}
+export type TodaysSlips = Infer<typeof todaysSlips>;
 
 const picked = (place: PoolPlace) => ({
   slug: place.slug,
@@ -437,20 +397,11 @@ export async function runOmikuji(
   await limitDraws(ctx, now);
 
   const day = localDay(now, offsetHours);
-  const seed = `${args.regionId}|${day}|${neighbourhoodId ?? "-"}`;
+  const seed = omikujiSeed(args.regionId, day, neighbourhoodId);
   const pool = (await publicPool(ctx, args.regionId)).filter(
     (place) => neighbourhoodId === undefined || place.neighbourhoodId === neighbourhoodId,
   );
-  const [chosen] = sampleWithoutReplacement(
-    pool,
-    1,
-    (place) =>
-      drawWeight(
-        { recentSuggestions: 0, hasStory: place.hasStory, matchesInterest: false },
-        { wildCard: true, ignoreExposure: true },
-      ),
-    (place) => keyedUniform(seed, place.id),
-  );
+  const chosen = chooseOmikuji(pool, seed);
   if (chosen === undefined) return { ok: false, reason: "no_places" };
   await recordExposure(ctx, [chosen.id], now, offsetHours, day);
   return {
@@ -459,6 +410,42 @@ export async function runOmikuji(
     ...(neighbourhoodId === undefined ? {} : { neighbourhoodId }),
     place: picked(chosen),
   };
+}
+
+/**
+ * Today's slip for every neighbourhood at once, and for the whole region, for walk mode. A phone
+ * must not tell Noren where it is, so it cannot ask for "the slip near me": it asks once for all of
+ * them and picks on the phone. Each slip is the one runOmikuji gives for that neighbourhood on the
+ * same day (the same seed and the same draw). A neighbourhood with no place has no slip.
+ *
+ * It records nothing in the exposure ledger: the ledger would have to learn which slip the person
+ * took, and that would say where they are. The ledger only tilts suggest_walk, never the omikuji.
+ * Exported for tests; not registered.
+ */
+export async function runOmikujiToday(
+  ctx: MutationCtx,
+  args: { regionId: string },
+  now: number,
+): Promise<TodaysSlips> {
+  const region = regionConfig(args.regionId);
+  await limitDraws(ctx, now);
+  const day = localDay(now, region.collection.utcOffsetHours);
+  const pool = await publicPool(ctx, args.regionId);
+  const slips: TodaysSlips["slips"] = [];
+  for (const neighbourhoodId of [...(region.neighbourhoods ?? []).map(({ id }) => id), undefined]) {
+    const chosen = chooseOmikuji(
+      pool.filter(
+        (place) => neighbourhoodId === undefined || place.neighbourhoodId === neighbourhoodId,
+      ),
+      omikujiSeed(args.regionId, day, neighbourhoodId),
+    );
+    if (chosen === undefined) continue;
+    slips.push({
+      ...(neighbourhoodId === undefined ? {} : { neighbourhoodId }),
+      place: { ...picked(chosen), pin: chosen.pin },
+    });
+  }
+  return { day, slips };
 }
 
 const tags = v.array(v.string());
@@ -502,6 +489,15 @@ export const omikuji = mutation({
   handler: async (ctx, args) => {
     requireDraws(args.regionId);
     return await runOmikuji(ctx, args, Date.now());
+  },
+});
+
+export const omikujiToday = mutation({
+  args: { regionId: v.string() },
+  returns: todaysSlips,
+  handler: async (ctx, args) => {
+    requireDraws(args.regionId);
+    return await runOmikujiToday(ctx, args, Date.now());
   },
 });
 

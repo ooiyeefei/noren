@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
-import { useDocumentLinks } from "./document-links";
+import { useDocumentLinks, useFeatureLinks } from "./document-links";
 
 export function SiteFooter({
   locale,
@@ -14,6 +14,7 @@ export function SiteFooter({
 }): React.JSX.Element {
   const m = messagesFor(shellMessages, locale);
   const documents = useDocumentLinks();
+  const features = useFeatureLinks();
   return (
     <footer
       lang={locale}
@@ -42,6 +43,14 @@ export function SiteFooter({
           >
             {m.whatIsNoren}
           </Link>
+          {features.walk && (
+            <Link
+              className="flex min-h-11 items-center underline underline-offset-4 hover:text-ai"
+              href={localePath(locale, "/walk")}
+            >
+              {m.walkMode}
+            </Link>
+          )}
           <Link
             className="flex min-h-11 items-center underline underline-offset-4 hover:text-ai"
             href={localePath(locale, "/notice")}
