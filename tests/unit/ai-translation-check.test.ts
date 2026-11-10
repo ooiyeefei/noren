@@ -1,3 +1,4 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { APICallError } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it, vi } from "vitest";
@@ -13,6 +14,7 @@ import {
 import { createModal } from "../../src/lib/ai/modal";
 import {
   CHECK_MAX_TOKENS,
+  CHECK_MAX_TOKENS_NATIVE,
   CHECK_REPORT_SCHEMA,
   CHECK_TOOL,
   CheckOutputError,
@@ -131,11 +133,12 @@ describe("checkPrompt", () => {
 });
 
 describe("classifyCheckError", () => {
-  it("retries a sleeping or unreachable endpoint and a timeout", () => {
+  it("retries a sleeping or unreachable endpoint, an overloaded Claude and a timeout", () => {
     for (const error of [
       apiError(503),
       apiError(502),
       apiError(504),
+      apiError(529),
       apiError(),
       Object.assign(new Error("timed out"), { name: "TimeoutError" }),
       Object.assign(new Error("aborted"), { name: "AbortError" }),
@@ -556,5 +559,209 @@ describe("checkTranslationsJob", () => {
       ["check-2", "defer"],
     ]);
     expect(s.lines.join("\n")).toContain("Error: mock database failure");
+  });
+});
+
+describe("the checker with Claude", () => {
+  const input = {
+    original: ORIGINAL,
+    originalLang: "ja",
+    translation: UNFAITHFUL,
+    translationLang: "en",
+  };
+  const PASS = { faithful: true, added: [], missing: [] };
+  const FAIL = { faithful: false, added: ["best coffee shop in Nagasaki"], missing: ["cash only"] };
+
+  function answering(
+    text: string,
+    finish: "stop" | "length" | "content-filter" | "other" = "stop",
+  ) {
+    return new MockLanguageModelV4({
+      provider: "anthropic.messages",
+      modelId: "claude-haiku-5-5",
+      doGenerate: async () => ({
+        content: text ? [{ type: "text" as const, text }] : [],
+        finishReason: { unified: finish, raw: undefined },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 1, text: 1, reasoning: undefined },
+        },
+        warnings: [],
+      }),
+    });
+  }
+  const native = (model: MockLanguageModelV4) =>
+    createTranslationChecker({ model, reportMode: "native" });
+
+  it("asks for structured output with the report schema, not for a forced tool call", async () => {
+    const model = answering(JSON.stringify(PASS));
+    await native(model).check(input);
+    expect(model.doGenerateCalls).toHaveLength(1);
+    const [call] = model.doGenerateCalls;
+    expect(call).toMatchObject({
+      responseFormat: { type: "json", schema: CHECK_REPORT_SCHEMA },
+      maxOutputTokens: CHECK_MAX_TOKENS_NATIVE,
+    });
+    expect(call!.tools ?? []).toEqual([]);
+    expect(call!.toolChoice?.type ?? "auto").toBe("auto");
+    expect(call!.temperature).toBeUndefined();
+    expect(call!.reasoning).toBeUndefined();
+  });
+
+  it("passes a faithful translation", async () => {
+    expect(await native(answering(JSON.stringify(PASS))).check(input)).toEqual(PASS);
+  });
+
+  it("fails a translation with claims added or left out, and lists them", async () => {
+    expect(await native(answering(JSON.stringify(FAIL))).check(input)).toEqual(FAIL);
+  });
+
+  it("does not pass a translation the checker calls faithful while listing a claim", async () => {
+    const report = { faithful: true, added: ["an extra claim"], missing: [] };
+    expect(await native(answering(JSON.stringify(report))).check(input)).toEqual({
+      faithful: false,
+      added: ["an extra claim"],
+      missing: [],
+    });
+  });
+
+  const unreadable: [string, string, "stop" | "length" | "content-filter" | "other"][] = [
+    ["text that is not JSON", "The translation looks faithful to me.", "stop"],
+    ["JSON that is not an object", "[]", "stop"],
+    ["JSON cut off in the middle", '{"faithful": true, "added": [', "stop"],
+    ["an object without a verdict", "{}", "stop"],
+    ["a verdict that is not a boolean", '{"faithful":"yes","added":[],"missing":[]}', "stop"],
+    [
+      "a list that is not a list of claims",
+      '{"faithful":false,"added":"one","missing":[]}',
+      "stop",
+    ],
+    ["an empty answer", "", "stop"],
+    ["a passing report cut off at max tokens", JSON.stringify(PASS), "length"],
+    ["a passing report from a refused request", JSON.stringify(PASS), "content-filter"],
+    ["a refusal with no text", "", "content-filter"],
+    ["a passing report with an unknown stop", JSON.stringify(PASS), "other"],
+  ];
+  it.each(unreadable)("fails closed on %s", async (_name, text, finish) => {
+    const error = await native(answering(text, finish))
+      .check(input)
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(CheckOutputError);
+    expect(classifyCheckError(error)).toBe("fail");
+    expect(describeCheckError(error)).not.toContain(ORIGINAL);
+  });
+
+  it("lets a provider error through unchanged, so overload is retried and a bad key is not", async () => {
+    const failing = (statusCode: number) =>
+      new MockLanguageModelV4({
+        provider: "anthropic.messages",
+        doGenerate: async () => {
+          throw apiError(statusCode);
+        },
+      });
+    const overloaded = await native(failing(529))
+      .check(input)
+      .catch((caught: unknown) => caught);
+    expect(APICallError.isInstance(overloaded)).toBe(true);
+    expect(classifyCheckError(overloaded)).toBe("retry");
+    const unauthorized = await native(failing(401))
+      .check(input)
+      .catch((caught: unknown) => caught);
+    expect(classifyCheckError(unauthorized)).toBe("fail");
+  });
+
+  describe("on the wire to Anthropic", () => {
+    function message(text: string, stopReason = "end_turn") {
+      return Response.json({
+        id: "msg_mock",
+        type: "message",
+        role: "assistant",
+        model: "claude-sonnet-5-5",
+        content: [{ type: "text", text }],
+        stop_reason: stopReason,
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+    }
+    function wired(setting: string, response: () => Response) {
+      const fetch = vi.fn<typeof globalThis.fetch>(async () => response());
+      const result = aiConfig("check_translation", {
+        ANTHROPIC_API_KEY: "mock-anthropic-key",
+        AI_MODEL_CHECK_TRANSLATION: setting,
+      });
+      if (!result.ok) throw new Error(result.reason);
+      const unused = () => () => {
+        throw new Error("wrong provider");
+      };
+      const model = createLanguageModel(result.config, {
+        anthropic: (options) => createAnthropic({ ...options, fetch }),
+        gateway: unused,
+        meta: unused,
+        modal: unused,
+      });
+      return { fetch, checker: createTranslationChecker({ model, reportMode: "native" }) };
+    }
+    const bodyOf = (fetch: ReturnType<typeof wired>["fetch"]) =>
+      JSON.parse(String(fetch.mock.calls[0]![1]!.body));
+
+    it.each(["claude-sonnet-5-5", "claude-haiku-5-5"])(
+      "sends %s one structured-output request: no tool_choice, no tools, no sampling or thinking settings",
+      async (setting) => {
+        const { fetch, checker } = wired(setting, () => message(JSON.stringify(FAIL)));
+        expect(await checker.check(input)).toEqual(FAIL);
+        expect(fetch).toHaveBeenCalledTimes(1);
+        const [url, init] = fetch.mock.calls[0]!;
+        expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+        expect(new Headers(init!.headers).get("x-api-key")).toBe("mock-anthropic-key");
+        const body = bodyOf(fetch);
+        expect(body).toMatchObject({
+          model: setting,
+          max_tokens: CHECK_MAX_TOKENS_NATIVE,
+          output_config: {
+            format: {
+              type: "json_schema",
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["faithful", "added", "missing"],
+              },
+            },
+          },
+        });
+        for (const field of ["tool_choice", "tools", "temperature", "top_p", "top_k", "thinking"])
+          expect(body).not.toHaveProperty(field);
+        expect(JSON.stringify(body.system)).toContain("You check a translation");
+        expect(JSON.stringify(body.messages)).toContain(UNFAITHFUL);
+      },
+    );
+
+    it("a refusal (stop_reason refusal) is a failed check, not a pass", async () => {
+      const { checker } = wired("claude-sonnet-5-5", () =>
+        message(JSON.stringify(PASS), "refusal"),
+      );
+      const error = await checker.check(input).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(CheckOutputError);
+    });
+
+    it("running out of max_tokens is a failed check, not a pass", async () => {
+      const { checker } = wired("claude-sonnet-5-5", () =>
+        message(JSON.stringify(PASS), "max_tokens"),
+      );
+      const error = await checker.check(input).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(CheckOutputError);
+    });
+
+    it("an overloaded Anthropic (529) is thrown at once, to be retried by scheduling", async () => {
+      const { fetch, checker } = wired("claude-haiku-5-5", () =>
+        Response.json(
+          { type: "error", error: { type: "overloaded_error", message: "Overloaded" } },
+          { status: 529 },
+        ),
+      );
+      const error = await checker.check(input).catch((caught: unknown) => caught);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(APICallError.isInstance(error)).toBe(true);
+      expect(classifyCheckError(error)).toBe("retry");
+    });
   });
 });

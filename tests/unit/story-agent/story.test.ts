@@ -1,5 +1,12 @@
+import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it } from "vitest";
-import { storyPrompt, verifyStory, WORDS_MAX, type ReportedStory } from "@/lib/story-agent/story";
+import {
+  createStoryWriter,
+  storyPrompt,
+  verifyStory,
+  WORDS_MAX,
+  type ReportedStory,
+} from "@/lib/story-agent/story";
 
 // All posts are made up.
 const posts = [
@@ -175,5 +182,61 @@ describe("storyPrompt", () => {
     const prompt = storyPrompt(place, posts, { previous, problems: ["cites nothing"] });
     expect(prompt).toContain("YOUR LAST DRAFT");
     expect(prompt).toContain("- cites nothing");
+  });
+});
+
+describe("createStoryWriter on a model that is not forced to call the tool", () => {
+  const place = { names: [{ lang: "en", value: "Test Kissa" }] };
+  const report = { sentences: [sentence([{ post: 1, words: WORDS }])] };
+  const usage = {
+    inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+    outputTokens: { total: 1, text: 1, reasoning: undefined },
+  };
+  const calling = {
+    content: [
+      {
+        type: "tool-call" as const,
+        toolCallId: "call_1",
+        toolName: "report_story",
+        input: JSON.stringify(report),
+      },
+    ],
+    finishReason: { unified: "tool-calls" as const, raw: undefined },
+    usage,
+    warnings: [],
+  };
+  const talking = {
+    content: [{ type: "text" as const, text: "Here is the story." }],
+    finishReason: { unified: "stop" as const, raw: undefined },
+    usage,
+    warnings: [],
+  };
+
+  it("asks with tool_choice auto and the token limit it is given, and asks again after a reply without the call", async () => {
+    const model = new MockLanguageModelV4({
+      provider: "anthropic.messages",
+      doGenerate: [talking, calling],
+    });
+    const writer = createStoryWriter({ model, forceTool: false, maxOutputTokens: 16_000 });
+    expect(await writer.write({ place, posts })).toEqual(report);
+    expect(model.doGenerateCalls.map((call) => call.toolChoice)).toEqual([
+      { type: "auto" },
+      { type: "auto" },
+    ]);
+    expect(model.doGenerateCalls.map((call) => call.maxOutputTokens)).toEqual([16_000, 16_000]);
+  });
+
+  it("keeps 8,000 tokens and a forced call unless told otherwise, and gives up after two replies without the call", async () => {
+    const forced = new MockLanguageModelV4({ doGenerate: [calling] });
+    await createStoryWriter({ model: forced }).write({ place, posts });
+    expect(forced.doGenerateCalls[0]).toMatchObject({
+      toolChoice: { type: "tool", toolName: "report_story" },
+      maxOutputTokens: 8000,
+    });
+    const silent = new MockLanguageModelV4({ doGenerate: [talking, talking] });
+    await expect(
+      createStoryWriter({ model: silent, forceTool: false }).write({ place, posts }),
+    ).rejects.toThrow("the writer did not call report_story");
+    expect(silent.doGenerateCalls).toHaveLength(2);
   });
 });

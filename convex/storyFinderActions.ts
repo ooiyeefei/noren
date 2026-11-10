@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { createLanguageModel } from "../src/lib/ai/claim-extractor";
-import { aiConfig } from "../src/lib/ai/config";
+import { aiConfig, toolStep } from "../src/lib/ai/config";
 import { translateJob } from "../src/lib/ai/jobs";
 import { createTranslator } from "../src/lib/ai/translator";
 import { createMentionChecker, describeCheckFailure } from "../src/lib/story-finder/check";
@@ -54,8 +54,8 @@ export const checkBatch = internalAction({
     if (batch.length) {
       const checker = createMentionChecker({
         model: createLanguageModel(config.config),
-        // Meta's Model API accepts only tool_choice "auto" (see check.ts).
-        forceTool: config.config.provider !== "meta",
+        // Meta's Model API and Claude are asked with tool_choice "auto"; see toolStep.
+        ...toolStep(config.config, 8000),
       });
       const results = await mapLimit(batch, PARALLEL, async (candidate) => {
         const started = Date.now();

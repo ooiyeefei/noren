@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AI_CAPABILITIES, aiConfig } from "../../src/lib/ai/config";
+import {
+  AI_CAPABILITIES,
+  aiConfig,
+  mayForceTool,
+  reportMode,
+  toolStep,
+} from "../../src/lib/ai/config";
 import nagasaki from "../../regions/nagasaki.json";
 
 const configured = { AI_GATEWAY_API_KEY: "test-key", TRANSCRIBE_PROVIDER: "gateway" };
@@ -421,5 +427,49 @@ describe("consent", () => {
     expect(nagasaki.consent.text.en).toContain(
       "Modal (United States), which runs an open-weight model that checks the translations",
     );
+  });
+});
+
+describe("how a step asks for a structured report", () => {
+  const env = {
+    ANTHROPIC_API_KEY: "mock-anthropic-key",
+    AI_GATEWAY_API_KEY: "mock-gateway-key",
+    META_API_KEY: "mock-meta-key",
+    MODAL_PROXY_TOKEN: "mock-modal-token",
+    MODAL_BASE_URL: "https://mock.invalid",
+  };
+  function provider(setting: string) {
+    const result = aiConfig("check_story", { ...env, AI_MODEL_CHECK_STORY: setting });
+    if (!result.ok) throw new Error(result.reason);
+    return result.config;
+  }
+
+  it("gives Claude native structured output and everything else one forced tool call", () => {
+    for (const model of ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"])
+      expect(reportMode(provider(model))).toBe("native");
+    for (const model of [
+      "meta:muse-spark-1.3",
+      "modal:noren-glimmer",
+      "anthropic/claude-haiku-5.5",
+    ])
+      expect(reportMode(provider(model))).toBe("tool");
+  });
+
+  it("names a tool in tool_choice for neither Meta nor Claude", () => {
+    expect(mayForceTool(provider("claude-sonnet-5-5"))).toBe(false);
+    expect(mayForceTool(provider("claude-haiku-5-5"))).toBe(false);
+    expect(mayForceTool(provider("meta:muse-spark-1.3"))).toBe(false);
+    expect(mayForceTool(provider("modal:noren-glimmer"))).toBe(true);
+    expect(mayForceTool(provider("openai/gpt-6-astra"))).toBe(true);
+  });
+
+  it("gives a one-tool-call step Claude's token limit and every other provider its own", () => {
+    expect(toolStep(provider("claude-haiku-5-5"), 8000)).toEqual({
+      forceTool: false,
+      maxOutputTokens: 8000,
+    });
+    expect(toolStep(provider("meta:muse-spark-1.3"), 8000)).toEqual({ forceTool: false });
+    expect(toolStep(provider("modal:noren-glimmer"), 8000)).toEqual({ forceTool: true });
+    expect(toolStep(provider("openai/gpt-6-astra"), 8000)).toEqual({ forceTool: true });
   });
 });
