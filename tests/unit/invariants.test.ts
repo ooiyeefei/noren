@@ -93,6 +93,7 @@ const notPersonCreated = [
   "shownQuote",
   "openTextSnippet",
   "phraseCard",
+  "problemReport",
   "takedownRequest",
   "rateLimit",
   "auditLog",

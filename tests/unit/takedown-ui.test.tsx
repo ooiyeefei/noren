@@ -44,7 +44,7 @@ const backend = vi.hoisted(() => ({
   query: new URLSearchParams({ page: " /en/places/mock " }),
   calls: [] as unknown[],
 }));
-vi.mock("next/navigation", () => ({ useSearchParams: () => backend.query }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => backend.query, usePathname: () => null }));
 vi.mock("convex/react", () => ({
   useMutation: (ref: Parameters<typeof getFunctionName>[0]) =>
     getFunctionName(ref) === "takedown:submit" ? backend.submit : backend.appeal,

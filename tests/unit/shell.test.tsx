@@ -330,6 +330,12 @@ it("loading and setup have named circular skeletons and no management links", ()
   }
 });
 
+it("the footer's report link works before any script runs, and needs no pathname to render", () => {
+  const html = render(<SiteFooter locale="en" />);
+  expect(html).toContain('href="/en/report"');
+  expect(html).toContain("Report a problem");
+});
+
 it("the logo is a decorative 24px indigo curtain without text", () => {
   const html = render(<NorenMark />);
   expect(html).toContain('width="24" height="24"');
@@ -346,9 +352,10 @@ it("the footer has the three ordered destinations and review notice in both loca
         `/${locale}/about`,
         `/${locale}/notice`,
         `/${locale}/takedown`,
+        `/${locale}/report`,
       ]);
       expect(html).not.toMatch(/OpenStreetMap/);
-      for (const key of ["whatIsNoren", "aboutData", "askRemoval", "japaneseReview"] as const)
+      for (const key of ["whatIsNoren", "aboutData", "askRemoval", "reportProblem", "japaneseReview"] as const)
         expect(html).toContain(shellMessages[locale][key]);
       expect(html.includes("mt-8")).toBe(!compact);
       expect(html).toContain("border-line");
@@ -356,6 +363,8 @@ it("the footer has the three ordered destinations and review notice in both loca
   }
   expect(shellMessages.en.aboutData).toBe("Credits and your data");
   expect(shellMessages.en.askRemoval).toBe("Ask to remove something");
+  expect(shellMessages.en.reportProblem).toBe("Report a problem");
+  expect(shellMessages.ja.reportProblem).toBe("不具合を報告");
   expect(shellMessages.en.japaneseReview).toBe(
     "Japanese wording is still being checked by native speakers.",
   );
