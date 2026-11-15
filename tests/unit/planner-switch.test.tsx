@@ -9,7 +9,7 @@ import { AccountMenuView, type AccountState } from "@/components/layout/account-
 import { FeatureLinksProvider } from "@/components/layout/features";
 import { SiteFooter } from "@/components/layout/site-footer";
 
-// The dark launch: while features.planner is false in the region file there is no page, no link and
+// The dark launch: while features.planner is false (the tests switch it off here; the shipped file now has it on) there is no page, no link and
 // nothing that writes to the device.
 
 const menu = vi.hoisted(() => ({ open: true }));
@@ -71,11 +71,11 @@ async function content(Page: () => ReactElement): Promise<ReactElement> {
 }
 
 describe("the shipped switch", () => {
-  it("is off", () => {
+  it("is on, with the connector and walk mode", () => {
     expect(regionSchema.parse(nagasaki).features).toEqual({
-      connector: false,
-      planner: false,
-      walk: false,
+      connector: true,
+      planner: true,
+      walk: true,
     });
   });
 });

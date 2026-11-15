@@ -195,6 +195,7 @@ export const legalDocuments: Readonly<
           heading: "歩きモード",
           paragraphs: [
             "前を見て歩いてください。歩きモードは、顔を上げたまま歩けるように話しかけます。画面を読むときは立ち止まり、車や自転車の運転中は使わないでください。私有地に入らず、神社やお寺の決まりを守ってください。歩きモードが示す場所が閉まっていたり、そこへの道が安全でなかったりすることがあります。",
+            "次に訪れる人への問いは、あなたの話の一部です。訪れた人が失礼なく聞ける問いにし、誰の個人情報も書かないでください。問いは、あなた自身、その場所のページを管理する人、または Noren が取り下げることがあります。",
           ],
         },
         {
@@ -316,7 +317,7 @@ export const legalDocuments: Readonly<
             {
               name: "Meta Platforms",
               country: "米国",
-              does: "AI です。自分の投稿から一文の下書きを作るとき（下記）に、その投稿の文章を受け取ります。インタビューの録音と文章、公開投稿の文章も受け取ります。音声認識に同意した場合、録音も受け取り、文字にします。",
+              does: "AI です。音声認識に同意した場合、録音を受け取り、文字にします。インタビューの録音も受け取ります。Noren の設定で Anthropic の代わりに使うことがあり、そのときは同じ文章を受け取ります。",
               more: [
                 {
                   when: "planner",
@@ -327,12 +328,12 @@ export const legalDocuments: Readonly<
             {
               name: "Modal",
               country: "米国",
-              does: "オープンウェイトの AI モデルを動かし、翻訳と AI が書いた物語を確かめます。店主が確認した発言、公開投稿の引用、それらの翻訳を受け取ります。",
+              does: "オープンウェイトの AI モデルを動かします。Noren の設定で翻訳と AI が書いた物語の確認に使うことがあり、そのときは店主が確認した発言、公開投稿の引用、それらの翻訳を受け取ります。",
             },
             {
               name: "Anthropic",
               country: "米国",
-              does: "AI です。Noren の設定で Meta Platforms の代わりに使うことがあり、そのときは同じ文章を受け取ります。",
+              does: "AI です。自分の投稿から一文の下書きを作るとき（下記）に、その投稿の文章を受け取ります。インタビューの文章と公開投稿の文章も受け取り、翻訳と AI が書いた物語を確かめます。",
               more: [
                 {
                   when: "planner",
@@ -372,7 +373,7 @@ export const legalDocuments: Readonly<
             "『体験を話す』を選び、音声認識に同意すると、Noren は録音をオーストラリアのシドニーにある Convex に一時的にアップロードし、米国の Meta Platforms に送って文字にします。自分の声だけを録音し、他の人の個人情報を話さないでください。",
             "文字にした内容は、確認して直せるように入力欄に戻ります。文字起こしの間、Noren は文章をサーバーに保存しません。共有前の文章は、ブラウザーに下書きとして保存されます。『共有』を押したときだけ、話として保存され、名前とともに公開されます。",
             "文字が戻ると、音声認識が成功しても失敗しても、Noren は保管した音声をすぐに削除します。その前にページを離れた場合は、1 時間ほどで削除します。Meta Platforms はこの録音をモデルの学習に使いません。安全確認などのために、Meta の規約が認める期間保存することがあります。",
-            "自分の投稿だと示して下書きを頼むと、Noren はそのページから題名と文章を読み、場所の名前とともに Meta Platforms に送ります。下書きはあなたに返され、「共有」を押すまで何も保存しません。Meta が受け取った内容で学習するモデルは、Noren の設定で拒否しています。",
+            "自分の投稿だと示して下書きを頼むと、Noren はそのページから題名と文章を読み、場所の名前とともに米国の Anthropic に送ります。下書きはあなたに返され、「共有」を押すまで何も保存しません。Anthropic はこの文章をモデルの学習に使いません。",
             "インタビューは別の扱いです。店主には先に専用の同意書で同意していただき、そこで録音と文章を扱うサービスを示します。",
           ],
         },
@@ -415,6 +416,9 @@ export const legalDocuments: Readonly<
             "歩きモードは、開いている間、近くの場所とその方向を知らせるために、端末で現在地を追います。距離は端末の中で計算します。現在地は Noren に送らず、保存もしません。",
             "端末は、Noren から公開されている場所の一覧を一度だけ読み込み、「今日のおみくじ」を開くとそれも読み込みます。おみくじはその日、誰にとっても同じです。どちらにも現在地は含まれません。",
             "歩きモードは端末に入っている音声で話すので、話す内容は端末の外に出ません。",
+            "今日のおみくじには問いが入っていて、その場所に着くまで封がしてあります。距離は端末が確かめ、封も端末が開けます。あなたがどこにいるかも、封が開いたことも、Noren には送られません。",
+            "引いたおみくじは、この端末のこのブラウザーに、最大 7 枚まで保存されます。Noren のサーバーには保存されません。「しまった一枚を消す」を押すか、ブラウザーでこのサイトのデータを消去すると削除されます。",
+            "話を書くとき、次に訪れる人への問いを残すことができます。問いは、あなたの話と名前とともに公開され、その場所の今日のおみくじの中にも表示されます。Noren は問いを翻訳せず、AI サービスにも送りません。問いはいつでも取り下げられます。",
           ],
         },
         {
@@ -492,7 +496,7 @@ export const legalDocuments: Readonly<
           id: "public-posts",
           heading: "Noren が見つけた公開投稿",
           paragraphs: [
-            "Noren は、場所について書かれた公開投稿を探し、Meta Platforms と Modal の AI で読みます。短い引用と投稿者の公開名を表示し、元の投稿へリンクします。AI が書いた物語には「Noren の AI が仕立てました」と表示します。あなたの投稿が載っていたら、アカウントがなくても {contact} から削除を依頼できます。",
+            "Noren は、場所について書かれた公開投稿を探し、Anthropic の AI で読みます。短い引用と投稿者の公開名を表示し、元の投稿へリンクします。AI が書いた物語には「Noren の AI が仕立てました」と表示します。あなたの投稿が載っていたら、アカウントがなくても {contact} から削除を依頼できます。",
             {
               when: "connector",
               text: "Noren につないだ AI アシスタントも、同じ引用、名前、リンクを読めます。",
@@ -631,6 +635,7 @@ export const legalDocuments: Readonly<
           heading: "Walk mode",
           paragraphs: [
             "Look where you are going. Walk mode speaks so you can keep your eyes up. Stop before you read the screen, and do not use it while driving or cycling. Keep off private land, and follow the rules of shrines and temples. A place walk mode points to may be closed, and the way to it may not be safe.",
+            "A question you leave for the next visitor is part of your story. Write one a visitor could politely ask, with no one's personal details. You, the people who look after the place's page, or Noren may remove it.",
           ],
         },
         {
@@ -752,7 +757,7 @@ export const legalDocuments: Readonly<
             {
               name: "Meta Platforms",
               country: "United States",
-              does: "An AI service. It receives your post's words when you ask for a draft from your own post (see below). It also receives interview recordings and transcripts, and the words of public posts. If you agree to speech recognition, it also receives your voice recording and turns it into words.",
+              does: "An AI service. If you agree to speech recognition, it receives your voice recording and turns it into words. It also receives interview recordings. A Noren setting can use it in place of Anthropic, and it then receives the same words.",
               more: [
                 {
                   when: "planner",
@@ -763,12 +768,12 @@ export const legalDocuments: Readonly<
             {
               name: "Modal",
               country: "United States",
-              does: "Runs an open-weight AI model that checks translations and AI-written stories. It receives statements an owner has confirmed, quotes from public posts and their translations.",
+              does: "Runs an open-weight AI model. A Noren setting can use it to check translations and AI-written stories, and it then receives statements an owner has confirmed, quotes from public posts and their translations.",
             },
             {
               name: "Anthropic",
               country: "United States",
-              does: "An AI service. A Noren setting can use it in place of Meta Platforms, and it then receives the same words.",
+              does: "An AI service. It receives your post's words when you ask for a draft from your own post (see below). It also receives interview transcripts and the words of public posts, and it checks translations and AI-written stories.",
               more: [
                 {
                   when: "planner",
@@ -808,7 +813,7 @@ export const legalDocuments: Readonly<
             "If you choose Speak your story and agree to speech recognition, Noren temporarily uploads your recording to Convex in Sydney, Australia, and sends it to Meta Platforms in the United States to turn it into words. Record only your own voice and avoid saying other people's personal information.",
             "The words return to your story box for you to check and edit. Noren does not save a transcript on its server during transcription. Your unsent words are kept in your browser as a draft. They are saved as a story and shown publicly with your name only when you press Share.",
             "Noren deletes its copy of the audio as soon as the words come back, whether speech recognition worked or not. If you leave the page before that, Noren deletes it within about an hour. Meta Platforms does not use the recording to train its models, and may keep it for as long as its own terms allow, for example for safety checks.",
-            "If you tick that a post is your own and ask for a draft, Noren reads the post's title and words from its page and sends them, with the place's name, to Meta Platforms. The draft comes back to you, and nothing is kept until you press Share. Noren's settings refuse the Meta models that train on what they receive.",
+            "If you tick that a post is your own and ask for a draft, Noren reads the post's title and words from its page and sends them, with the place's name, to Anthropic in the United States. The draft comes back to you, and nothing is kept until you press Share. Anthropic does not use these words to train its models.",
             "An interview works differently. A shop owner first agrees to a separate consent form, which names the services that handle the recording and the transcript.",
           ],
         },
@@ -851,6 +856,9 @@ export const legalDocuments: Readonly<
             "Walk mode follows your location on your phone while it is open, to tell you which places are near and which way they are. Your phone works out the distances. Your location is not sent to Noren and is not kept.",
             "Your phone loads Noren's public list of places once, and today's omikuji when you open it. The omikuji is the same for everyone that day. Neither request includes your location.",
             "Walk mode speaks with a voice built into your phone, so what it says stays on your phone.",
+            "Today's omikuji carries a question that stays sealed until you are at the place. Your phone checks the distance and opens the seal itself. Noren is not told where you are or that a seal opened.",
+            "The slips you draw are kept in this browser, on this device, seven at most. Noren's server does not store them. “Clear kept slips” removes them, and so does clearing this site's data in your browser.",
+            "When you write a story you can leave a question for the next visitor. It is shown publicly with your story and your name, and inside the day's omikuji for that place. Noren does not translate it and does not send it to an AI service. You can remove it at any time.",
           ],
         },
         {
@@ -928,7 +936,7 @@ export const legalDocuments: Readonly<
           id: "public-posts",
           heading: "Public posts Noren finds",
           paragraphs: [
-            "Noren looks for public posts about places, and AI from Meta Platforms and Modal reads them. A page shows a short quote and the author's public name, with a link to the original. Stories AI writes from them are marked “Stitched by Noren's AI”. If a post of yours appears, you can ask for its removal at {contact}, with or without an account.",
+            "Noren looks for public posts about places, and AI from Anthropic reads them. A page shows a short quote and the author's public name, with a link to the original. Stories AI writes from them are marked “Stitched by Noren's AI”. If a post of yours appears, you can ask for its removal at {contact}, with or without an account.",
             {
               when: "connector",
               text: "AI assistants connected to Noren can read the same quote, name and link.",

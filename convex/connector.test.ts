@@ -26,6 +26,17 @@ function switchOnDraws() {
   });
 }
 
+/** The shipped file has the connector on, so the off state is set here. */
+function switchOffDraws() {
+  vi.spyOn(region, "regionConfig").mockImplementation((id: string) => {
+    const config = realRegionConfig(id);
+    return {
+      ...config,
+      features: { ...config.features, connector: false, planner: false, walk: false },
+    };
+  });
+}
+
 beforeEach(switchOnDraws);
 afterEach(() => vi.restoreAllMocks());
 
@@ -515,9 +526,9 @@ describe("rate limit", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("answers as if absent while the region's file keeps the connector off, and counts nothing", async () => {
+  it("answers as if absent while the region's switch keeps the connector off, and counts nothing", async () => {
     vi.restoreAllMocks();
-    expect(realRegionConfig("nagasaki").features.connector).toBe(false);
+    switchOffDraws();
     const { b, creator } = await world();
     await place(b, creator, { slug: "one" });
     expect(await errorCode(b.t.mutation(api.connector.walk, walkArgs({ count: 1 })))).toBe(

@@ -182,7 +182,8 @@ describe("public mapping", () => {
       checkIn: { checkInMetres: 50, accuracyAllowanceMetres: 30 },
       accountsOpen: true,
       shareToNoren: true,
-      connectorTick: false,
+      connectorTick: true, // the shipped region has the connector and the planner on
+      relay: true, // and walk mode, which lets a story carry a question for the next visitor
     });
     expect(region.scriptOrigins).toEqual(scriptHostsFor(config.enabledSourceAdapters));
     expect(region.frameOrigins).toEqual(frameHostsFor(config.enabledSourceAdapters));

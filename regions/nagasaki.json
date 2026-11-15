@@ -154,7 +154,7 @@
     }
   },
   "voice": { "enabled": true, "maxSeconds": 120 },
-  "features": { "connector": false, "planner": false, "walk": false },
+  "features": { "connector": true, "planner": true, "walk": true },
   "photos": {
     "enabled": true,
     "maxPerStory": 4,
@@ -175,7 +175,7 @@
     "operatorName": "Noren, an open-source project run by Yee Fei",
     "launchPackComplete": false,
     "accountsOpen": true,
-    "documentsVersion": "2026-11-09"
+    "documentsVersion": "2026-11-15"
   },
   "towns": [
     {
