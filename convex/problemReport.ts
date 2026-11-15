@@ -1,10 +1,11 @@
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { internalQuery, query } from "./_generated/server";
 import { writeAudit } from "./lib/audit";
 import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
-import { mutation } from "./lib/gate";
+import { internalMutation, mutation } from "./lib/gate";
 import { samePagePath } from "./lib/pagePath";
 import { consumeRateLimit } from "./lib/rateLimit";
 
@@ -45,7 +46,7 @@ export const submit = mutation({
       now,
     });
     if (!limit.ok) throw appError("rate_limited", "Too many requests. Please try again later.");
-    await ctx.db.insert("problemReport", {
+    const reportId = await ctx.db.insert("problemReport", {
       details,
       pagePath: samePagePath(args.pagePath),
       device: args.device.trim(),
@@ -54,6 +55,7 @@ export const submit = mutation({
       status: "open",
       receivedAt: now,
     });
+    await ctx.scheduler.runAfter(0, internal.problemReportActions.fileIssue, { reportId });
     return { receivedAt: now };
   },
 });
@@ -68,6 +70,7 @@ const listItem = v.object({
   status: statusValidator,
   receivedAt: v.number(),
   closedAt: v.optional(v.number()),
+  issueNumber: v.optional(v.number()),
 });
 
 export const list = query({
@@ -92,6 +95,7 @@ export const list = query({
         status: report.status,
         receivedAt: report.receivedAt,
         closedAt: report.closedAt,
+        issueNumber: report.issueNumber,
       })),
     };
   },
@@ -120,6 +124,45 @@ export const close = mutation({
       targetId: reportId,
       diff: { status: { from: "open", to: "done" } },
     });
+    return null;
+  },
+});
+
+/** What the GitHub issue is written from: an open report not yet filed, and never its contact. */
+export const forIssue = internalQuery({
+  args: { reportId: v.id("problemReport") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      details: v.string(),
+      pagePath: v.string(),
+      device: v.string(),
+      locale: v.union(v.literal("ja"), v.literal("en")),
+      hasContact: v.boolean(),
+      receivedAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, { reportId }) => {
+    const report = await ctx.db.get("problemReport", reportId);
+    if (report === null || report.status !== "open" || report.issueNumber !== undefined)
+      return null;
+    return {
+      details: report.details,
+      pagePath: report.pagePath,
+      device: report.device,
+      locale: report.locale,
+      hasContact: report.contact !== "",
+      receivedAt: report.receivedAt,
+    };
+  },
+});
+
+export const recordIssue = internalMutation({
+  args: { reportId: v.id("problemReport"), number: v.number() },
+  returns: v.null(),
+  handler: async (ctx, { reportId, number }) => {
+    const report = await ctx.db.get("problemReport", reportId);
+    if (report !== null) await ctx.db.patch("problemReport", reportId, { issueNumber: number });
     return null;
   },
 });

@@ -149,6 +149,8 @@ export const communityTables = {
     receivedAt: v.number(),
     closedAt: v.optional(v.number()),
     closedBy: v.optional(v.id("person")),
+    /** The issue filed for it in the team's private GitHub repository, when one was. */
+    issueNumber: v.optional(v.number()),
   }).index("by_status_and_receivedAt", ["status", "receivedAt"]),
 
   /** A fixed-window counter for the few public write paths (the takedown form); one row per key. */
