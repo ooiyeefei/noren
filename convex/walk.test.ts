@@ -105,9 +105,10 @@ async function story(
 const forRegion = (b: Backend) => b.t.query(api.walk.forRegion, { regionId: "nagasaki" });
 
 describe("walk.forRegion: the one download", () => {
-  it("answers as if absent while the region's file keeps walk mode off", async () => {
+  it("answers as if absent while the region's switch keeps walk mode off", async () => {
     vi.restoreAllMocks();
-    expect(realRegionConfig("nagasaki").features.walk).toBe(false);
+    // The shipped file has walk mode on, so the off state is set here.
+    switchOn({ connector: false, planner: false, walk: false });
     const { b, creator } = await world();
     await place(b, creator, { slug: "one" });
     expect(await errorCode(forRegion(b))).toBe("not_found");
@@ -478,10 +479,12 @@ describe("omikujiToday: every neighbourhood's slip at once", () => {
   it("answers while any draw-using feature is on, and as if absent while all are off", async () => {
     const { b } = await town();
     vi.restoreAllMocks();
+    switchOn({ connector: false, planner: false, walk: false });
     expect(
       await errorCode(b.t.mutation(api.connector.omikujiToday, { regionId: "nagasaki" })),
     ).toBe("not_found");
-    switchOn({ planner: true });
+    vi.restoreAllMocks();
+    switchOn({ connector: false, planner: true, walk: false });
     expect(
       await errorCode(b.t.mutation(api.connector.omikujiToday, { regionId: "nagasaki" })),
     ).toBe("did not fail");

@@ -32,8 +32,8 @@ afterEach(() => {
 });
 
 describe("/[lang]/walk", () => {
-  it("ships switched off in the region file", () => {
-    expect(regionSchema.parse(regionJson).features.walk).toBe(false);
+  it("ships switched on in the region file", () => {
+    expect(regionSchema.parse(regionJson).features.walk).toBe(true);
   });
 
   it("is a 404 while the region's walk switch is off, before anything renders", async () => {

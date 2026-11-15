@@ -156,15 +156,15 @@ describe("region policy", () => {
     expect(region.legal.launchPackComplete).toBe(false);
   });
 
-  it("ships the connector, the planner and walk mode switched off until the notice names them", () => {
+  it("ships the connector, the planner and walk mode switched on, with the notice that names them", () => {
     const { features } = loadRegions().get("nagasaki")!;
-    expect(features).toEqual({ connector: false, planner: false, walk: false });
+    expect(features).toEqual({ connector: true, planner: true, walk: true });
   });
 
-  it("ships with accounts open and the documents the owner approved", () => {
+  it("ships with accounts open and the documents version that names the connector, planner and walk mode", () => {
     const { legal } = loadRegions().get("nagasaki")!;
     expect(legal.accountsOpen).toBe(true);
-    expect(legal.documentsVersion).toBe("2026-11-09");
+    expect(legal.documentsVersion).toBe("2026-11-15");
   });
 
   it("opening accounts ends invite-only and changes no other launch rule", () => {

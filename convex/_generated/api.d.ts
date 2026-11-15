@@ -32,6 +32,7 @@ import type * as lib_mock from "../lib/mock.js";
 import type * as lib_publicPool from "../lib/publicPool.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_region from "../lib/region.js";
+import type * as lib_relay from "../lib/relay.js";
 import type * as lib_rules_claims from "../lib/rules/claims.js";
 import type * as lib_rules_community from "../lib/rules/community.js";
 import type * as lib_rules_index from "../lib/rules/index.js";
@@ -117,6 +118,7 @@ declare const fullApi: ApiFromModules<{
   "lib/publicPool": typeof lib_publicPool;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/region": typeof lib_region;
+  "lib/relay": typeof lib_relay;
   "lib/rules/claims": typeof lib_rules_claims;
   "lib/rules/community": typeof lib_rules_community;
   "lib/rules/index": typeof lib_rules_index;
