@@ -1,5 +1,11 @@
 import { v, type Infer } from "convex/values";
 import { aiReadingOffered } from "../src/lib/connector/policy";
+import {
+  CARRIED_SHOWN_LIMIT,
+  carryDistance,
+  nearestCarryTargets,
+  threadOn,
+} from "../src/lib/slip/carry";
 import { cleanQuestion, isStarterKey } from "../src/lib/slip/question";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
@@ -17,6 +23,8 @@ import { excerptTranslations, hasNoCard } from "./lib/foundPosts";
 import { mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
 import { readMapNames } from "./lib/mapCopies";
+import { isPublicRealPlace, nameView, publicPool, toPoolPlace } from "./lib/publicPool";
+import { carriedQuestionShown, placeRef, placeRefOf, type PlaceRef } from "./lib/relay";
 import { limitContribution } from "./lib/rateLimit";
 import { isRegionLocale, regionConfig } from "./lib/region";
 import {
@@ -43,6 +51,9 @@ const PLACE_SCAN = 200;
 const PLACE_LIMIT = 50;
 const PLACE_PER_PERSON = 20;
 
+/** Questions carried to one place that are read to find the newest few that still show. */
+const CARRIED_SCAN = 50;
+
 /** The earliest stories of a place read to find the first teller; a place has a handful. */
 const FIRST_SCAN = 20;
 
@@ -53,6 +64,8 @@ const answerView = v.union(
     text: v.string(),
     lang: v.string(),
     askedBy: v.string(),
+    /** Set when the question was written at another place and carried to this one. */
+    from: v.optional(placeRef),
   }),
   v.object({ kind: v.literal("starter"), key: v.string() }),
 );
@@ -83,6 +96,11 @@ const storyView = v.object({
    * walk mode is on, like everything about the sealed slip.
    */
   nextQuestion: v.optional(v.string()),
+  /**
+   * The place the question is carried to, while "three doors" is on and that place is still a real
+   * place on the public map. Then the question is not for the next visitor here.
+   */
+  nextQuestionFor: v.optional(placeRef),
   /** What this story answers, while that question is still showing. */
   answers: v.optional(answerView),
   /** The earliest shown story of the place (false while walk mode is off). */
@@ -91,25 +109,64 @@ const storyView = v.object({
 
 /**
  * The stored form of what a new story answers, or undefined when it answers nothing valid: a story's
- * question must belong to this same place, be shown, and still have its question.
+ * question must be open at this place and shown. It is open here when it was written here for the
+ * next visitor (not addressed elsewhere), or, while "three doors" is on, carried here from another
+ * place that is still a real place on the public map.
  */
 async function answeredBy(
   ctx: QueryCtx,
   place: Doc<"place">,
   answers: { kind: "story"; storyId: string } | { kind: "starter"; key: string },
+  carry: boolean,
 ): Promise<Doc<"story">["answers"]> {
   if (answers.kind === "starter")
     return isStarterKey(answers.key) ? { kind: "starter", key: answers.key } : undefined;
   const id = ctx.db.normalizeId("story", answers.storyId);
   const asked = id === null ? null : await ctx.db.get("story", id);
-  if (
-    asked === null ||
-    asked.placeId !== place._id ||
-    !isStoryShown(place, asked) ||
-    asked.nextQuestion === undefined
-  )
-    return undefined;
-  return { kind: "story", storyId: asked._id };
+  if (asked === null || asked.nextQuestion === undefined) return undefined;
+  if (asked.placeId === place._id) {
+    return isStoryShown(place, asked) && asked.nextQuestionFor === undefined
+      ? { kind: "story", storyId: asked._id }
+      : undefined;
+  }
+  if (!carry || asked.nextQuestionFor !== place._id) return undefined;
+  const source = await ctx.db.get("place", asked.placeId);
+  return carriedQuestionShown(source, asked) ? { kind: "story", storyId: asked._id } : undefined;
+}
+
+/**
+ * Whether a question written at `place` may be carried to `targetId`, or the reason it may not. The
+ * target must be a different real place in the same region that a signed-out visitor can see and
+ * that has a pin; the place written at must be one too (its name shows on the target's page); and
+ * the two pins must be within CARRY_MAX_METRES. One message for every target problem, so a refusal
+ * says nothing about a place the writer cannot see.
+ */
+async function requireCarryTarget(
+  ctx: QueryCtx,
+  person: Doc<"person">,
+  place: Doc<"place">,
+  targetId: Id<"place">,
+  hasQuestion: boolean,
+): Promise<Id<"place">> {
+  if (!hasQuestion)
+    throw appError("invalid_input", "a question carried to another place needs the question");
+  if (person.isMock || place.isMock)
+    throw appError("invalid_input", "a demo account cannot carry a question to another place");
+  const refused = () => appError("invalid_input", "a question cannot be carried to that place");
+  if (targetId === place._id) throw refused();
+  const target = await ctx.db.get("place", targetId);
+  if (target === null || target.regionId !== place.regionId) throw refused();
+  const region = regionConfig(place.regionId);
+  const there = await toPoolPlace(ctx, region, target);
+  if (there === null) throw refused();
+  const here = await toPoolPlace(ctx, region, place);
+  if (here === null)
+    throw appError(
+      "invalid_input",
+      "a question can be carried only from a real place that is on the public map",
+    );
+  if (!carryDistance(here.pin, there.pin).allowed) throw refused();
+  return target._id;
 }
 
 /**
@@ -132,6 +189,12 @@ export const add = mutation({
      */
     nextQuestion: v.optional(v.string()),
     /**
+     * Another place to carry that question to ("three doors"), a short walk away. Refused unless
+     * walk mode and the thread switch are both on, the question is given, and the target is a
+     * different real place in this region on the public map within CARRY_MAX_METRES of this one.
+     */
+    nextQuestionFor: v.optional(v.id("place")),
+    /**
      * What this story answers. A story's question must be at this same place, shown, and still
      * have its question; a starter must be on the list. Anything else is dropped, and the story is
      * written without it. Ignored while walk mode is off. The id is a plain string so that a
@@ -147,7 +210,17 @@ export const add = mutation({
   returns: v.id("story"),
   handler: async (
     ctx,
-    { placeId, body, lang, photoIds, shareConsent, connectorAllowed, nextQuestion, answers },
+    {
+      placeId,
+      body,
+      lang,
+      photoIds,
+      shareConsent,
+      connectorAllowed,
+      nextQuestion,
+      nextQuestionFor,
+      answers,
+    },
   ) => {
     const person = await requirePerson(ctx);
     requireConfirmedName(person);
@@ -161,7 +234,9 @@ export const add = mutation({
       throw appError("invalid_input", "this region does not offer sharing on Noren's accounts");
     if (connectorAllowed && !aiReadingOffered(regionConfig(place.regionId).features))
       throw appError("invalid_input", "this region does not offer AI reading of stories");
-    const relay = regionConfig(place.regionId).features.walk;
+    const { features } = regionConfig(place.regionId);
+    const relay = features.walk;
+    const carry = threadOn(features);
     let question: string | undefined;
     if (nextQuestion !== undefined) {
       if (!relay) {
@@ -178,8 +253,20 @@ export const add = mutation({
           );
       }
     }
+    let carriedTo: Id<"place"> | undefined;
+    if (nextQuestionFor !== undefined) {
+      if (!carry)
+        throw appError("invalid_input", "this region does not offer carrying a question elsewhere");
+      carriedTo = await requireCarryTarget(
+        ctx,
+        person,
+        place,
+        nextQuestionFor,
+        question !== undefined,
+      );
+    }
     const answered =
-      relay && answers !== undefined ? await answeredBy(ctx, place, answers) : undefined;
+      relay && answers !== undefined ? await answeredBy(ctx, place, answers, carry) : undefined;
     await limitContribution(ctx, person, "story", place.regionId);
     const storyId = await ctx.db.insert(
       "story",
@@ -190,6 +277,7 @@ export const add = mutation({
         lang,
         status: "live" as const,
         ...(question === undefined ? {} : { nextQuestion: question }),
+        ...(carriedTo === undefined ? {} : { nextQuestionFor: carriedTo }),
         ...(answered === undefined ? {} : { answers: answered }),
         ...(shareConsent ? { shareConsentAt: Date.now() } : {}),
         ...(connectorAllowed ? { connectorAllowedAt: Date.now() } : {}),
@@ -251,7 +339,9 @@ export const listForPlace = query({
       shown.push({ story, author, addedByMe });
     }
     // The relay (a question for the next visitor, first teller) shows only while walk mode is on.
-    const relay = regionConfig(place.regionId).features.walk;
+    const { features } = regionConfig(place.regionId);
+    const relay = features.walk;
+    const carry = threadOn(features);
     let firstId: Id<"story"> | undefined;
     if (relay) {
       // The earliest shown story may lie beyond the window above, so it is read from the other end.
@@ -271,28 +361,56 @@ export const listForPlace = query({
       }
       return name;
     };
+    // Places read for a carried question: where it was written, or where it is carried to.
+    const others = new Map<Id<"place">, Doc<"place"> | null>();
+    const otherPlace = async (id: Id<"place">) => {
+      if (!others.has(id)) others.set(id, await ctx.db.get("place", id));
+      return others.get(id) ?? null;
+    };
+    /** Where a question is carried to, when it still shows there; else undefined. */
+    const carriedTarget = async (story: Doc<"story">): Promise<PlaceRef | undefined> => {
+      if (!carry || story.nextQuestionFor === undefined) return undefined;
+      const target = await otherPlace(story.nextQuestionFor);
+      return target !== null && isPublicRealPlace(target)
+        ? await placeRefOf(ctx, target)
+        : undefined;
+    };
     const answerOf = async (story: Doc<"story">): Promise<Infer<typeof answerView> | undefined> => {
       const { answers } = story;
       if (answers === undefined) return undefined;
       if (answers.kind === "starter") return { kind: "starter", key: answers.key };
       const asked = await ctx.db.get("story", answers.storyId);
-      if (
-        asked === null ||
-        asked.placeId !== placeId ||
-        !isStoryShown(place, asked) ||
-        asked.nextQuestion === undefined
-      )
+      if (asked === null || asked.nextQuestion === undefined) return undefined;
+      const here = asked.placeId === placeId;
+      if (here ? !isStoryShown(place, asked) || asked.nextQuestionFor !== undefined : !carry)
         return undefined;
+      let from: PlaceRef | undefined;
+      if (!here) {
+        const source = await otherPlace(asked.placeId);
+        if (asked.nextQuestionFor !== placeId || !carriedQuestionShown(source, asked))
+          return undefined;
+        from = await placeRefOf(ctx, source!);
+      }
       return {
         kind: "story",
         text: asked.nextQuestion,
         lang: asked.lang,
         askedBy: await nameOf(asked.authorPersonId),
+        ...(from === undefined ? {} : { from }),
       };
     };
     const views = [];
     for (const { story, author, addedByMe } of shown) {
       const answers = relay ? await answerOf(story) : undefined;
+      // A question addressed elsewhere is shown as such, or not at all: it is nobody's question
+      // here once "three doors" is off or its place has left the map.
+      const carriedTo = relay ? await carriedTarget(story) : undefined;
+      const question =
+        relay && story.nextQuestion !== undefined
+          ? story.nextQuestionFor === undefined || carriedTo !== undefined
+            ? story.nextQuestion
+            : undefined
+          : undefined;
       views.push({
         _id: story._id,
         body: story.body,
@@ -306,11 +424,102 @@ export const listForPlace = query({
         photos: await storyPhotoViews(ctx, story._id, addedByMe, photoRules),
         connectorAllowed: story.connectorAllowedAt !== undefined,
         firstTeller: relay && story._id === firstId,
-        ...(relay && story.nextQuestion !== undefined ? { nextQuestion: story.nextQuestion } : {}),
+        ...(question === undefined ? {} : { nextQuestion: question }),
+        ...(question === undefined || carriedTo === undefined
+          ? {}
+          : { nextQuestionFor: carriedTo }),
         ...(answers === undefined ? {} : { answers }),
       });
     }
     return views;
+  },
+});
+
+/**
+ * The places a question written at this place could be carried to: the nearest 50 real places on
+ * the public map within CARRY_MAX_METRES, nearest first. It takes a place, never a position, and
+ * reads no viewer, so everyone gets the same list. Empty while "three doors" is off, or when this
+ * place is not itself a real public place with a pin.
+ */
+export const carryTargets = query({
+  args: { placeId: v.id("place") },
+  returns: v.array(
+    v.object({
+      placeId: v.id("place"),
+      slug: v.string(),
+      names: v.array(nameView),
+      metres: v.number(),
+    }),
+  ),
+  handler: async (ctx, { placeId }) => {
+    const place = await ctx.db.get("place", placeId);
+    if (place === null) return [];
+    const region = regionConfig(place.regionId);
+    if (!threadOn(region.features)) return [];
+    const here = await toPoolPlace(ctx, region, place);
+    if (here === null) return [];
+    const pool = await publicPool(ctx, place.regionId);
+    return nearestCarryTargets(here, pool).map(({ id, slug, names, metres }) => ({
+      placeId: id,
+      slug,
+      names,
+      metres,
+    }));
+  },
+});
+
+/**
+ * Questions carried to this place from other places, newest first, at most five: each with the
+ * writer's words and name and where it was written. Only shown stories from places that are still
+ * real places on the public map. Empty while "three doors" is off. Everyone gets the same
+ * questions; only `canRemove` depends on who is asking.
+ */
+export const carriedTo = query({
+  args: { placeId: v.id("place") },
+  returns: v.array(
+    v.object({
+      storyId: v.id("story"),
+      text: v.string(),
+      lang: v.string(),
+      askedBy: v.string(),
+      from: placeRef,
+      addedAt: v.number(),
+      /** The viewer may take the question off (stories.clearQuestion): its writer, either place's editor or a steward. */
+      canRemove: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, { placeId }) => {
+    const viewer = await currentPerson(ctx);
+    const place = await ctx.db.get("place", placeId);
+    if (place === null || !(await canReadPlace(ctx, viewer, place))) return [];
+    if (!threadOn(regionConfig(place.regionId).features)) return [];
+    const carried = await ctx.db
+      .query("story")
+      .withIndex("by_nextQuestionFor_and_status", (q) =>
+        q.eq("nextQuestionFor", placeId).eq("status", "live"),
+      )
+      .order("desc")
+      .take(CARRIED_SCAN);
+    const rows = [];
+    for (const story of carried) {
+      if (rows.length >= CARRIED_SHOWN_LIMIT) break;
+      const source = await ctx.db.get("place", story.placeId);
+      if (source === null || !carriedQuestionShown(source, story)) continue;
+      rows.push({
+        storyId: story._id,
+        text: story.nextQuestion!,
+        lang: story.lang,
+        askedBy: (await ctx.db.get("person", story.authorPersonId))?.displayName ?? "",
+        from: await placeRefOf(ctx, source),
+        addedAt: story._creationTime,
+        canRemove:
+          viewer !== null &&
+          (story.authorPersonId === viewer._id ||
+            canEditPlace(viewer, place) ||
+            canEditPlace(viewer, source)),
+      });
+    }
+    return rows;
   },
 });
 
@@ -434,7 +643,8 @@ export const latest = query({
 
 /**
  * Takes the question off a story, leaving the story. The writer may, and so may whoever may remove
- * the story (the place's editor or a steward). It is never refused for walk mode being off.
+ * the story (the place's editor or a steward). For a question carried to another place, that place's
+ * editor may too. It is never refused for walk mode or the thread switch being off.
  */
 export const clearQuestion = mutation({
   args: { storyId: v.id("story") },
@@ -443,23 +653,30 @@ export const clearQuestion = mutation({
     const person = await requirePerson(ctx);
     const story: Doc<"story"> | null = await ctx.db.get("story", storyId);
     if (story === null) throw appError("not_found", "story not found");
-    if (story.authorPersonId !== person._id) {
+    const target =
+      story.nextQuestionFor === undefined ? null : await ctx.db.get("place", story.nextQuestionFor);
+    const targetEditor = target !== null && canEditPlace(person, target);
+    if (story.authorPersonId !== person._id && !targetEditor) {
       const place = await loadReadablePlace(ctx, person, story.placeId);
       if (!canEditPlace(person, place))
         throw appError(
           "forbidden",
-          "only the writer, the place's editor or a steward may remove a question",
+          "only the writer, the place's editor, the editor of the place it is carried to or a steward may remove a question",
         );
     }
     if (story.nextQuestion === undefined) return null;
-    await ctx.db.patch("story", storyId, { nextQuestion: undefined });
+    // The question and where it was carried go together.
+    await ctx.db.patch("story", storyId, { nextQuestion: undefined, nextQuestionFor: undefined });
     await writeAudit(ctx, {
       actorKind: "person",
       actorPersonId: person._id,
       action: "story.question_cleared",
       targetType: "story",
       targetId: storyId,
-      diff: { nextQuestion: false },
+      diff: {
+        nextQuestion: false,
+        ...(story.nextQuestionFor === undefined ? {} : { nextQuestionFor: false }),
+      },
     });
     return null;
   },

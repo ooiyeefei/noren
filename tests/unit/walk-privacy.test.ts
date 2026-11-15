@@ -3,11 +3,11 @@ import path from "node:path";
 import { getFunctionName } from "convex/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { knockAtDoor } from "@/lib/slip/door";
-import { keepSlip, loadKept, markOpened, saveKept } from "@/lib/slip/kept";
+import { doorsOf, keepSlip, loadKept, markOpened, openDoor, saveKept } from "@/lib/slip/kept";
 import { walkMessages } from "@/lib/i18n/messages/walk";
 import { WalkController } from "@/lib/walk/controller";
 import { convexWalkData } from "@/lib/walk/convex-data";
-import type { TodaysSlips } from "@/lib/walk/types";
+import type { Slip, TodaysSlips } from "@/lib/walk/types";
 import { ORIGIN, northOf, walkPlace } from "../fixtures/walk";
 import {
   LOCAL_VOICES,
@@ -252,6 +252,9 @@ describe("opening a slip's seal", () => {
       "src/lib/slip/door.ts",
       "src/lib/slip/kept.ts",
       "src/lib/slip/question.ts",
+      "src/components/walk/thread-doors.tsx",
+      "src/components/walk/thread-knot.tsx",
+      "src/components/walk/compass-word.ts",
     ]) {
       const text = read(file);
       for (const pattern of [
@@ -267,12 +270,101 @@ describe("opening a slip's seal", () => {
         expect(text, `${file} ${pattern}`).not.toMatch(pattern);
     }
     // Kept slips are the only thing here that uses storage, and only through kept.ts.
-    for (const file of ["src/components/walk/slip-seal.tsx", "src/lib/slip/door.ts"])
+    for (const file of [
+      "src/components/walk/slip-seal.tsx",
+      "src/lib/slip/door.ts",
+      "src/components/walk/thread-doors.tsx",
+    ])
       expect(read(file)).not.toMatch(/\b(localStorage|sessionStorage|indexedDB)\b/);
     // The panel asks Noren for the slips in exactly one place, the draw; nothing else in it talks.
     const panel = read("src/components/walk/omikuji-panel.tsx");
     expect(panel.match(/data\.\w+\(/g)).toEqual(["data.drawToday("]);
     // Neither the door nor the seal ever puts a position or distance in a link.
-    expect(read("src/components/walk/slip-seal.tsx")).not.toMatch(/[?&](lat|lng|near|metres|distance)=/);
+    for (const file of [
+      "src/components/walk/slip-seal.tsx",
+      "src/components/walk/thread-doors.tsx",
+    ])
+      expect(read(file)).not.toMatch(/[?&](lat|lng|near|metres|distance)=/);
+  });
+});
+
+// Three doors: the two further doors come down with the slip, and opening them is as private as
+// opening the first seal.
+describe("opening a slip's further doors", () => {
+  const ROOT = path.resolve(import.meta.dirname, "../..");
+  const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+  const starter = { kind: "starter" as const, key: "oldest" };
+  const stop = (slug: string, metresNorth: number) => ({
+    via: "draw" as const,
+    place: { slug, names: [], hasStory: false, pin: northOf(ORIGIN, metresNorth) },
+    question: starter,
+  });
+  const threaded: Slip = {
+    ...slips.slips[0]!,
+    question: starter,
+    thread: [stop("second", 150), stop("third", 300)],
+  };
+  const withThread: TodaysSlips = { day: slips.day, slips: [threaded] };
+
+  it("make no request, beacon or network call, at the door or without location", async () => {
+    const fetchSpy = vi.fn();
+    const beacon = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    vi.stubGlobal("navigator", { sendBeacon: beacon });
+    const client = { query: vi.fn(async () => places), mutation: vi.fn(async () => withThread) };
+    const data = convexWalkData(client as never, "nagasaki");
+    const drawn = await data.drawToday();
+    const before = requests(client).length;
+    expect(drawn.slips[0]!.thread).toHaveLength(2);
+    const store = new Map<string, string>();
+    const port = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    };
+    const key = { day: withThread.day, neighbourhoodId: "shinchi" };
+    let list = markOpened(keepSlip([], { ...key, slip: threaded }), key);
+    const [second, third] = threaded.thread!;
+    // Door two at the door, with a reading taken on the phone; door three without location.
+    const knock = await knockAtDoor(
+      async () => ({ kind: "read", ...second!.place.pin, accuracy: 6 }),
+      second!.place.pin,
+      30,
+    );
+    expect(knock.kind).toBe("open");
+    list = openDoor(list, key, 1);
+    expect(doorsOf(list[0]!)).toBe(1);
+    list = openDoor(list, key, 2);
+    expect(doorsOf(list[0]!)).toBe(2);
+    saveKept(port, list);
+    expect(doorsOf(loadKept(port)[0]!)).toBe(2);
+    expect(third!.place.slug).toBe("third");
+    expect(requests(client)).toHaveLength(before);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(beacon).not.toHaveBeenCalled();
+    // And what the phone saved holds no reading.
+    expect(JSON.stringify([...store.values()])).not.toMatch(/accuracy/);
+  });
+
+  it("is still two requests a page makes, each with the region alone", () => {
+    const client = { query: vi.fn(async () => places), mutation: vi.fn(async () => withThread) };
+    const data = convexWalkData(client as never, "nagasaki");
+    void data.loadPlaces();
+    void data.drawToday();
+    expect(requests(client).map(({ args }) => args)).toEqual([
+      [{ regionId: "nagasaki" }],
+      [{ regionId: "nagasaki" }],
+    ]);
+  });
+
+  it("is chosen on the server from public data, with no position or viewer to choose by", () => {
+    const connector = read("convex/connector.ts");
+    // The draw still takes the region and nothing else, and the thread is built from the pool.
+    expect(connector).toMatch(
+      /export const omikujiToday = mutation\(\{\s*args: \{ regionId: v\.string\(\) \}/,
+    );
+    const thread = read("src/lib/slip/thread.ts");
+    expect(thread).not.toMatch(/\b(fetch|ctx|geolocation|navigator)\b/);
+    expect(thread).not.toMatch(/Math\.random|Date\.now/);
   });
 });

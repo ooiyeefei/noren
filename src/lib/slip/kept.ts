@@ -1,4 +1,5 @@
-import type { Slip } from "@/lib/walk/types";
+import type { Slip, ThreadStop } from "@/lib/walk/types";
+import { THREAD_STOPS } from "./thread";
 
 // Kept slips: the day's drawn slips and whether each seal is open, on this device only. Nothing here
 // reaches Noren. The functions are pure over a list or an injected storage port, and none throws:
@@ -16,6 +17,11 @@ export type KeptSlip = {
   /** The neighbourhood the slip was drawn for; null for the whole region. */
   neighbourhoodId: string | null;
   opened: boolean;
+  /**
+   * How many of the slip's two further doors are open, in order (0, 1 or 2). Absent in slips kept
+   * before "three doors" existed, which reads as none. Read it with doorsOf.
+   */
+  doors?: number;
   slip: Slip;
 };
 
@@ -42,6 +48,63 @@ function isKept(value: unknown): value is KeptSlip {
   );
 }
 
+const isPlace = (place: unknown): boolean =>
+  isRecord(place) &&
+  typeof place.slug === "string" &&
+  Array.isArray(place.names) &&
+  typeof place.hasStory === "boolean" &&
+  isRecord(place.pin) &&
+  typeof place.pin.lat === "number" &&
+  typeof place.pin.lng === "number";
+
+/** The thread as stored, only if it is exactly the two well-formed doors a slip carries. */
+function validThread(value: unknown): ThreadStop[] | undefined {
+  if (!Array.isArray(value) || value.length !== THREAD_STOPS) return undefined;
+  const sound = value.every(
+    (stop) =>
+      isRecord(stop) &&
+      (stop.via === "carried" || stop.via === "draw") &&
+      isPlace(stop.place) &&
+      isRecord(stop.question) &&
+      typeof stop.question.kind === "string" &&
+      (stop.via === "draw" ||
+        (isRecord(stop.carried) &&
+          typeof stop.carried.askedBy === "string" &&
+          isRecord(stop.carried.from) &&
+          typeof stop.carried.from.slug === "string" &&
+          Array.isArray(stop.carried.from.names))),
+  );
+  return sound ? (value as ThreadStop[]) : undefined;
+}
+
+/** A stored entry made safe to show: a malformed thread or door count is dropped, never thrown on. */
+function tidied(kept: KeptSlip): KeptSlip {
+  const { doors, slip, ...rest } = kept;
+  const { thread, ...slipRest } = slip;
+  const sound = validThread(thread);
+  const count =
+    typeof doors === "number" && Number.isFinite(doors)
+      ? Math.max(0, Math.min(THREAD_STOPS, Math.floor(doors)))
+      : 0;
+  return {
+    ...rest,
+    ...(count > 0 ? { doors: count } : {}),
+    slip: sound === undefined ? slipRest : { ...slipRest, thread: sound },
+  };
+}
+
+/** How many of a kept slip's further doors are open: 0, 1 or 2, and never more than it has. */
+export function doorsOf(kept: Pick<KeptSlip, "doors" | "slip">): number {
+  const stops = Array.isArray(kept.slip?.thread) ? kept.slip.thread.length : 0;
+  const count =
+    typeof kept.doors === "number" && Number.isFinite(kept.doors) ? Math.floor(kept.doors) : 0;
+  return Math.max(0, Math.min(count, THREAD_STOPS, stops));
+}
+
+/** The thread is tied: both further doors are open. */
+export const isTied = (kept: Pick<KeptSlip, "doors" | "slip">): boolean =>
+  doorsOf(kept) === THREAD_STOPS;
+
 /** Newest day first; at most KEPT_MAX. */
 function tidy(list: readonly KeptSlip[]): KeptSlip[] {
   return [...list]
@@ -60,7 +123,7 @@ export function loadKept(port: StoragePort | null): KeptSlip[] {
     const raw = port.getItem(KEPT_KEY);
     if (raw === null) return [];
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? tidy(parsed.filter(isKept)) : [];
+    return Array.isArray(parsed) ? tidy(parsed.filter(isKept).map(tidied)) : [];
   } catch {
     return [];
   }
@@ -97,7 +160,17 @@ export function keepSlip(
   entry: Omit<KeptSlip, "opened"> & { opened?: boolean },
 ): KeptSlip[] {
   const before = list.find((kept) => sameSlip(kept, entry));
-  const next: KeptSlip = { ...entry, opened: (entry.opened ?? false) || before?.opened === true };
+  // Re-drawing the same day's slip keeps the larger count of open doors. The doors themselves can
+  // change during a day (someone carries a new question), so once a further door is open here the
+  // kept thread stays: an open door must be the one this person opened.
+  const doors = Math.max(entry.doors ?? 0, before?.doors ?? 0);
+  const keepThread = before !== undefined && doorsOf(before) > 0 && doorsOf(before) >= doors;
+  const next: KeptSlip = {
+    ...entry,
+    ...(keepThread ? { slip: { ...entry.slip, thread: before.slip.thread! } } : {}),
+    opened: (entry.opened ?? false) || before?.opened === true,
+    ...(doors > 0 ? { doors } : {}),
+  };
   return tidy([...list.filter((kept) => !sameSlip(kept, entry)), next]);
 }
 
@@ -107,6 +180,22 @@ export function markOpened(
   key: Pick<KeptSlip, "day" | "neighbourhoodId">,
 ): KeptSlip[] {
   return list.map((kept) => (sameSlip(kept, key) ? { ...kept, opened: true } : kept));
+}
+
+/**
+ * Opens further door `door` (1 or 2) of one slip. A door opens only after the one before it, and the
+ * first only once the slip's own seal is open; anything else leaves the list as it is.
+ */
+export function openDoor(
+  list: readonly KeptSlip[],
+  key: Pick<KeptSlip, "day" | "neighbourhoodId">,
+  door: number,
+): KeptSlip[] {
+  return list.map((kept) =>
+    sameSlip(kept, key) && kept.opened && door === doorsOf(kept) + 1 && door <= THREAD_STOPS
+      ? { ...kept, doors: door }
+      : kept,
+  );
 }
 
 /** The browser's localStorage, or null where reaching for it throws. Only the slips use it. */

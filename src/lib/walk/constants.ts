@@ -39,3 +39,11 @@ export const SLIP_HERE_METRES = 30;
  * same accuracy rules as a story coming into range apply). The distance is worked out on the phone.
  */
 export const SLIP_OPEN_METRES = 60;
+
+/**
+ * Three doors: a slip leads on to two more places. A drawn next door is at least this far from the
+ * one before (so it is another door, not the same corner) and at most this far in a straight line:
+ * about 6 minutes on foot. A question carried to a place leads there whatever the distance.
+ */
+export const THREAD_MIN_METRES = 60;
+export const THREAD_MAX_METRES = 400;

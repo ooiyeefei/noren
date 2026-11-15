@@ -57,20 +57,47 @@ export type Fix = { lat: number; lng: number; accuracy: number };
  */
 export type SlipQuestion =
   | { kind: "starter"; key: string }
-  | { kind: "story"; storyId: string; text: string; lang: string; askedBy: string };
+  | {
+      kind: "story";
+      storyId: string;
+      text: string;
+      lang: string;
+      askedBy: string;
+      /** Set when the question was written at another place and carried here. */
+      carriedFrom?: { slug: string; names: PlaceNameLike[] };
+    };
+
+/** A place a slip offers: where it is on the public map, and what the page may say about it. */
+export type SlipPlace = {
+  slug: string;
+  names: PlaceNameLike[];
+  category?: string;
+  confirmedAt?: number;
+  hasStory: boolean;
+  pin: Pin;
+};
+
+/**
+ * One further door of a slip's thread ("three doors"): a place near the one before, with its own
+ * sealed question. `via` says how it was chosen: a question carried here (and whose), or a random
+ * pick nearby. It comes down with the slip and is opened on the phone like the first seal.
+ */
+export type ThreadStop =
+  | {
+      via: "carried";
+      carried: { askedBy: string; from: { slug: string; names: PlaceNameLike[] } };
+      place: SlipPlace;
+      question: SlipQuestion;
+    }
+  | { via: "draw"; place: SlipPlace; question: SlipQuestion };
 
 /** One slip: the day's place, and the question sealed in it. */
 export type Slip = {
   neighbourhoodId?: string;
-  place: {
-    slug: string;
-    names: PlaceNameLike[];
-    category?: string;
-    confirmedAt?: number;
-    hasStory: boolean;
-    pin: Pin;
-  };
+  place: SlipPlace;
   question?: SlipQuestion;
+  /** Exactly two further doors, when "three doors" is on and two could be found. */
+  thread?: ThreadStop[];
 };
 
 /** Today's omikuji slips, as the server draws them for every neighbourhood. */

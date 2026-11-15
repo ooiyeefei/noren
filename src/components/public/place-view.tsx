@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { NorenHeader } from "@/components/place/noren-header";
 import { PlaceActions } from "@/components/place/place-actions";
 import type { AddStoryActions } from "@/components/place/add-story";
+import { CarriedHere, type CarriedRow } from "@/components/place/carried-here";
 import { StoryFeed, type StoryFeedActions } from "@/components/place/story-feed";
 import { PlaceCheck, type PlaceCheckActions } from "@/components/place/place-check";
 import { PlaceStory, type PlaceStoryLike } from "@/components/place/place-story";
@@ -62,6 +63,7 @@ export function PlaceView({
   page,
   sources,
   stories,
+  carried,
   placeStory,
   checks,
   story,
@@ -78,6 +80,8 @@ export function PlaceView({
   sources?: readonly SourceViewLike[];
   /** Stories members wrote here; undefined while loading. */
   stories?: readonly WrittenStoryLike[];
+  /** Questions carried here from other places ("three doors"); unset while none are loaded. */
+  carried?: readonly CarriedRow[];
   /** What the story agent wrote from the posts about this place, when it has. */
   placeStory?: PlaceStoryLike;
   checks?: PlaceCheckActions;
@@ -148,6 +152,17 @@ export function PlaceView({
         </section>
       )}
       {placeStory && <PlaceStory locale={locale} story={placeStory} />}
+      {region.thread && carried !== undefined && carried.length > 0 && (
+        <div className="border-t border-line pt-6 first:border-t-0 first:pt-0">
+          <CarriedHere
+            locale={locale}
+            region={region}
+            slug={place.slug}
+            rows={carried}
+            {...(story?.clearQuestion ? { onClear: story.clearQuestion } : {})}
+          />
+        </div>
+      )}
       {/* The fictional demo place takes no stories about it, so it shows the section only for its own. */}
       {(feed === undefined || feed.length > 0 || !place.isMock) && (
         <section
@@ -183,6 +198,7 @@ export function PlaceView({
                 photoBaseUrl={region.photos?.baseUrl}
                 canShareKit={place.canManage}
                 connectorOffered={region.connectorTick}
+                region={region}
               />
             </>
           )}

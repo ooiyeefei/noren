@@ -1,10 +1,11 @@
 import { v, type Infer } from "convex/values";
 import { MAP_PLACE_LIMIT } from "../../src/lib/domain/constants";
 import { neighbourhoodAt } from "../../src/lib/region/neighbourhoods";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
-import { publicStoriesAllowed } from "./access";
+import { isPubliclyReadablePlace, publicStoriesAllowed } from "./access";
 import { readHasPublishedPage, readMapNames, readMapPin } from "./mapCopies";
+import type { RegionConfig } from "../../src/lib/region/schema";
 import { regionConfig } from "./region";
 import { scriptValidator } from "./validators";
 import { readablePlaces } from "./visibility";
@@ -41,22 +42,45 @@ export async function publicPool(ctx: QueryCtx, regionId: string): Promise<PoolP
   const places = await readablePlaces(ctx, null, { regionId, limit: MAP_PLACE_LIMIT });
   const pool: PoolPlace[] = [];
   for (const place of places) {
-    if (place.isMock || place.hiddenReason !== undefined) continue;
-    const pin = place.mapPin !== undefined ? place.mapPin : await readMapPin(ctx, place._id);
-    if (pin === null) continue;
-    pool.push({
-      id: place._id,
-      slug: place.slug,
-      category: place.category,
-      names: place.mapNames ?? (await readMapNames(ctx, place._id)),
-      pin,
-      confirmedAt: place.confirmedAt,
-      hasStory:
-        (publicStoriesAllowed(place) &&
-          (place.hasPublishedPage ?? (await readHasPublishedPage(ctx, place._id)))) ||
-        place.hasPeopleStories === true,
-      neighbourhoodId: neighbourhoodAt(region, pin)?.id,
-    });
+    const poolPlace = await toPoolPlace(ctx, region, place);
+    if (poolPlace !== null) pool.push(poolPlace);
   }
   return pool;
+}
+
+/**
+ * The one rule for a single place: real (not demo), not taken off the map, readable by a signed-out
+ * visitor. The pool and the check that a question may be carried to a place both use it.
+ */
+export function isPublicRealPlace(place: Doc<"place">): boolean {
+  return !place.isMock && place.hiddenReason === undefined && isPubliclyReadablePlace(place);
+}
+
+/** A place's pin as the map reads it (the copy, else the pin row); null when it has none. */
+export async function pinOf(ctx: QueryCtx, place: Doc<"place">): Promise<Pin | null> {
+  return place.mapPin !== undefined ? place.mapPin : await readMapPin(ctx, place._id);
+}
+
+/** The place as the pool offers it, or null when it is not a public real place with a pin. */
+export async function toPoolPlace(
+  ctx: QueryCtx,
+  region: RegionConfig,
+  place: Doc<"place">,
+): Promise<PoolPlace | null> {
+  if (!isPublicRealPlace(place)) return null;
+  const pin = await pinOf(ctx, place);
+  if (pin === null) return null;
+  return {
+    id: place._id,
+    slug: place.slug,
+    category: place.category,
+    names: place.mapNames ?? (await readMapNames(ctx, place._id)),
+    pin,
+    confirmedAt: place.confirmedAt,
+    hasStory:
+      (publicStoriesAllowed(place) &&
+        (place.hasPublishedPage ?? (await readHasPublishedPage(ctx, place._id)))) ||
+      place.hasPeopleStories === true,
+    neighbourhoodId: neighbourhoodAt(region, pin)?.id,
+  };
 }

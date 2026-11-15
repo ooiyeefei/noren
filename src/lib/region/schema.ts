@@ -192,14 +192,17 @@ export const regionSchema = z
      * `connector`: the read-only Noren connector at /api/mcp (people add it to Claude or ChatGPT by
      * its address); off, the route answers 404. `planner`: the in-app "plan my day" chat and the
      * "What Noren remembers" page. `walk`: walk mode, with the omikuji and first-story quests.
+     * `thread`: "three doors", a question carried to another place and a slip that leads on to two
+     * more doors. It works only while `walk` is on too (src/lib/slip/carry.ts, threadOn).
      */
     features: z
       .strictObject({
         connector: z.boolean(),
         planner: z.boolean().default(false),
         walk: z.boolean().default(false),
+        thread: z.boolean().default(false),
       })
-      .default({ connector: false, planner: false, walk: false }),
+      .default({ connector: false, planner: false, walk: false, thread: false }),
     legal: z.strictObject({
       /** Named legal operator shown on notices; null until decided (blocks real people's stories). */
       operatorName: z.string().min(1).nullable(),

@@ -12,7 +12,10 @@ import {
   clearKept,
   keepSlip,
   loadKept,
+  doorsOf,
+  isTied,
   markOpened,
+  openDoor,
   sameSlip,
   saveKept,
   type KeptSlip,
@@ -21,23 +24,16 @@ import { dayToTime } from "@/lib/collection/reach";
 import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
 import { walkMessages, type WalkMessageTable } from "@/lib/i18n/messages/walk";
-import type { Compass } from "@/lib/walk/direction";
+import { THREAD_STOPS } from "@/lib/slip/thread";
 import { SLIP_HERE_METRES } from "@/lib/walk/constants";
 import { legFrom, nearestNeighbourhood, slipFor, type NeighbourhoodLike } from "@/lib/walk/omikuji";
 import type { Fix, Pin, Slip, TodaysSlips, WalkData } from "@/lib/walk/types";
+import { COMPASS_WORD } from "./compass-word";
 import { SealedQuestion, questionText, type DoorProps } from "./slip-seal";
+import { ThreadDoors } from "./thread-doors";
+import { ThreadTiedMark } from "./thread-knot";
 
 const HOUR_MS = 60 * 60 * 1000;
-const COMPASS_WORD = {
-  n: "compassN",
-  ne: "compassNE",
-  e: "compassE",
-  se: "compassSE",
-  s: "compassS",
-  sw: "compassSW",
-  w: "compassW",
-  nw: "compassNW",
-} as const satisfies Record<Compass, keyof WalkMessageTable>;
 const NEAR = "near";
 const ALL = "all";
 
@@ -165,6 +161,12 @@ export function OmikujiPanel({
     new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(
       dayToTime(day),
     );
+  const keptEntry =
+    viewing === null && drawn && slips
+      ? kept.find((entry) =>
+          sameSlip(entry, { day: slips.slips.day, neighbourhoodId: drawn.neighbourhoodId }),
+        )
+      : undefined;
   // The slip on show: the one just drawn, or a kept one the person chose to look at again.
   const current =
     viewing !== null
@@ -173,14 +175,14 @@ export function OmikujiPanel({
         ? {
             day: slips.slips.day,
             neighbourhoodId: drawn.neighbourhoodId,
-            slip,
-            opened:
-              kept.find((entry) =>
-                sameSlip(entry, {
-                  day: slips.slips.day,
-                  neighbourhoodId: drawn.neighbourhoodId,
-                }),
-              )?.opened ?? false,
+            // Once a further door is open, the doors on show are the kept ones (the ones this
+            // person opened), even if today's thread has changed since.
+            slip:
+              keptEntry && doorsOf(keptEntry) > 0
+                ? { ...slip, thread: keptEntry.slip.thread! }
+                : slip,
+            opened: keptEntry?.opened ?? false,
+            ...(keptEntry?.doors === undefined ? {} : { doors: keptEntry.doors }),
           }
         : undefined;
   const drawnNeighbourhood = current
@@ -273,6 +275,26 @@ export function OmikujiPanel({
               accuracyAllowanceMetres,
               locate,
             }}
+            {...(region.thread
+              ? {
+                  thread: {
+                    doors: doorsOf(current),
+                    tiedOn: dayText(current.day),
+                    onOpenDoor: (doorNumber: 1 | 2) =>
+                      update((list) =>
+                        openDoor(
+                          keepSlip(list, {
+                            day: current.day,
+                            neighbourhoodId: current.neighbourhoodId,
+                            slip: current.slip,
+                          }),
+                          current,
+                          doorNumber,
+                        ),
+                      ),
+                  },
+                }
+              : {})}
           />
         </div>
       )}
@@ -298,6 +320,7 @@ export function OmikujiPanel({
                       {" · "}
                       {entry.opened ? m.keptOpened : m.keptStillSealed}
                     </span>
+                    {region.thread && isTied(entry) && <ThreadTiedMark label={m.keptTied} />}
                   </span>
                   <button
                     type="button"
@@ -359,6 +382,7 @@ export function SlipCard({
   from,
   centre,
   door,
+  thread,
   dayText,
 }: {
   locale: Locale;
@@ -375,6 +399,12 @@ export function SlipCard({
    * does not keep slips).
    */
   door?: DoorProps;
+  /**
+   * "Three doors": how many of the slip's further doors are open, how to open the next, and the date
+   * the thread is tied on. Without it (switch off, or a page that does not keep slips) a slip's
+   * further doors are not shown.
+   */
+  thread?: { doors: number; onOpenDoor(door: 1 | 2): void; tiedOn: string };
   /** Set for a slip from an earlier day: its date, for the label. Unset is today's. */
   dayText?: string;
 }) {
@@ -444,6 +474,12 @@ export function SlipCard({
           placePath={path}
           pin={place.pin}
           door={door ?? { ...OPEN_DOOR, opened: true }}
+          {...(question.kind === "story" && question.carriedFrom
+            ? {
+                carriedFromName: placeHeading(question.carriedFrom.names, locale, region).primary
+                  .text,
+              }
+            : {})}
         />
       )}
       {place.hasStory ? (
@@ -478,6 +514,20 @@ export function SlipCard({
         >
           {m.askAbout}
         </a>
+      )}
+      {sealed && thread && door?.opened === true && slip.thread?.length === THREAD_STOPS && (
+        <ThreadDoors
+          locale={locale}
+          region={region}
+          m={m}
+          first={{ pin: place.pin, name: name.primary.text }}
+          stops={slip.thread}
+          doors={thread.doors}
+          onOpenDoor={thread.onOpenDoor}
+          from={from}
+          tiedOn={thread.tiedOn}
+          door={door}
+        />
       )}
     </>
   );

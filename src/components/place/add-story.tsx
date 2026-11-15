@@ -25,6 +25,7 @@ import {
   type StoryRegion,
   type WrittenStoryArgs,
 } from "./add-story-form";
+import { CarryPicker, type CarryTargetView } from "./carry-picker";
 import { LinkPreview, useLinkRead, type LinkReadActions } from "./link-read";
 import { PhotoPicker, type PhotoPickerActions } from "./photo-picker";
 import { NO_PHOTOS, type PhotoDraft } from "./photo-upload";
@@ -56,6 +57,11 @@ export type AddStoryActions = LinkReadActions & {
   photos?: PhotoPickerActions;
   /** The question this story answers (walk mode); shown above the textarea and sent with it. */
   answering?: Answering;
+  /**
+   * The places a question written here may be carried to ("three doors"): asked for once, when the
+   * writer chooses "At another place nearby". Only used while the region has the thread switch on.
+   */
+  carryTargets?(): Promise<readonly CarryTargetView[]>;
 };
 
 /** The props of the form, for a wrapper that adds the open request. */
@@ -80,13 +86,7 @@ const EMPTY: StoryDraft = { url: "", note: "", title: "", author: "", body: "", 
  * link to a post on the service they already use. Either way it is shown with their name.
  * With a `draftName`, an unshared story and its photos come back after a reload.
  */
-export function AddStory({
-  locale,
-  region,
-  actions,
-  draftName,
-  openWritten = 0,
-}: AddStoryProps) {
+export function AddStory({ locale, region, actions, draftName, openWritten = 0 }: AddStoryProps) {
   const m = messagesFor(addStoryMessages, locale);
   const id = useId();
   const [mode, setMode] = useDraft<Mode | null>(draftName && `${draftName}:mode`, null);
@@ -359,7 +359,18 @@ export function AddStory({
                 </label>
               </>
             )}
-            {mode === "write" && <VoiceInput locale={locale} disabled={pending || draft.body.length >= BODY_LIMIT} onText={(text) => setDraft((current) => ({ ...current, body: [current.body, text].filter(Boolean).join("\n") }))} />}
+            {mode === "write" && (
+              <VoiceInput
+                locale={locale}
+                disabled={pending || draft.body.length >= BODY_LIMIT}
+                onText={(text) =>
+                  setDraft((current) => ({
+                    ...current,
+                    body: [current.body, text].filter(Boolean).join("\n"),
+                  }))
+                }
+              />
+            )}
             {mode === "write" && actions.photos && (
               <PhotoPicker
                 locale={locale}
@@ -396,6 +407,19 @@ export function AddStory({
                 </p>
                 {problemText("question", m.questionProblem)}
               </div>
+            )}
+            {mode === "write" && region.relay && region.thread && !!draft.question?.trim() && (
+              <CarryPicker
+                locale={locale}
+                id={id}
+                other={draft.carryOther === true}
+                placeId={draft.carryTo}
+                load={actions.carryTargets}
+                problem={problem === "carry"}
+                onChange={({ other, placeId }) =>
+                  setDraft({ ...draft, carryOther: other, carryTo: placeId })
+                }
+              />
             )}
             {actions.shownAs && (
               <ShownAs locale={locale} hintId={`${id}-name`} actions={actions.shownAs} />

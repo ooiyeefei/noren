@@ -10,6 +10,7 @@ import type { StoryFeedEntry } from "@/components/public/mapping";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
 import { starterText } from "@/lib/slip/question";
+import { PlaceLink, withPlace, type NameRegion } from "./place-link";
 import { StoryPhotos } from "./story-photos";
 
 type Removable = { kind: StoryFeedEntry["kind"]; id: string };
@@ -41,6 +42,7 @@ export function StoryFeed({
   photoBaseUrl,
   canShareKit = false,
   connectorOffered = false,
+  region,
 }: {
   locale: Locale;
   entries: readonly StoryFeedEntry[];
@@ -60,6 +62,8 @@ export function StoryFeed({
   connectorOffered?: boolean;
   /** Where photos are served from; unset while photos are off. */
   photoBaseUrl?: string;
+  /** Names a place a question was carried to, or from, in the page's language. */
+  region?: NameRegion;
 }) {
   const ui = messagesFor(placePageMessages, locale);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -180,8 +184,24 @@ export function StoryFeed({
                           {moment.answers.kind === "story"
                             ? quoted(moment.answers.text, moment.answers.lang)
                             : quoted(starterText(moment.answers.key, locale) ?? "", locale)}
-                          {moment.answers.kind === "story" && moment.answers.askedBy && (
-                            <> {format(ui.askedByName, { name: moment.answers.askedBy })}</>
+                          {moment.answers.kind === "story" && moment.answers.from ? (
+                            <>
+                              {" "}
+                              {withPlace(
+                                moment.answers.askedBy ? ui.askedByNameFrom : ui.askedByFrom,
+                                { name: moment.answers.askedBy },
+                                <PlaceLink
+                                  locale={locale}
+                                  region={region}
+                                  place={moment.answers.from}
+                                />,
+                              )}
+                            </>
+                          ) : (
+                            moment.answers.kind === "story" &&
+                            moment.answers.askedBy && (
+                              <> {format(ui.askedByName, { name: moment.answers.askedBy })}</>
+                            )
                           )}
                         </p>
                       )}
@@ -198,9 +218,19 @@ export function StoryFeed({
                         <div data-story-question="" className="space-y-1 text-[16px]">
                           <p>
                             <span className="font-bold">
-                              {moment.authorName
-                                ? format(ui.leftQuestion, { name: moment.authorName })
-                                : ui.leftQuestionAnon}
+                              {moment.nextQuestionFor
+                                ? withPlace(
+                                    ui.carriedLabel,
+                                    {},
+                                    <PlaceLink
+                                      locale={locale}
+                                      region={region}
+                                      place={moment.nextQuestionFor}
+                                    />,
+                                  )
+                                : moment.authorName
+                                  ? format(ui.leftQuestion, { name: moment.authorName })
+                                  : ui.leftQuestionAnon}
                             </span>{" "}
                             {quoted(moment.nextQuestion, moment.lang)}
                           </p>

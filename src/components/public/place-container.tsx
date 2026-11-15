@@ -1,12 +1,13 @@
 "use client";
 
 import { use, useState } from "react";
-import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useAction, useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { PageContainer } from "@/components/layout/page-container";
 import { useTasteLearning } from "@/components/memory/taste-learning";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { Answering, AddStoryActions } from "@/components/place/add-story";
+import type { CarryTargetView } from "@/components/place/carry-picker";
 import type { WrittenStoryArgs } from "@/components/place/add-story-form";
 import { uploadStoryPhoto } from "@/components/place/photo-upload";
 import type { StoryFeedActions } from "@/components/place/story-feed";
@@ -18,7 +19,7 @@ import { readLocation } from "@/lib/collection/location";
 import { PlaceView, pressedAfter, type PlaceCollection, type PressedFrom } from "./place-view";
 import { useShownAs } from "@/components/place/use-shown-as";
 import { useToday } from "./use-today";
-import type { PublicRegionProps } from "./mapping";
+import { placeHeading, type PublicRegionProps } from "./mapping";
 import { readPlaceTab, type PlaceTabState } from "@/lib/place/tabs";
 import { parseAnswers, starterText } from "@/lib/slip/question";
 
@@ -32,6 +33,7 @@ function answeringFrom(
   ref: ReturnType<typeof parseAnswers>,
   stories:
     readonly { _id: string; nextQuestion?: string; lang: string; authorName: string }[] | undefined,
+  carried: readonly { storyId: string; text: string; lang: string; askedBy: string }[] | undefined,
   locale: Locale,
 ): Answering | undefined {
   if (ref === null) return undefined;
@@ -39,6 +41,14 @@ function answeringFrom(
     const text = starterText(ref.key, locale);
     return text === undefined ? undefined : { ref, text, lang: locale };
   }
+  const brought = carried?.find((row) => row.storyId === ref.storyId);
+  if (brought !== undefined)
+    return {
+      ref,
+      text: brought.text,
+      lang: brought.lang,
+      ...(brought.askedBy ? { askedBy: brought.askedBy } : {}),
+    };
   const asked = stories?.find((story) => story._id === ref.storyId);
   if (asked === undefined || !asked.nextQuestion) return undefined;
   return {
@@ -50,9 +60,13 @@ function answeringFrom(
 }
 
 /** The form's photo ids came from Convex a moment ago, and stories.add checks each one again. */
-const writtenStory = ({ photoIds, ...args }: WrittenStoryArgs, placeId: Id<"place">) => ({
+const writtenStory = (
+  { photoIds, nextQuestionFor, ...args }: WrittenStoryArgs,
+  placeId: Id<"place">,
+) => ({
   ...args,
   placeId,
+  ...(nextQuestionFor ? { nextQuestionFor: nextQuestionFor as Id<"place"> } : {}),
   ...(photoIds ? { photoIds: photoIds as Id<"storyPhoto">[] } : {}),
 });
 
@@ -94,6 +108,12 @@ function PlaceQuery({
   const args = place ? { placeId: place._id } : "skip";
   const sources = useQuery(api.sources.listForPlace, args);
   const stories = useQuery(api.stories.listForPlace, args);
+  // Questions carried here from other places; asked only where "three doors" is on.
+  const carried = useQuery(
+    api.stories.carriedTo,
+    region.thread && place ? { placeId: place._id } : "skip",
+  );
+  const convex = useConvex();
   const placeStory = useQuery(api.placeStories.forPlace, args);
   const page = useQuery(api.pages.getPublished, args);
   const { isLoading, isAuthenticated } = useConvexAuth();
@@ -155,7 +175,7 @@ function PlaceQuery({
     );
   // The question the link asks the writer to answer: a starter, or a story's question at this place.
   const answering = region.relay
-    ? answeringFrom(parseAnswers(answers), stories, locale)
+    ? answeringFrom(parseAnswers(answers), stories, carried, locale)
     : undefined;
   const checks: PlaceCheckActions | undefined = place
     ? {
@@ -172,6 +192,23 @@ function PlaceQuery({
         write: (args) => pressing("story", () => saved(writeStory(writtenStory(args, place._id)))),
         shownAs,
         ...(answering ? { answering } : {}),
+        ...(region.thread
+          ? {
+              carryTargets: async (): Promise<CarryTargetView[]> =>
+                (await convex.query(api.stories.carryTargets, { placeId: place._id })).map(
+                  (target) => {
+                    const name = placeHeading(target.names, locale, region).primary;
+                    return {
+                      placeId: target.placeId,
+                      name: name.text,
+                      lang: name.lang,
+                      metres: target.metres,
+                      search: target.names.map(({ value }) => value).join(" "),
+                    };
+                  },
+                ),
+            }
+          : {}),
         photos:
           photoLimits && canAddPhotos?.allowed
             ? {
@@ -217,6 +254,7 @@ function PlaceQuery({
       place={place}
       sources={sources}
       stories={stories}
+      carried={carried}
       placeStory={placeStory ?? undefined}
       page={page}
       checks={checks}
