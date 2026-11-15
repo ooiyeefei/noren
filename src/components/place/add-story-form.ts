@@ -1,9 +1,18 @@
 import { describeSource, type DescribedSource } from "@/lib/adapters";
 import type { SourceAdapterId } from "@/lib/domain/constants";
 import type { LinkRead } from "@/lib/link-read/types";
+import { cleanQuestion, type AnswerRef } from "@/lib/slip/question";
 
-export type StoryDraft = { url: string; note: string; title: string; author: string; body: string };
-export type StoryProblem = "url" | "note" | "title" | "body";
+export type StoryDraft = {
+  url: string;
+  note: string;
+  title: string;
+  author: string;
+  body: string;
+  /** A question for the next visitor; kept with the unsent draft. Absent in drafts kept before it existed. */
+  question?: string;
+};
+export type StoryProblem = "url" | "note" | "title" | "body" | "question";
 export type StoryArgs = {
   url: string;
   note: string;
@@ -19,6 +28,10 @@ export type WrittenStoryArgs = {
   shareConsent?: boolean;
   /** The writer's tick that AI may read the story with their name: the planner and the connector. */
   connectorAllowed?: boolean;
+  /** One line for the next visitor to ask here; only where the region has walk mode on. */
+  nextQuestion?: string;
+  /** What this story answers, from the link that brought the writer here. */
+  answers?: AnswerRef;
 };
 export type StoryRegion = {
   sourceAdapters: readonly SourceAdapterId[];
@@ -30,6 +43,8 @@ export type StoryRegion = {
   shareToNoren?: boolean;
   /** The region has the connector or the planner on, so the form offers the tick that lets AI read a story. */
   connectorTick?: boolean;
+  /** Walk mode is on: the form offers a question for the next visitor and shows the one being answered. */
+  relay?: boolean;
 };
 
 export const NOTE_LIMIT = 1000;
@@ -49,10 +64,16 @@ export function noteLanguage(note: string, region: StoryRegion): string {
 export function toWrittenArgs(
   draft: StoryDraft,
   region: StoryRegion,
-): { ok: true; args: WrittenStoryArgs } | { ok: false; problem: "body" } {
+): { ok: true; args: WrittenStoryArgs } | { ok: false; problem: "body" | "question" } {
   const body = draft.body.trim();
   if (!body || body.length > BODY_LIMIT) return { ok: false, problem: "body" };
-  return { ok: true, args: { body, lang: noteLanguage(body, region) } };
+  const args: WrittenStoryArgs = { body, lang: noteLanguage(body, region) };
+  if (region.relay && draft.question?.trim()) {
+    const question = cleanQuestion(draft.question);
+    if (!question.ok) return { ok: false, problem: "question" };
+    args.nextQuestion = question.text;
+  }
+  return { ok: true, args };
 }
 
 /** The pasted link's platform and official embed, which need no fetching. */

@@ -83,6 +83,7 @@ export function WalkContainer({
           planner={walk.planner}
           data={data}
           position={snapshot.fix}
+          accuracyAllowanceMetres={walk.accuracyAllowanceMetres}
         />
       }
     />

@@ -7,8 +7,9 @@ import { ErrorMessage } from "@/components/layout/error-message";
 import { ConnectorTick } from "@/components/share/connector-choice";
 import { ConsentTick } from "@/components/share/consent-tick";
 import { ShareStoryConnected } from "@/components/share/share-story";
-import { localePath, messagesFor, type Locale } from "@/lib/i18n";
+import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
+import { QUESTION_LIMIT, type AnswerRef } from "@/lib/slip/question";
 import { cn } from "@/lib/utils";
 import {
   AUTHOR_LIMIT,
@@ -29,6 +30,16 @@ import { PhotoPicker, type PhotoPickerActions } from "./photo-picker";
 import { NO_PHOTOS, type PhotoDraft } from "./photo-upload";
 import { ShownAs, type ShownAsActions } from "./shown-as";
 
+/** The question a story is being written to answer, from the link that brought the writer here. */
+export type Answering = {
+  ref: AnswerRef;
+  text: string;
+  /** The language of the words; unset reads as the page's. */
+  lang?: string;
+  /** Who asked, for a member's question. */
+  askedBy?: string;
+};
+
 /** What the page can do with a story; the container wires these to Convex. */
 export type AddStoryActions = LinkReadActions & {
   /** Undefined while sign-in is still loading. */
@@ -43,6 +54,8 @@ export type AddStoryActions = LinkReadActions & {
   shownAs?: ShownAsActions;
   /** Set only when this member can add photos at this place. */
   photos?: PhotoPickerActions;
+  /** The question this story answers (walk mode); shown above the textarea and sent with it. */
+  answering?: Answering;
 };
 
 /** The props of the form, for a wrapper that adds the open request. */
@@ -60,7 +73,7 @@ type Mode = "write" | "link";
 const BUTTON =
   "inline-flex min-h-11 items-center justify-center rounded-[10px] px-5 py-2 font-bold disabled:opacity-50";
 const FIELD = "block w-full rounded-[10px] border border-input p-3 text-[16px]";
-const EMPTY: StoryDraft = { url: "", note: "", title: "", author: "", body: "" };
+const EMPTY: StoryDraft = { url: "", note: "", title: "", author: "", body: "", question: "" };
 
 /**
  * FR-032, FR-033: any signed-in member shares a story about the place, either written here or as a
@@ -86,6 +99,8 @@ export function AddStory({
   const [consent, setConsent] = useState(false);
   const [connectorConsent, setConnectorConsent] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  // Once the story that answers is shared, the question it answered is not shown again.
+  const [answered, setAnswered] = useState(false);
   const [photos, setPhotos] = useState<PhotoDraft>(NO_PHOTOS);
   const keptPhotos = usePhotoDrafts(draftName);
   const busy = useRef(false);
@@ -120,6 +135,7 @@ export function AddStory({
         ...(photoIds.length ? { photoIds } : {}),
         ...(consent && region.shareToNoren ? { shareConsent: true } : {}),
         ...(connectorConsent && region.connectorTick ? { connectorAllowed: true } : {}),
+        ...(region.relay && send.answering && !answered ? { answers: send.answering.ref } : {}),
       };
       return { ok: true as const, run: () => send.write(args) };
     }
@@ -143,6 +159,7 @@ export function AddStory({
       setAdded(true);
       setConsent(false);
       setConnectorConsent(false);
+      if (current === "write" && region.relay) setAnswered(true);
       setSharedId(current === "write" && typeof result === "string" ? result : null);
     } catch (caught) {
       setError(caught);
@@ -203,21 +220,39 @@ export function AddStory({
         >
           <fieldset disabled={pending} className="min-w-0 space-y-4">
             {mode === "write" ? (
-              <label className="block space-y-1">
-                <span className="font-bold">{m.body}</span>
-                <span id={`${id}-body-hint`} className="block text-[15px] text-muted-foreground">
-                  {m.bodyHint}
-                </span>
-                <textarea
-                  value={draft.body}
-                  maxLength={BODY_LIMIT}
-                  rows={6}
-                  {...described("body", `${id}-body-hint`)}
-                  onChange={(event) => setDraft({ ...draft, body: event.target.value })}
-                  className={FIELD}
-                />
-                {problemText("body", m.bodyProblem)}
-              </label>
+              <>
+                {region.relay && actions.answering && !answered && (
+                  <div data-answering="" className="space-y-1 rounded-[10px] bg-kamenozoki/60 p-3">
+                    <p className="font-bold">{m.youWereAsked}</p>
+                    <p
+                      lang={actions.answering.lang ?? locale}
+                      className="text-[18px] leading-relaxed [overflow-wrap:anywhere]"
+                    >
+                      {actions.answering.text}
+                    </p>
+                    {actions.answering.askedBy && (
+                      <p className="text-[15px] text-muted-foreground">
+                        {format(m.askedBy, { name: actions.answering.askedBy })}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <label className="block space-y-1">
+                  <span className="font-bold">{m.body}</span>
+                  <span id={`${id}-body-hint`} className="block text-[15px] text-muted-foreground">
+                    {m.bodyHint}
+                  </span>
+                  <textarea
+                    value={draft.body}
+                    maxLength={BODY_LIMIT}
+                    rows={6}
+                    {...described("body", `${id}-body-hint`)}
+                    onChange={(event) => setDraft({ ...draft, body: event.target.value })}
+                    className={FIELD}
+                  />
+                  {problemText("body", m.bodyProblem)}
+                </label>
+              </>
             ) : (
               <>
                 <p className="max-w-prose text-[15px] leading-relaxed">{m.intro}</p>
@@ -332,6 +367,35 @@ export function AddStory({
                 onChange={setPhotos}
                 draftName={draftName}
               />
+            )}
+            {mode === "write" && region.relay && (
+              <div className="space-y-1">
+                <label htmlFor={`${id}-question`} className="block font-bold">
+                  {m.questionLabel}
+                </label>
+                <p id={`${id}-question-hint`} className="text-[15px] text-muted-foreground">
+                  {m.questionHint}
+                </p>
+                <input
+                  id={`${id}-question`}
+                  type="text"
+                  data-next-question=""
+                  value={draft.question ?? ""}
+                  maxLength={QUESTION_LIMIT}
+                  {...described("question", `${id}-question-hint ${id}-question-count`)}
+                  onChange={(event) =>
+                    setDraft({ ...draft, question: event.target.value.replace(/\s+/gu, " ") })
+                  }
+                  className={FIELD}
+                />
+                <p id={`${id}-question-count`} className="text-[15px] text-muted-foreground">
+                  {format(m.questionCount, {
+                    count: (draft.question ?? "").length,
+                    limit: QUESTION_LIMIT,
+                  })}
+                </p>
+                {problemText("question", m.questionProblem)}
+              </div>
             )}
             {actions.shownAs && (
               <ShownAs locale={locale} hintId={`${id}-name`} actions={actions.shownAs} />

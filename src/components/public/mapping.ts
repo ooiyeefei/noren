@@ -38,6 +38,8 @@ export type PublicRegionProps = {
   shareToNoren: boolean;
   /** The connector or the planner is on, so a writer is offered the tick that lets an AI read their story. */
   connectorTick: boolean;
+  /** Walk mode is on, so stories may carry a question for the next visitor. */
+  relay?: boolean;
   /** Set only on the place page, while the region has photos on and every setting is in place. */
   photos?: PublicPhotoProps;
 };
@@ -95,7 +97,16 @@ export type WrittenStoryLike = {
   canRemove: boolean;
   addedByMe?: boolean;
   photos?: readonly StoryPhotoLike[];
+  /** The question the writer left for the next visitor (walk mode). */
+  nextQuestion?: string;
+  /** What this story answers, while that question still shows. */
+  answers?: StoryAnswerLike;
+  /** The earliest story here. */
+  firstTeller?: boolean;
 };
+export type StoryAnswerLike =
+  | { kind: "story"; text: string; lang: string; askedBy: string }
+  | { kind: "starter"; key: string };
 /** One of the newest stories in the region, for the home page (FR-033). */
 export type LatestStoryLike = {
   kind: "written" | "post";
@@ -150,6 +161,7 @@ export function publicRegionProps(region: RegionConfig, locale: Locale): PublicR
     accountsOpen: region.legal.accountsOpen,
     shareToNoren: region.sharing.norenAccount,
     connectorTick: aiReadingOffered(region.features),
+    ...(region.features.walk ? { relay: true } : {}),
   };
 }
 

@@ -51,20 +51,32 @@ export type WalkPlace = {
 /** One reading of the phone's position. It stays on the phone. */
 export type Fix = { lat: number; lng: number; accuracy: number };
 
+/**
+ * The question sealed inside a slip. It comes down with the slip for every neighbourhood and is
+ * opened on the phone: opening it asks Noren for nothing.
+ */
+export type SlipQuestion =
+  | { kind: "starter"; key: string }
+  | { kind: "story"; storyId: string; text: string; lang: string; askedBy: string };
+
+/** One slip: the day's place, and the question sealed in it. */
+export type Slip = {
+  neighbourhoodId?: string;
+  place: {
+    slug: string;
+    names: PlaceNameLike[];
+    category?: string;
+    confirmedAt?: number;
+    hasStory: boolean;
+    pin: Pin;
+  };
+  question?: SlipQuestion;
+};
+
 /** Today's omikuji slips, as the server draws them for every neighbourhood. */
 export type TodaysSlips = {
   day: string;
-  slips: {
-    neighbourhoodId?: string;
-    place: {
-      slug: string;
-      names: PlaceNameLike[];
-      category?: string;
-      confirmedAt?: number;
-      hasStory: boolean;
-      pin: Pin;
-    };
-  }[];
+  slips: Slip[];
 };
 
 /** The only two things walk mode asks Noren for. Neither carries a position. */

@@ -95,6 +95,7 @@ function view(locale: Locale, snapshot: Partial<WalkSnapshot> = {}, planner = fa
           planner={planner}
           data={data}
           position={null}
+          accuracyAllowanceMetres={30}
         />
       }
     />,
@@ -457,7 +458,7 @@ describe("a slip from today's omikuji", () => {
 
   it("says it is a random pick and labels an unconfirmed place", () => {
     const html = slip({ slip: slipPlace({ confirmedAt: undefined }) });
-    expect(html).toContain("A random pick for the day. It is not a ranking and not a fortune.");
+    expect(html).toContain("A random pick for the day. It is not a ranking.");
     expect(html).toContain('data-badge="unconfirmed"');
     expect(html).not.toMatch(/大吉|凶|lucky/i);
   });
@@ -480,5 +481,126 @@ describe("what the page shows of the person's position", () => {
     });
     for (const fragment of ["32.7415", "129.8755", "lat=", "lng=", "latitude", "longitude"])
       expect(html).not.toContain(fragment);
+  });
+});
+
+describe("the sealed slip", () => {
+  const place = (over: Record<string, unknown> = {}) => ({
+    slug: "lane-cafe",
+    names: [{ lang: "en", script: "latin" as const, value: "Lane Cafe", isPrimary: true }],
+    category: "cafe",
+    confirmedAt: 5,
+    hasStory: true,
+    pin: ORIGIN,
+    ...over,
+  });
+  const starter = { kind: "starter" as const, key: "oldest" };
+  const story = {
+    kind: "story" as const,
+    storyId: "k17abc123def",
+    text: "Who paints the sign?",
+    lang: "en",
+    askedBy: "Kenji",
+  };
+  const door = (opened: boolean, position = null as null | { lat: number; lng: number; accuracy: number }) => ({
+    opened,
+    onOpen: vi.fn(),
+    position,
+    accuracyAllowanceMetres: 30,
+    locate: vi.fn(),
+  });
+  const show = (
+    locale: Locale,
+    slip: Parameters<typeof SlipCard>[0]["slip"],
+    d?: ReturnType<typeof door>,
+    dayText?: string,
+  ) =>
+    render(
+      <SlipCard
+        locale={locale}
+        region={regionFor(locale)}
+        m={walkMessages[locale]}
+        write="Write a story"
+        planner={false}
+        slip={slip}
+        heading="Today's slip"
+        from={null}
+        centre={undefined}
+        door={d}
+        dayText={dayText}
+      />,
+    );
+
+  it("shows the place, and the question only as sealed, with both ways to open it", () => {
+    const html = show("en", { place: place(), question: story }, door(false));
+    expect(html).toContain("Lane Cafe");
+    expect(html).toContain("data-slip-sealed");
+    expect(html).toContain("A question is sealed inside. It opens at the door.");
+    expect(html).toContain("I&#x27;m at the door");
+    expect(html).toContain("Open without location");
+    expect(html).not.toContain("Who paints the sign?");
+    expect(html).not.toContain("Kenji");
+    expect(html).not.toContain("data-slip-write");
+    expect(html).toContain("Your phone checks the distance.");
+  });
+
+  it("drops the door button during a walk, which opens the seal itself", () => {
+    const html = show(
+      "en",
+      { place: place(), question: starter },
+      door(false, { ...ORIGIN, accuracy: 10 }),
+    );
+    expect(html).not.toContain("data-slip-door");
+    expect(html).toContain("Your walk is watching for the door.");
+    expect(html).toContain("data-slip-open-without");
+  });
+
+  it("shows an opened member question with who asked, its language, and the write link", () => {
+    const html = show("en", { place: place(), question: story }, door(true));
+    expect(html).toContain("Kenji asked:");
+    expect(html).toMatch(/lang="en"[^>]*>Who paints the sign\?/);
+    expect(html).toContain('href="/en/places/lane-cafe?tab=stories&amp;write=1&amp;answers=story:k17abc123def"');
+    expect(html).toContain("Write what you heard");
+    expect(html).not.toContain("data-slip-sealed");
+    expect(html).not.toContain("slip-reveal");
+  });
+
+  it("shows a starter in the page's language, from Noren", () => {
+    const en = show("en", { place: place(), question: starter }, door(true));
+    expect(en).toContain("Find the oldest thing you can see here.");
+    expect(en).toContain("Noren&#x27;s starting question:");
+    expect(en).toContain("answers=starter:oldest");
+    const ja = show("ja", { place: place(), question: starter }, door(true));
+    expect(ja).toContain("いちばん古いもの");
+    expect(ja).toContain("聞いたことを書く");
+    expect(ja).toContain('href="/ja/places/lane-cafe?tab=stories&amp;write=1&amp;answers=starter:oldest"');
+  });
+
+  it("labels a slip with no story Great fortune, others plainly, and never grades", () => {
+    const fresh = show("en", { place: place({ hasStory: false }), question: starter }, door(false));
+    expect(fresh).toContain("Great fortune");
+    expect(fresh).toContain("Nobody has told this place&#x27;s story yet. The first teller is named on it for good.");
+    expect(fresh).not.toContain("Be the first");
+    expect(show("ja", { place: place({ hasStory: false }), question: starter }, door(false))).toContain("大吉");
+    const told = show("en", { place: place(), question: starter }, door(false));
+    expect(told).toContain("Today&#x27;s slip");
+    expect(told).not.toContain("Great fortune");
+    expect(show("en", { place: place(), question: starter }, door(false), "Nov 3, 2026")).toContain(
+      "Slip of Nov 3, 2026",
+    );
+    for (const html of [fresh, told]) expect(html).not.toMatch(/小吉|中吉|凶|score|\brank\b|points|streak/i);
+  });
+
+  it("changes nothing for a slip with no question", () => {
+    const html = show("en", { place: place({ hasStory: false }) });
+    expect(html).not.toContain("data-slip-label");
+    expect(html).not.toContain("Great fortune");
+    expect(html).toContain("Nobody has written about Lane Cafe yet. Go in and be the first.");
+    expect(html).toContain('href="/en/places/lane-cafe?tab=stories&amp;write=1"');
+  });
+
+  it("skips a starter question it no longer has", () => {
+    const html = show("en", { place: place(), question: { kind: "starter", key: "retired" } }, door(false));
+    expect(html).not.toContain("data-slip-sealed");
   });
 });

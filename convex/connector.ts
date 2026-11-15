@@ -31,6 +31,7 @@ import { internalMutation, mutation } from "./lib/gate";
 import { consumeRateLimit } from "./lib/rateLimit";
 import { nameView, publicPool, type Pin, type PoolPlace } from "./lib/publicPool";
 import { regionConfig, regionPolicy } from "./lib/region";
+import { openQuestionFor, slipQuestion, type SlipQuestion } from "./lib/relay";
 
 // The draws behind the connector's suggest_walk and draw_omikuji tools.
 //
@@ -129,6 +130,11 @@ const todaysSlips = v.object({
       neighbourhoodId: v.optional(v.string()),
       /** The pin is Noren's public map pin; the phone works out the distance and direction. */
       place: pickedPlace.extend({ pin: v.object({ lat: v.number(), lng: v.number() }) }),
+      /**
+       * The question sealed in the slip, downloaded with it for every neighbourhood and opened on
+       * the phone. Only while walk mode is on. Not part of the connector's tools.
+       */
+      question: v.optional(slipQuestion),
     }),
   ),
 });
@@ -445,6 +451,8 @@ export async function runOmikujiToday(
   const day = localDay(now, region.collection.utcOffsetHours);
   const pool = await publicPool(ctx, args.regionId);
   const slips: TodaysSlips["slips"] = [];
+  // The same place may be the slip of two neighbourhoods; its question is read once.
+  const questions = new Map<string, SlipQuestion>();
   for (const neighbourhoodId of [...(region.neighbourhoods ?? []).map(({ id }) => id), undefined]) {
     const chosen = chooseOmikuji(
       pool.filter(
@@ -453,9 +461,15 @@ export async function runOmikujiToday(
       omikujiSeed(args.regionId, day, neighbourhoodId),
     );
     if (chosen === undefined) continue;
+    let question = questions.get(chosen.id);
+    if (region.features.walk && question === undefined) {
+      question = await openQuestionFor(ctx, chosen);
+      questions.set(chosen.id, question);
+    }
     slips.push({
       ...(neighbourhoodId === undefined ? {} : { neighbourhoodId }),
       place: { ...picked(chosen), pin: chosen.pin },
+      ...(question === undefined ? {} : { question }),
     });
   }
   return { day, slips };

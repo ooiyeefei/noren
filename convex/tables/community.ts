@@ -48,6 +48,22 @@ export const communityTables = {
      * Noren, to people, regardless.
      */
     connectorAllowedAt: v.optional(v.number()),
+    /**
+     * A question the writer leaves for the next visitor to ask at this place: one line, 1 to 140
+     * characters, in the story's own language (src/lib/slip/question.ts). Never translated and never
+     * sent to any AI service. Only written while walk mode is on; stories before it have none.
+     */
+    nextQuestion: v.optional(v.string()),
+    /**
+     * What this story answers: another story's question at the same place, or a starter question
+     * (src/lib/slip/starter-questions.ts). Absent for stories that answer nothing.
+     */
+    answers: v.optional(
+      v.union(
+        v.object({ kind: v.literal("story"), storyId: v.id("story") }),
+        v.object({ kind: v.literal("starter"), key: v.string() }),
+      ),
+    ),
   })
     .index("by_placeId_and_status", ["placeId", "status"])
     .index("by_status", ["status"])

@@ -1,7 +1,8 @@
 import { v, type Infer } from "convex/values";
 import { aiReadingOffered } from "../src/lib/connector/policy";
+import { cleanQuestion, isStarterKey } from "../src/lib/slip/question";
 import type { Doc, Id } from "./_generated/dataModel";
-import { query } from "./_generated/server";
+import { query, type QueryCtx } from "./_generated/server";
 import {
   canEditPlace,
   isPubliclyReadablePlace,
@@ -42,6 +43,20 @@ const PLACE_SCAN = 200;
 const PLACE_LIMIT = 50;
 const PLACE_PER_PERSON = 20;
 
+/** The earliest stories of a place read to find the first teller; a place has a handful. */
+const FIRST_SCAN = 20;
+
+/** What a story answers, ready to show: the question's words and who asked, or a starter's key. */
+const answerView = v.union(
+  v.object({
+    kind: v.literal("story"),
+    text: v.string(),
+    lang: v.string(),
+    askedBy: v.string(),
+  }),
+  v.object({ kind: v.literal("starter"), key: v.string() }),
+);
+
 const storyView = v.object({
   _id: v.id("story"),
   body: v.string(),
@@ -63,7 +78,39 @@ const storyView = v.object({
    * src/lib/connector/policy.ts reads it.
    */
   connectorAllowed: v.boolean(),
+  /**
+   * The question the writer left for the next visitor, in the story's own language. Only while
+   * walk mode is on, like everything about the sealed slip.
+   */
+  nextQuestion: v.optional(v.string()),
+  /** What this story answers, while that question is still showing. */
+  answers: v.optional(answerView),
+  /** The earliest shown story of the place (false while walk mode is off). */
+  firstTeller: v.boolean(),
 });
+
+/**
+ * The stored form of what a new story answers, or undefined when it answers nothing valid: a story's
+ * question must belong to this same place, be shown, and still have its question.
+ */
+async function answeredBy(
+  ctx: QueryCtx,
+  place: Doc<"place">,
+  answers: { kind: "story"; storyId: string } | { kind: "starter"; key: string },
+): Promise<Doc<"story">["answers"]> {
+  if (answers.kind === "starter")
+    return isStarterKey(answers.key) ? { kind: "starter", key: answers.key } : undefined;
+  const id = ctx.db.normalizeId("story", answers.storyId);
+  const asked = id === null ? null : await ctx.db.get("story", id);
+  if (
+    asked === null ||
+    asked.placeId !== place._id ||
+    !isStoryShown(place, asked) ||
+    asked.nextQuestion === undefined
+  )
+    return undefined;
+  return { kind: "story", storyId: asked._id };
+}
 
 /**
  * Any signed-in member writes what they heard, saw or tasted at a place they can read (FR-033). The
@@ -79,9 +126,29 @@ export const add = mutation({
     shareConsent: v.optional(v.boolean()),
     /** The writer's tick that AI may read this story, with their name (the planner and the connector); only while either is on. */
     connectorAllowed: v.optional(v.boolean()),
+    /**
+     * A question for the next visitor, 1 to 140 characters with no contact details. Refused while
+     * walk mode is off. The story's own language; never translated, never sent to AI.
+     */
+    nextQuestion: v.optional(v.string()),
+    /**
+     * What this story answers. A story's question must be at this same place, shown, and still
+     * have its question; a starter must be on the list. Anything else is dropped, and the story is
+     * written without it. Ignored while walk mode is off. The id is a plain string so that a
+     * mangled link cannot make the write fail.
+     */
+    answers: v.optional(
+      v.union(
+        v.object({ kind: v.literal("story"), storyId: v.string() }),
+        v.object({ kind: v.literal("starter"), key: v.string() }),
+      ),
+    ),
   },
   returns: v.id("story"),
-  handler: async (ctx, { placeId, body, lang, photoIds, shareConsent, connectorAllowed }) => {
+  handler: async (
+    ctx,
+    { placeId, body, lang, photoIds, shareConsent, connectorAllowed, nextQuestion, answers },
+  ) => {
     const person = await requirePerson(ctx);
     requireConfirmedName(person);
     const place = await loadReadablePlace(ctx, person, placeId);
@@ -94,6 +161,25 @@ export const add = mutation({
       throw appError("invalid_input", "this region does not offer sharing on Noren's accounts");
     if (connectorAllowed && !aiReadingOffered(regionConfig(place.regionId).features))
       throw appError("invalid_input", "this region does not offer AI reading of stories");
+    const relay = regionConfig(place.regionId).features.walk;
+    let question: string | undefined;
+    if (nextQuestion !== undefined) {
+      if (!relay) {
+        if (nextQuestion) throw appError("invalid_input", "this region does not offer questions");
+      } else {
+        const checked = cleanQuestion(nextQuestion);
+        if (checked.ok) question = checked.text;
+        else if (checked.reason !== "empty")
+          throw appError(
+            "invalid_input",
+            checked.reason === "long"
+              ? "a question is 1 to 140 characters"
+              : "a question may not hold a link, an email address, an @name or a phone number",
+          );
+      }
+    }
+    const answered =
+      relay && answers !== undefined ? await answeredBy(ctx, place, answers) : undefined;
     await limitContribution(ctx, person, "story", place.regionId);
     const storyId = await ctx.db.insert(
       "story",
@@ -103,6 +189,8 @@ export const add = mutation({
         body: text,
         lang,
         status: "live" as const,
+        ...(question === undefined ? {} : { nextQuestion: question }),
+        ...(answered === undefined ? {} : { answers: answered }),
         ...(shareConsent ? { shareConsentAt: Date.now() } : {}),
         ...(connectorAllowed ? { connectorAllowedAt: Date.now() } : {}),
       }),
@@ -162,8 +250,49 @@ export const listForPlace = query({
       author.key = story._id;
       shown.push({ story, author, addedByMe });
     }
+    // The relay (a question for the next visitor, first teller) shows only while walk mode is on.
+    const relay = regionConfig(place.regionId).features.walk;
+    let firstId: Id<"story"> | undefined;
+    if (relay) {
+      // The earliest shown story may lie beyond the window above, so it is read from the other end.
+      const earliest = await ctx.db
+        .query("story")
+        .withIndex("by_placeId_and_status", (q) => q.eq("placeId", placeId).eq("status", "live"))
+        .order("asc")
+        .take(FIRST_SCAN);
+      firstId = earliest.find((story) => isStoryShown(place, story))?._id;
+    }
+    const names = new Map<Id<"person">, string>();
+    const nameOf = async (personId: Id<"person">) => {
+      let name = names.get(personId);
+      if (name === undefined) {
+        name = (await ctx.db.get("person", personId))?.displayName ?? "";
+        names.set(personId, name);
+      }
+      return name;
+    };
+    const answerOf = async (story: Doc<"story">): Promise<Infer<typeof answerView> | undefined> => {
+      const { answers } = story;
+      if (answers === undefined) return undefined;
+      if (answers.kind === "starter") return { kind: "starter", key: answers.key };
+      const asked = await ctx.db.get("story", answers.storyId);
+      if (
+        asked === null ||
+        asked.placeId !== placeId ||
+        !isStoryShown(place, asked) ||
+        asked.nextQuestion === undefined
+      )
+        return undefined;
+      return {
+        kind: "story",
+        text: asked.nextQuestion,
+        lang: asked.lang,
+        askedBy: await nameOf(asked.authorPersonId),
+      };
+    };
     const views = [];
     for (const { story, author, addedByMe } of shown) {
+      const answers = relay ? await answerOf(story) : undefined;
       views.push({
         _id: story._id,
         body: story.body,
@@ -176,6 +305,9 @@ export const listForPlace = query({
         canRemove: addedByMe || canEditPlace(viewer, place),
         photos: await storyPhotoViews(ctx, story._id, addedByMe, photoRules),
         connectorAllowed: story.connectorAllowedAt !== undefined,
+        firstTeller: relay && story._id === firstId,
+        ...(relay && story.nextQuestion !== undefined ? { nextQuestion: story.nextQuestion } : {}),
+        ...(answers === undefined ? {} : { answers }),
       });
     }
     return views;
@@ -297,6 +429,39 @@ export const latest = query({
       });
     }
     return entries.sort((a, b) => b.addedAt - a.addedAt).slice(0, LATEST_LIMIT);
+  },
+});
+
+/**
+ * Takes the question off a story, leaving the story. The writer may, and so may whoever may remove
+ * the story (the place's editor or a steward). It is never refused for walk mode being off.
+ */
+export const clearQuestion = mutation({
+  args: { storyId: v.id("story") },
+  returns: v.null(),
+  handler: async (ctx, { storyId }) => {
+    const person = await requirePerson(ctx);
+    const story: Doc<"story"> | null = await ctx.db.get("story", storyId);
+    if (story === null) throw appError("not_found", "story not found");
+    if (story.authorPersonId !== person._id) {
+      const place = await loadReadablePlace(ctx, person, story.placeId);
+      if (!canEditPlace(person, place))
+        throw appError(
+          "forbidden",
+          "only the writer, the place's editor or a steward may remove a question",
+        );
+    }
+    if (story.nextQuestion === undefined) return null;
+    await ctx.db.patch("story", storyId, { nextQuestion: undefined });
+    await writeAudit(ctx, {
+      actorKind: "person",
+      actorPersonId: person._id,
+      action: "story.question_cleared",
+      targetType: "story",
+      targetId: storyId,
+      diff: { nextQuestion: false },
+    });
+    return null;
   },
 });
 

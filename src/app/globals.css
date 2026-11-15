@@ -158,3 +158,19 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* A slip's seal opening: the question settles into place. Plain motion, and the rule above switches
+   it off for anyone who asked for less. */
+@keyframes slip-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.slip-reveal {
+  animation: slip-reveal 600ms ease-out both;
+}
