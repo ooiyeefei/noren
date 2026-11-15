@@ -134,6 +134,23 @@ export const communityTables = {
     .index("by_code", ["code"])
     .index("by_status_and_receivedAt", ["status", "receivedAt"]),
 
+  /**
+   * A bug report from a visitor, no account needed. It holds what they wrote, the page they came
+   * from and their browser, never who is signed in. The contact detail is erased when it closes.
+   */
+  problemReport: defineTable({
+    details: v.string(),
+    /** A same-site path only, without query or fragment ("" when none was usable). */
+    pagePath: v.string(),
+    device: v.string(),
+    contact: v.string(),
+    locale: v.union(v.literal("ja"), v.literal("en")),
+    status: v.union(v.literal("open"), v.literal("done")),
+    receivedAt: v.number(),
+    closedAt: v.optional(v.number()),
+    closedBy: v.optional(v.id("person")),
+  }).index("by_status_and_receivedAt", ["status", "receivedAt"]),
+
   /** A fixed-window counter for the few public write paths (the takedown form); one row per key. */
   rateLimit: defineTable({
     key: v.string(),

@@ -5,6 +5,7 @@ import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
 import { useDocumentLinks } from "./document-links";
 import { useFeatureLinks } from "./features";
+import { ReportLink } from "./report-link";
 
 export function SiteFooter({
   locale,
@@ -80,6 +81,7 @@ export function SiteFooter({
           >
             {m.askRemoval}
           </Link>
+          <ReportLink locale={locale} label={m.reportProblem} />
           {documents && (
             <>
               <Link

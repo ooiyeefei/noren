@@ -31,6 +31,7 @@ vi.mock("@/lib/region/registry", async (original) => {
 });
 vi.mock("next/root-params", () => ({ lang: async () => state.locale }));
 vi.mock("next/navigation", () => ({
+  usePathname: () => null,
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
   },
@@ -498,6 +499,7 @@ describe("the footer links (T058)", () => {
         `/${locale}/about`,
         `/${locale}/notice`,
         `/${locale}/takedown`,
+        `/${locale}/report`,
         `/${locale}/terms`,
         `/${locale}/privacy`,
       ]);

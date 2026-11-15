@@ -100,6 +100,7 @@ afterEach(() => {
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
+  usePathname: () => null,
   useSearchParams: () => new URLSearchParams("add=1&step=3"),
 }));
 vi.mock("convex/react", () => ({ useQuery: vi.fn(), useMutation: vi.fn() }));

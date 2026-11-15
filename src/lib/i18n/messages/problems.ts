@@ -1,0 +1,38 @@
+import { defineMessages } from "@/lib/i18n";
+
+export const problemsMessages = defineMessages({
+  en: {
+    title: "Problem reports",
+    open: "Open",
+    done: "Done",
+    empty: "No reports.",
+    more: "Load more",
+    page: "Page",
+    noPage: "No page recorded",
+    device: "Browser and screen",
+    contact: "Contact (erased when done)",
+    received: "Received",
+    markDone: "Mark done",
+    closeHelp: "Marking done erases the contact.",
+    saved: "Marked done.",
+    loading: "Loading…",
+    status: "Show",
+  },
+  ja: {
+    title: "不具合の報告",
+    open: "未対応",
+    done: "対応済み",
+    empty: "報告はありません。",
+    more: "さらに表示",
+    page: "ページ",
+    noPage: "ページの記録なし",
+    device: "ブラウザと画面",
+    contact: "連絡先（対応済みにすると消去）",
+    received: "受信",
+    markDone: "対応済みにする",
+    closeHelp: "対応済みにすると、連絡先は消去されます。",
+    saved: "対応済みにしました。",
+    loading: "読み込み中…",
+    status: "表示",
+  },
+});

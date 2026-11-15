@@ -9,6 +9,7 @@ import type { PlaceKind, Visibility } from "@/lib/domain/constants";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { stewardMessages } from "@/lib/i18n/messages/steward";
 import { takedownsMessages } from "@/lib/i18n/messages/takedowns";
+import { problemsMessages } from "@/lib/i18n/messages/problems";
 import { storyFinderMessages } from "@/lib/i18n/messages/story-finder";
 import { candidateMessages } from "@/lib/i18n/messages/candidates";
 import { checkMessages } from "@/lib/i18n/messages/checks";
@@ -50,6 +51,7 @@ export function StewardNav({
     | "candidates"
     | "reports"
     | "takedowns"
+    | "problems"
     | "story-finder"
     | "collection"
     | "place-admin";
@@ -66,6 +68,7 @@ export function StewardNav({
     },
     { page: "reports", path: "/reports", label: messagesFor(checkMessages, locale).reportsTitle },
     { page: "takedowns", path: "/takedowns", label: messagesFor(takedownsMessages, locale).title },
+    { page: "problems", path: "/problems", label: messagesFor(problemsMessages, locale).title },
     {
       page: "story-finder",
       path: "/story-finder",
