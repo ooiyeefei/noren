@@ -49,7 +49,7 @@ vi.mock("@/lib/region", async (importOriginal) => {
     ...original,
     getActiveRegion: () => ({
       ...original.getRegion("nagasaki")!,
-      features: { connector: false, planner: active.planner, walk: false },
+      features: { connector: false, planner: active.planner, walk: false, thread: false },
     }),
   };
 });
@@ -76,6 +76,7 @@ describe("the shipped switch", () => {
       connector: true,
       planner: true,
       walk: true,
+      thread: false,
     });
   });
 });

@@ -11,8 +11,12 @@ export type StoryDraft = {
   body: string;
   /** A question for the next visitor; kept with the unsent draft. Absent in drafts kept before it existed. */
   question?: string;
+  /** The question is for another place nearby ("three doors"), not this one. */
+  carryOther?: boolean;
+  /** That place's id, once the writer has picked it. */
+  carryTo?: string;
 };
-export type StoryProblem = "url" | "note" | "title" | "body" | "question";
+export type StoryProblem = "url" | "note" | "title" | "body" | "question" | "carry";
 export type StoryArgs = {
   url: string;
   note: string;
@@ -30,6 +34,8 @@ export type WrittenStoryArgs = {
   connectorAllowed?: boolean;
   /** One line for the next visitor to ask here; only where the region has walk mode on. */
   nextQuestion?: string;
+  /** The place nearby to carry the question to ("three doors"); only with a question. */
+  nextQuestionFor?: string;
   /** What this story answers, from the link that brought the writer here. */
   answers?: AnswerRef;
 };
@@ -45,6 +51,8 @@ export type StoryRegion = {
   connectorTick?: boolean;
   /** Walk mode is on: the form offers a question for the next visitor and shows the one being answered. */
   relay?: boolean;
+  /** Walk mode and the thread switch are both on: the question may be carried to another place. */
+  thread?: boolean;
 };
 
 export const NOTE_LIMIT = 1000;
@@ -64,7 +72,7 @@ export function noteLanguage(note: string, region: StoryRegion): string {
 export function toWrittenArgs(
   draft: StoryDraft,
   region: StoryRegion,
-): { ok: true; args: WrittenStoryArgs } | { ok: false; problem: "body" | "question" } {
+): { ok: true; args: WrittenStoryArgs } | { ok: false; problem: "body" | "question" | "carry" } {
   const body = draft.body.trim();
   if (!body || body.length > BODY_LIMIT) return { ok: false, problem: "body" };
   const args: WrittenStoryArgs = { body, lang: noteLanguage(body, region) };
@@ -72,6 +80,11 @@ export function toWrittenArgs(
     const question = cleanQuestion(draft.question);
     if (!question.ok) return { ok: false, problem: "question" };
     args.nextQuestion = question.text;
+    // Carried elsewhere only when the writer chose "At another place nearby" and picked one.
+    if (region.thread && draft.carryOther) {
+      if (!draft.carryTo) return { ok: false, problem: "carry" };
+      args.nextQuestionFor = draft.carryTo;
+    }
   }
   return { ok: true, args };
 }

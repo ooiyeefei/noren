@@ -13,10 +13,15 @@ const modules = import.meta.glob("./**/*.ts");
 const realRegionConfig = region.regionConfig;
 
 /** As the region's file does once the planner is switched on (or left off). */
-function setSwitches(features: { connector: boolean; planner: boolean; walk: boolean }) {
+function setSwitches(features: {
+  connector: boolean;
+  planner: boolean;
+  walk: boolean;
+  thread?: boolean;
+}) {
   vi.spyOn(region, "regionConfig").mockImplementation((id: string) => ({
     ...realRegionConfig(id),
-    features,
+    features: { thread: false, ...features },
   }));
 }
 const plannerOn = () => setSwitches({ connector: false, planner: true, walk: false });

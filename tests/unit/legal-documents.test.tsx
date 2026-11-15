@@ -373,7 +373,7 @@ describe("the pages (T058)", () => {
     type Features = { connector?: boolean; planner?: boolean; walk?: boolean };
     const page = (locale: Locale, kind: "terms" | "privacy", features: Features = {}) => {
       const region = published((r) => {
-        r.features = { connector: false, planner: false, walk: false, ...features };
+        r.features = { connector: false, planner: false, walk: false, thread: false, ...features };
       });
       const html = render(
         <LegalDocumentView locale={locale} kind={kind} values={documentValues(region, locale)!} />,

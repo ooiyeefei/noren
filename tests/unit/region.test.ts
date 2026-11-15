@@ -158,7 +158,12 @@ describe("region policy", () => {
 
   it("ships the connector, the planner and walk mode switched on, with the notice that names them", () => {
     const { features } = loadRegions().get("nagasaki")!;
-    expect(features).toEqual({ connector: true, planner: true, walk: true });
+    expect(features).toEqual({
+      connector: true,
+      planner: true,
+      walk: true,
+      thread: false,
+    });
   });
 
   it("ships with accounts open and the documents version that names the connector, planner and walk mode", () => {

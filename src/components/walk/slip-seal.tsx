@@ -52,6 +52,7 @@ export function SealedQuestion({
   placePath,
   pin,
   door,
+  carriedFromName,
 }: {
   locale: Locale;
   m: WalkMessageTable;
@@ -60,6 +61,11 @@ export function SealedQuestion({
   placePath: string;
   pin: Pin;
   door: DoorProps;
+  /**
+   * For a question written at another place and carried here: that place's name in the page's
+   * language. The caller has the region's naming rules; unset, the asker alone is named.
+   */
+  carriedFromName?: string;
 }) {
   const { opened, onOpen, position, accuracyAllowanceMetres, locate } = door;
   const text = questionText(question, locale);
@@ -103,11 +109,15 @@ export function SealedQuestion({
             ? m.sealOpened
             : "";
   const asked =
-    question.kind === "story"
-      ? question.askedBy
-        ? format(m.askedByName, { name: question.askedBy })
-        : m.askedBySomeone
-      : m.askedStarter;
+    question.kind !== "story"
+      ? m.askedStarter
+      : carriedFromName
+        ? question.askedBy
+          ? format(m.askedByNameFrom, { name: question.askedBy, place: carriedFromName })
+          : format(m.askedBySomeoneFrom, { place: carriedFromName })
+        : question.askedBy
+          ? format(m.askedByName, { name: question.askedBy })
+          : m.askedBySomeone;
   const ref = answerRefOf(question);
   const newTab = { target: "_blank", rel: "noopener" } as const;
 

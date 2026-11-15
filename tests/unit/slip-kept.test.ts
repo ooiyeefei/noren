@@ -3,9 +3,12 @@ import {
   KEPT_KEY,
   KEPT_MAX,
   clearKept,
+  doorsOf,
+  isTied,
   keepSlip,
   loadKept,
   markOpened,
+  openDoor,
   saveKept,
   type KeptSlip,
   type StoragePort,
@@ -127,5 +130,149 @@ describe("the door", () => {
     expect(await knockAtDoor(async () => ({ kind: "denied" }), ORIGIN, 30)).toEqual({
       kind: "none",
     });
+  });
+});
+
+// Three doors: a kept slip remembers how many of its two further doors are open, in order.
+describe("kept slips and their further doors", () => {
+  const stop = (slug: string, via: "draw" | "carried" = "draw") => ({
+    via,
+    ...(via === "carried" ? { carried: { askedBy: "Kenji", from: { slug: "a", names: [] } } } : {}),
+    place: { slug, names: [], hasStory: false, pin: ORIGIN },
+    question: { kind: "starter" as const, key: "oldest" },
+  });
+  const threaded = (slug = "a"): Slip =>
+    ({ ...slip(slug), thread: [stop("two"), stop("three", "carried")] }) as Slip;
+  const key = { day: day(10), neighbourhoodId: "suwa" };
+  const opened = () => markOpened(keepSlip([], { ...key, slip: threaded() }), key);
+
+  it("start with none open, and a slip kept before the field existed reads as none", () => {
+    const list = keepSlip([], { ...key, slip: threaded() });
+    expect(list[0]).not.toHaveProperty("doors");
+    expect(doorsOf(list[0]!)).toBe(0);
+    const port = memory();
+    port.setItem(
+      KEPT_KEY,
+      JSON.stringify([{ day: day(9), neighbourhoodId: null, opened: true, slip: slip() }]),
+    );
+    const [old] = loadKept(port);
+    expect(old).toMatchObject({ opened: true });
+    expect(doorsOf(old!)).toBe(0);
+    expect(isTied(old!)).toBe(false);
+  });
+
+  it("open one after the other, and only once the slip's own seal is open", () => {
+    let list = keepSlip([], { ...key, slip: threaded() });
+    expect(openDoor(list, key, 1)).toEqual(list);
+    list = markOpened(list, key);
+    expect(openDoor(list, key, 2)).toEqual(list);
+    list = openDoor(list, key, 1);
+    expect(doorsOf(list[0]!)).toBe(1);
+    expect(isTied(list[0]!)).toBe(false);
+    expect(openDoor(list, key, 1)).toEqual(list);
+    list = openDoor(list, key, 2);
+    expect(doorsOf(list[0]!)).toBe(2);
+    expect(isTied(list[0]!)).toBe(true);
+    expect(openDoor(list, key, 3)).toEqual(list);
+  });
+
+  it("touch only the slip asked about", () => {
+    let list = keepSlip([], { ...key, slip: threaded() });
+    list = keepSlip(list, { day: day(10), neighbourhoodId: null, slip: threaded("b") });
+    list = markOpened(markOpened(list, key), { day: day(10), neighbourhoodId: null });
+    list = openDoor(list, key, 1);
+    expect(list.map((kept) => doorsOf(kept))).toEqual([0, 1]);
+  });
+
+  it("survive a round trip through storage", () => {
+    const port = memory();
+    let list = opened();
+    list = openDoor(openDoor(list, key, 1), key, 2);
+    saveKept(port, list);
+    const [back] = loadKept(port);
+    expect(doorsOf(back!)).toBe(2);
+    expect(back!.slip.thread).toHaveLength(2);
+  });
+
+  it("keep the larger count when the same day's slip is drawn again", () => {
+    let list = openDoor(opened(), key, 1);
+    list = keepSlip(list, { ...key, slip: threaded() });
+    expect(doorsOf(list[0]!)).toBe(1);
+    list = openDoor(list, key, 2);
+    list = keepSlip(list, { ...key, slip: threaded(), doors: 0 });
+    expect(doorsOf(list[0]!)).toBe(2);
+    list = keepSlip(list, { ...key, slip: threaded(), doors: 1 });
+    expect(doorsOf(list[0]!)).toBe(2);
+    list = keepSlip([], { ...key, slip: threaded(), doors: 2 });
+    expect(doorsOf(list[0]!)).toBe(2);
+  });
+
+  it("keep the doors that were opened when the day's thread changes, and take the new ones before any is open", () => {
+    const changed = (): Slip =>
+      ({ ...slip(), thread: [stop("other-two"), stop("other-three")] }) as Slip;
+    const slugs = (list: KeptSlip[]) => list[0]!.slip.thread!.map(({ place }) => place.slug);
+    // Nothing further is open yet: the newly drawn thread replaces the kept one.
+    let list = keepSlip(opened(), { ...key, slip: changed() });
+    expect(slugs(list)).toEqual(["other-two", "other-three"]);
+    // Door two is open: a later draw with other doors keeps the ones this person opened.
+    list = openDoor(opened(), key, 1);
+    list = keepSlip(list, { ...key, slip: changed() });
+    expect(slugs(list)).toEqual(["two", "three"]);
+    expect(doorsOf(list[0]!)).toBe(1);
+    // And when the day's slip comes without a thread (the switch went off), the kept doors stay.
+    list = keepSlip(list, { ...key, slip: slip() });
+    expect(slugs(list)).toEqual(["two", "three"]);
+  });
+
+  it("never count more doors than the slip has", () => {
+    const noThread = { ...slip(), thread: undefined } as Slip;
+    expect(doorsOf({ doors: 2, slip: noThread })).toBe(0);
+    expect(doorsOf({ doors: 9, slip: threaded() })).toBe(2);
+    expect(doorsOf({ doors: -3, slip: threaded() })).toBe(0);
+    expect(doorsOf({ doors: 1.9, slip: threaded() })).toBe(1);
+    expect(doorsOf({ doors: Number.NaN, slip: threaded() })).toBe(0);
+    expect(doorsOf({ doors: "2" as never, slip: threaded() })).toBe(0);
+  });
+
+  it("do not throw on what a damaged or edited store holds", () => {
+    const port = memory();
+    const bad = [
+      { day: day(10), neighbourhoodId: null, opened: true, doors: "lots", slip: slip("a") },
+      {
+        day: day(9),
+        neighbourhoodId: null,
+        opened: true,
+        doors: 7,
+        slip: { ...slip("b"), thread: "no" },
+      },
+      {
+        day: day(8),
+        neighbourhoodId: null,
+        opened: true,
+        doors: 2,
+        slip: { ...slip("c"), thread: [{ via: "draw" }, null] },
+      },
+      {
+        day: day(7),
+        neighbourhoodId: null,
+        opened: true,
+        doors: 2,
+        slip: { ...slip("d"), thread: [stop("x"), stop("y")] },
+      },
+    ];
+    port.setItem(KEPT_KEY, JSON.stringify(bad));
+    const list = loadKept(port);
+    expect(list).toHaveLength(4);
+    expect(list.map((kept) => doorsOf(kept))).toEqual([0, 0, 0, 2]);
+    expect(list.map((kept) => kept.slip.thread?.length)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      2,
+    ]);
+    expect(() => openDoor(list, key, Number.NaN)).not.toThrow();
+    expect(() => openDoor([], key, 1)).not.toThrow();
+    expect(openDoor(list, key, 1.5)).toEqual(list);
+    expect(loadKept(broken)).toEqual([]);
   });
 });

@@ -10,6 +10,7 @@ import { DETERMINISTIC_COMPOSER } from "@/lib/claims/compose";
 import type { PlaceKind, Visibility } from "@/lib/domain/constants";
 import { createOpenFreeMapStyle } from "@/lib/geo";
 import { outboundPath } from "@/lib/http/outbound";
+import { threadOn } from "@/lib/slip/carry";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { publicMessages } from "@/lib/i18n/messages/public";
 import type { PublicPhotoProps } from "@/lib/photos/settings";
@@ -40,6 +41,8 @@ export type PublicRegionProps = {
   connectorTick: boolean;
   /** Walk mode is on, so stories may carry a question for the next visitor. */
   relay?: boolean;
+  /** Walk mode and the thread switch are both on ("three doors"): a question may be carried to another place. */
+  thread?: boolean;
   /** Set only on the place page, while the region has photos on and every setting is in place. */
   photos?: PublicPhotoProps;
 };
@@ -99,13 +102,17 @@ export type WrittenStoryLike = {
   photos?: readonly StoryPhotoLike[];
   /** The question the writer left for the next visitor (walk mode). */
   nextQuestion?: string;
+  /** The place the question is carried to ("three doors"); then it is not for the next visitor here. */
+  nextQuestionFor?: PlaceRefLike;
   /** What this story answers, while that question still shows. */
   answers?: StoryAnswerLike;
   /** The earliest story here. */
   firstTeller?: boolean;
 };
+/** A place named for a link: its address and names. */
+export type PlaceRefLike = { slug: string; names: readonly NameLike[] };
 export type StoryAnswerLike =
-  | { kind: "story"; text: string; lang: string; askedBy: string }
+  | { kind: "story"; text: string; lang: string; askedBy: string; from?: PlaceRefLike }
   | { kind: "starter"; key: string };
 /** One of the newest stories in the region, for the home page (FR-033). */
 export type LatestStoryLike = {
@@ -162,6 +169,7 @@ export function publicRegionProps(region: RegionConfig, locale: Locale): PublicR
     shareToNoren: region.sharing.norenAccount,
     connectorTick: aiReadingOffered(region.features),
     ...(region.features.walk ? { relay: true } : {}),
+    ...(threadOn(region.features) ? { thread: true } : {}),
   };
 }
 

@@ -22,6 +22,8 @@ import {
   type Rng,
 } from "../src/lib/draw";
 import { distanceMetres } from "../src/lib/overture/dedupe";
+import { threadOn } from "../src/lib/slip/carry";
+import { THREAD_STOPS, chooseNextStop, threadSeed } from "../src/lib/slip/thread";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { type MutationCtx } from "./_generated/server";
@@ -31,7 +33,13 @@ import { internalMutation, mutation } from "./lib/gate";
 import { consumeRateLimit } from "./lib/rateLimit";
 import { nameView, publicPool, type Pin, type PoolPlace } from "./lib/publicPool";
 import { regionConfig, regionPolicy } from "./lib/region";
-import { openQuestionFor, slipQuestion, type SlipQuestion } from "./lib/relay";
+import {
+  openQuestionFor,
+  placeRef,
+  shownStoriesAt,
+  slipQuestion,
+  type SlipQuestion,
+} from "./lib/relay";
 
 // The draws behind the connector's suggest_walk and draw_omikuji tools.
 //
@@ -120,6 +128,24 @@ const omikujiResult = v.union(
   }),
 );
 
+/** A slip's place: the pin is Noren's public map pin; the phone works out the distance and direction. */
+const slipPlace = pickedPlace.extend({ pin: v.object({ lat: v.number(), lng: v.number() }) });
+
+/**
+ * One further door of a slip's thread ("three doors"): a place near the one before, and the question
+ * sealed in it. `carried` says whose question led here, when a question carried to this place did.
+ * It is drawn by code from public data only; no viewer and no position are involved.
+ */
+const threadStop = v.union(
+  v.object({
+    via: v.literal("carried"),
+    carried: v.object({ askedBy: v.string(), from: placeRef }),
+    place: slipPlace,
+    question: slipQuestion,
+  }),
+  v.object({ via: v.literal("draw"), place: slipPlace, question: slipQuestion }),
+);
+
 /** One day's slips for walk mode: a slip per neighbourhood, and one for the whole region. */
 const todaysSlips = v.object({
   /** The date in the region's time that the slips belong to, YYYY-MM-DD. */
@@ -128,13 +154,18 @@ const todaysSlips = v.object({
     v.object({
       /** Unset for the slip drawn from the whole region. */
       neighbourhoodId: v.optional(v.string()),
-      /** The pin is Noren's public map pin; the phone works out the distance and direction. */
-      place: pickedPlace.extend({ pin: v.object({ lat: v.number(), lng: v.number() }) }),
+      place: slipPlace,
       /**
        * The question sealed in the slip, downloaded with it for every neighbourhood and opened on
        * the phone. Only while walk mode is on. Not part of the connector's tools.
        */
       question: v.optional(slipQuestion),
+      /**
+       * Exactly two further doors, in order, each shown on the phone only after the one before is
+       * open. Only while walk mode and the thread switch are both on, and only when two further
+       * stops could be found. Not part of the connector's tools.
+       */
+      thread: v.optional(v.array(threadStop)),
     }),
   ),
 });
@@ -450,26 +481,85 @@ export async function runOmikujiToday(
   await limitDraws(ctx, now);
   const day = localDay(now, region.collection.utcOffsetHours);
   const pool = await publicPool(ctx, args.regionId);
+  const thread = threadOn(region.features);
   const slips: TodaysSlips["slips"] = [];
-  // The same place may be the slip of two neighbourhoods; its question is read once.
+  // The same place may be the slip of two neighbourhoods, or a door of several threads; its stories
+  // are read once and its question is worked out once.
+  const stories = new Map<Id<"place">, Doc<"story">[]>();
+  const storiesAt = async (placeId: Id<"place">) => {
+    let found = stories.get(placeId);
+    if (found === undefined) {
+      found = await shownStoriesAt(ctx, placeId);
+      stories.set(placeId, found);
+    }
+    return found;
+  };
   const questions = new Map<string, SlipQuestion>();
+  const questionOf = async (place: PoolPlace) => {
+    let question = questions.get(place.id);
+    if (question === undefined) {
+      question = await openQuestionFor(ctx, place, { thread, stories: await storiesAt(place.id) });
+      questions.set(place.id, question);
+    }
+    return question;
+  };
+  /** The two further doors after `first`, or undefined when two cannot be found. */
+  const threadAfter = async (first: PoolPlace, slipSeed: string) => {
+    const stops: NonNullable<TodaysSlips["slips"][number]["thread"]> = [];
+    const inThread = [first.id as string];
+    let from = first;
+    for (let stop = 1; stop <= THREAD_STOPS; stop++) {
+      const carried = (await storiesAt(from.id))
+        .filter((story) => story.nextQuestion !== undefined && story.nextQuestionFor !== undefined)
+        .map((story) => ({
+          storyId: story._id as string,
+          addedAt: story._creationTime,
+          toPlaceId: story.nextQuestionFor as string,
+        }));
+      const next = chooseNextStop({
+        from,
+        pool,
+        inThread,
+        carried,
+        seed: threadSeed(slipSeed, stop),
+      });
+      if (next === undefined) return undefined;
+      const place = { ...picked(next.place), pin: next.place.pin };
+      const question = await questionOf(next.place);
+      if (next.via === "carried") {
+        const story = (await storiesAt(from.id)).find(({ _id }) => _id === next.storyId)!;
+        const author = await ctx.db.get("person", story.authorPersonId);
+        stops.push({
+          via: "carried",
+          carried: {
+            askedBy: author?.displayName ?? "",
+            from: { slug: from.slug, names: from.names },
+          },
+          place,
+          question,
+        });
+      } else stops.push({ via: "draw", place, question });
+      inThread.push(next.place.id);
+      from = next.place;
+    }
+    return stops;
+  };
   for (const neighbourhoodId of [...(region.neighbourhoods ?? []).map(({ id }) => id), undefined]) {
+    const slipSeed = omikujiSeed(args.regionId, day, neighbourhoodId);
     const chosen = chooseOmikuji(
       pool.filter(
         (place) => neighbourhoodId === undefined || place.neighbourhoodId === neighbourhoodId,
       ),
-      omikujiSeed(args.regionId, day, neighbourhoodId),
+      slipSeed,
     );
     if (chosen === undefined) continue;
-    let question = questions.get(chosen.id);
-    if (region.features.walk && question === undefined) {
-      question = await openQuestionFor(ctx, chosen);
-      questions.set(chosen.id, question);
-    }
+    const question = region.features.walk ? await questionOf(chosen) : undefined;
+    const further = thread ? await threadAfter(chosen, slipSeed) : undefined;
     slips.push({
       ...(neighbourhoodId === undefined ? {} : { neighbourhoodId }),
       place: { ...picked(chosen), pin: chosen.pin },
       ...(question === undefined ? {} : { question }),
+      ...(further === undefined ? {} : { thread: further }),
     });
   }
   return { day, slips };

@@ -55,6 +55,13 @@ export const communityTables = {
      */
     nextQuestion: v.optional(v.string()),
     /**
+     * The place the question is carried to ("three doors"): another place nearby, in the same region,
+     * that a signed-out visitor can see. Unset means the question is for the next visitor of this
+     * same place. Only written while features.thread is on; while it is off, a question carried
+     * elsewhere is nobody's open question (a clean rollback). Always with `nextQuestion`.
+     */
+    nextQuestionFor: v.optional(v.id("place")),
+    /**
      * What this story answers: another story's question at the same place, or a starter question
      * (src/lib/slip/starter-questions.ts). Absent for stories that answer nothing.
      */
@@ -67,6 +74,7 @@ export const communityTables = {
   })
     .index("by_placeId_and_status", ["placeId", "status"])
     .index("by_status", ["status"])
+    .index("by_nextQuestionFor_and_status", ["nextQuestionFor", "status"])
     .index("by_status_and_shareConsentAt", ["status", "shareConsentAt"])
     .index("by_authorPersonId", ["authorPersonId"]),
 
