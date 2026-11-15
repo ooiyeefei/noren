@@ -489,7 +489,7 @@ export const legalDocuments: Readonly<
           paragraphs: [
             "アカウントと共有したものは、あなたか運営担当者が削除するまで、またはアカウントを削除するまで保存します。",
             "削除の依頼に書いた連絡先は、依頼を閉じるときに消します。Vercel と Clerk の記録は、それぞれのサービスが定める期間残ります。",
-            "不具合の報告には、あなたが書いた内容、そのとき見ていたページ、ブラウザの名前と画面の大きさが保存されます。アカウントとは結び付けません。連絡先を書いた場合は、報告の対応が終わった時点で消去します。",
+            "不具合の報告には、あなたが書いた内容、そのとき見ていたページ、ブラウザの名前と画面の大きさが保存されます。アカウントとは結び付けません。連絡先を書いた場合は、報告の対応が終わった時点で消去します。連絡先を除いた写しを、Noren の担当者だけが読める GitHub の非公開リポジトリに保存し、GitHub が担当者にメールで知らせます。",
             "音声認識のために送った録音は、「AI とあなたの言葉」に書いたとおり削除します。Noren の公式 SNS アカウントの投稿は、Noren が削除するまで残ります。",
           ],
         },
@@ -930,7 +930,7 @@ export const legalDocuments: Readonly<
           paragraphs: [
             "Your account and what you share stay until you or a steward removes them, or you delete the account.",
             "A contact detail written on a removal request is erased when the request closes. Logs at Vercel and Clerk last as long as each service sets.",
-            "A problem report holds what you wrote, the page you were on, and your browser's name and screen size. It is not linked to your account. A contact detail written on it is erased when the report closes.",
+            "A problem report holds what you wrote, the page you were on, and your browser's name and screen size. It is not linked to your account. A contact detail written on it is erased when the report closes. A copy without the contact detail is filed in a private GitHub repository that only the Noren team can read, and GitHub emails the team about it.",
             "A recording you send for speech recognition is deleted as described under “AI and your words”. A post on Noren's own social media accounts stays until Noren deletes it.",
           ],
         },

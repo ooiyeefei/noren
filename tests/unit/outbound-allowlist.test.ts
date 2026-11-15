@@ -113,6 +113,8 @@ describe("server fetch allowlist", () => {
       .map((file) => relative(root, file))
       .sort();
     expect(callers).toEqual([
+      // Files a problem report in the team's private GitHub repository: api.github.com only.
+      "convex/problemReportActions.ts",
       "src/lib/adapters/url.ts",
       "src/lib/geo/maps-link.ts",
       "src/lib/geo/nominatim.ts",

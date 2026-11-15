@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiFromModules } from "convex/server";
 import { addPerson, errorCode, newBackend } from "../tests/convex/fixtures";
-import { api as generatedApi } from "./_generated/api";
+import { api as generatedApi, internal } from "./_generated/api";
 
 const modules = import.meta.glob("./**/*.ts");
 const api = generatedApi as typeof generatedApi &
@@ -14,6 +14,15 @@ const input = {
   locale: "en" as const,
 };
 const page = { numItems: 25, cursor: null };
+
+// submit schedules the GitHub step. With fake timers it never runs on its own, so each test below
+// decides when that step runs and nothing reaches the network by accident.
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 const rows = (b: ReturnType<typeof newBackend>) =>
   b.run((ctx) => ctx.db.query("problemReport").collect());
 
@@ -159,10 +168,7 @@ describe("problemReport.list and close", () => {
     const result = await b
       .as("steward")
       .query(api.problemReport.list, { status: "open", paginationOpts: page });
-    expect(result.page.map((r) => r.details)).toEqual([
-      "A newer report here",
-      input.details,
-    ]);
+    expect(result.page.map((r) => r.details)).toEqual(["A newer report here", input.details]);
   });
 
   it("close marks done, erases the contact and audits without the words", async () => {
@@ -192,5 +198,90 @@ describe("problemReport.list and close", () => {
     expect(
       await errorCode(b.as("steward").mutation(api.problemReport.close, { reportId: id })),
     ).toBe("conflict");
+  });
+});
+
+describe("problemReportActions.fileIssue", () => {
+  const actions = internal as typeof internal &
+    ApiFromModules<{ problemReportActions: typeof import("./problemReportActions") }>;
+  const settings = { REPORTS_GITHUB_REPO: "team/reports", REPORTS_GITHUB_TOKEN: "test-token" };
+
+  async function withIssueApi<T>(
+    env: Record<string, string>,
+    respond: () => Response,
+    run: (calls: { url: string; init: RequestInit }[]) => Promise<T>,
+  ): Promise<T> {
+    const calls: { url: string; init: RequestInit }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      if (!String(url).startsWith("https://api.github.com/"))
+        throw new Error(`unexpected ${String(url).slice(0, 60)}`);
+      calls.push({ url, init });
+      return respond();
+    });
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    try {
+      return await run(calls);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  }
+
+  async function stored(b: ReturnType<typeof newBackend>) {
+    await b.t.mutation(api.problemReport.submit, { ...input, contact: "me@example.test" });
+    const [report] = await rows(b);
+    return report!;
+  }
+
+  it("submit queues the GitHub step for the new report", async () => {
+    const b = newBackend(modules);
+    const report = await stored(b);
+    const queued = await b.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+    expect(queued).toHaveLength(1);
+    expect(queued[0]!.name).toContain("problemReportActions");
+    expect(queued[0]!.args).toEqual([{ reportId: report._id }]);
+  });
+
+  it("files the report without its contact and remembers the issue number", async () => {
+    const b = newBackend(modules);
+    const report = await stored(b);
+    await withIssueApi(
+      settings,
+      () => Response.json({ number: 12 }, { status: 201 }),
+      async (calls) => {
+        await b.t.action(actions.problemReportActions.fileIssue, { reportId: report._id });
+        expect(calls).toHaveLength(1);
+        expect(calls[0]!.url).toBe("https://api.github.com/repos/team/reports/issues");
+        const sent = String(calls[0]!.init.body);
+        expect(sent).toContain(input.details);
+        expect(sent).not.toContain("me@example.test");
+        // A second run finds the number and files nothing more.
+        await b.t.action(actions.problemReportActions.fileIssue, { reportId: report._id });
+        expect(calls).toHaveLength(1);
+      },
+    );
+    expect((await rows(b))[0]!.issueNumber).toBe(12);
+  });
+
+  it("sends nothing without the settings, and a refusal leaves the report as it was", async () => {
+    const b = newBackend(modules);
+    const report = await stored(b);
+    await withIssueApi(
+      {},
+      () => Response.json({}),
+      async (calls) => {
+        await b.t.action(actions.problemReportActions.fileIssue, { reportId: report._id });
+        expect(calls).toHaveLength(0);
+      },
+    );
+    await withIssueApi(
+      settings,
+      () => new Response("no", { status: 403 }),
+      async (calls) => {
+        await b.t.action(actions.problemReportActions.fileIssue, { reportId: report._id });
+        expect(calls).toHaveLength(1);
+      },
+    );
+    expect((await rows(b))[0]!.issueNumber).toBeUndefined();
   });
 });

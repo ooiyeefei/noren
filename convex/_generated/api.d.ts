@@ -63,6 +63,7 @@ import type * as places from "../places.js";
 import type * as planner from "../planner.js";
 import type * as plannerActions from "../plannerActions.js";
 import type * as problemReport from "../problemReport.js";
+import type * as problemReportActions from "../problemReportActions.js";
 import type * as seed from "../seed.js";
 import type * as sourceChecks from "../sourceChecks.js";
 import type * as sources from "../sources.js";
@@ -151,6 +152,7 @@ declare const fullApi: ApiFromModules<{
   planner: typeof planner;
   plannerActions: typeof plannerActions;
   problemReport: typeof problemReport;
+  problemReportActions: typeof problemReportActions;
   seed: typeof seed;
   sourceChecks: typeof sourceChecks;
   sources: typeof sources;
