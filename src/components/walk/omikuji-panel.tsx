@@ -1,12 +1,22 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { UnconfirmedBadge } from "@/components/badges";
 import { neighbourhoodName } from "@/components/explore/mission-bar";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { labelForCategory } from "@/components/public/category";
 import { placeHeading, type PublicRegionProps } from "@/components/public/mapping";
 import { readLocation } from "@/lib/collection/location";
+import {
+  browserStorage,
+  clearKept,
+  keepSlip,
+  loadKept,
+  markOpened,
+  sameSlip,
+  saveKept,
+  type KeptSlip,
+} from "@/lib/slip/kept";
 import { dayToTime } from "@/lib/collection/reach";
 import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
@@ -14,7 +24,8 @@ import { walkMessages, type WalkMessageTable } from "@/lib/i18n/messages/walk";
 import type { Compass } from "@/lib/walk/direction";
 import { SLIP_HERE_METRES } from "@/lib/walk/constants";
 import { legFrom, nearestNeighbourhood, slipFor, type NeighbourhoodLike } from "@/lib/walk/omikuji";
-import type { Fix, Pin, TodaysSlips, WalkData } from "@/lib/walk/types";
+import type { Fix, Pin, Slip, TodaysSlips, WalkData } from "@/lib/walk/types";
+import { SealedQuestion, questionText, type DoorProps } from "./slip-seal";
 
 const HOUR_MS = 60 * 60 * 1000;
 const COMPASS_WORD = {
@@ -56,6 +67,7 @@ export function OmikujiPanel({
   planner,
   data,
   position,
+  accuracyAllowanceMetres,
 }: {
   locale: Locale;
   region: PublicRegionProps;
@@ -65,6 +77,8 @@ export function OmikujiPanel({
   data: WalkData;
   /** The walk's latest reading, if a walk is on. */
   position: Fix | null;
+  /** The collection's allowance for the phone's own error, for opening a slip's seal at the door. */
+  accuracyAllowanceMetres: number;
 }) {
   const m = messagesFor(walkMessages, locale);
   const write = messagesFor(addStoryMessages, locale).write;
@@ -74,6 +88,29 @@ export function OmikujiPanel({
   const [drawn, setDrawn] = useState<Drawn | null>(null);
   const [step, setStep] = useState<"idle" | "locating" | "drawing" | "denied">("idle");
   const [error, setError] = useState<unknown>(null);
+  // Kept slips live on this device only. The list is also held here, so the page works when storage
+  // refuses; keptRef is the latest of it for handlers that run after a render.
+  const [kept, setKept] = useState<KeptSlip[]>([]);
+  const keptRef = useRef<KeptSlip[]>([]);
+  const [viewing, setViewing] = useState<Pick<KeptSlip, "day" | "neighbourhoodId"> | null>(null);
+  const [cleared, setCleared] = useState(false);
+  useEffect(() => {
+    const stored = loadKept(browserStorage());
+    keptRef.current = stored;
+    // Storage can only be read in the browser, after the server's markup has been matched.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setKept(stored);
+  }, []);
+  const update = useCallback((change: (list: KeptSlip[]) => KeptSlip[]) => {
+    const next = change(keptRef.current);
+    keptRef.current = next;
+    setKept(next);
+    saveKept(browserStorage(), next);
+  }, []);
+  const locate = useCallback(
+    () => readLocation(typeof navigator === "undefined" ? undefined : navigator.geolocation),
+    [],
+  );
   // On a walk the nearest neighbourhood is the natural pick; otherwise the first one on the list.
   const where = choice ?? (position ? NEAR : (neighbourhoods[0]?.id ?? ALL));
 
@@ -105,6 +142,13 @@ export function OmikujiPanel({
         setSlips(today);
       }
       setDrawn({ neighbourhoodId, origin });
+      setViewing(null);
+      setCleared(false);
+      const drawnSlip = slipFor(today.slips, neighbourhoodId);
+      if (drawnSlip)
+        update((list) =>
+          keepSlip(list, { day: today.slips.day, neighbourhoodId, slip: drawnSlip }),
+        );
       setStep("idle");
     } catch (caught) {
       setError(caught);
@@ -113,12 +157,35 @@ export function OmikujiPanel({
   }
 
   const slip = drawn && slips ? slipFor(slips.slips, drawn.neighbourhoodId) : undefined;
-  const drawnNeighbourhood = drawn
-    ? neighbourhoods.find(({ id }) => id === drawn.neighbourhoodId)
+  const nameOfNeighbourhood = (id: string | null) => {
+    const found = neighbourhoods.find((candidate) => candidate.id === id);
+    return found ? neighbourhoodName(found.names, locale) : format(m.allOf, { region: regionName });
+  };
+  const dayText = (day: string) =>
+    new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(
+      dayToTime(day),
+    );
+  // The slip on show: the one just drawn, or a kept one the person chose to look at again.
+  const current =
+    viewing !== null
+      ? kept.find((entry) => sameSlip(entry, viewing))
+      : drawn && slips && slip
+        ? {
+            day: slips.slips.day,
+            neighbourhoodId: drawn.neighbourhoodId,
+            slip,
+            opened:
+              kept.find((entry) =>
+                sameSlip(entry, {
+                  day: slips.slips.day,
+                  neighbourhoodId: drawn.neighbourhoodId,
+                }),
+              )?.opened ?? false,
+          }
+        : undefined;
+  const drawnNeighbourhood = current
+    ? neighbourhoods.find(({ id }) => id === current.neighbourhoodId)
     : undefined;
-  const whereName = drawnNeighbourhood
-    ? neighbourhoodName(drawnNeighbourhood.names, locale)
-    : format(m.allOf, { region: regionName });
   const busy = step === "locating" || step === "drawing";
   return (
     <section
@@ -164,37 +231,122 @@ export function OmikujiPanel({
       </div>
       {error !== null && <ErrorMessage error={error} locale={locale} />}
 
-      {drawn && slips && step !== "drawing" && (
-        <div
-          data-omikuji-slip={slip?.place.slug ?? "none"}
-          className="space-y-3 border-t border-line pt-4"
-        >
-          {slip === undefined ? (
-            <p>{format(m.slipNoPlace, { where: whereName })}</p>
-          ) : (
-            <SlipCard
-              locale={locale}
-              region={region}
-              m={m}
-              write={write}
-              planner={planner}
-              slip={slip}
-              heading={format(m.slipFor, {
-                where: whereName,
-                day: new Intl.DateTimeFormat(locale, {
-                  dateStyle: "medium",
-                  timeZone: "UTC",
-                }).format(dayToTime(slips.slips.day)),
-              })}
-              from={position ?? drawn.origin}
-              centre={drawnNeighbourhood}
-            />
-          )}
+      {viewing === null && drawn && slips && slip === undefined && step !== "drawing" && (
+        <div data-omikuji-slip="none" className="space-y-3 border-t border-line pt-4">
+          <p>{format(m.slipNoPlace, { where: nameOfNeighbourhood(drawn.neighbourhoodId) })}</p>
         </div>
       )}
+      {current && step !== "drawing" && (
+        <div
+          data-omikuji-slip={current.slip.place.slug}
+          className="space-y-3 border-t border-line pt-4"
+        >
+          <SlipCard
+            key={`${current.day}|${current.neighbourhoodId ?? ""}`}
+            locale={locale}
+            region={region}
+            m={m}
+            write={write}
+            planner={planner}
+            slip={current.slip}
+            heading={format(m.slipFor, {
+              where: nameOfNeighbourhood(current.neighbourhoodId),
+              day: dayText(current.day),
+            })}
+            from={position ?? (viewing === null ? (drawn?.origin ?? null) : null)}
+            centre={drawnNeighbourhood}
+            {...(slips?.slips.day === current.day ? {} : { dayText: dayText(current.day) })}
+            door={{
+              opened: current.opened,
+              onOpen: () =>
+                update((list) =>
+                  markOpened(
+                    keepSlip(list, {
+                      day: current.day,
+                      neighbourhoodId: current.neighbourhoodId,
+                      slip: current.slip,
+                    }),
+                    current,
+                  ),
+                ),
+              position,
+              accuracyAllowanceMetres,
+              locate,
+            }}
+          />
+        </div>
+      )}
+      {kept.length > 0 && (
+        <div data-kept-slips="" className="space-y-3 border-t border-line pt-4">
+          <h3 className="font-sans text-[20px] font-bold">{m.keptTitle}</h3>
+          <p className="text-[15px] text-muted-foreground">{m.keptNote}</p>
+          <ul className="space-y-3">
+            {kept.map((entry) => {
+              const name = placeHeading(entry.slip.place.names, locale, region).primary;
+              const showing = current !== undefined && sameSlip(current, entry);
+              return (
+                <li
+                  key={`${entry.day}|${entry.neighbourhoodId ?? ""}`}
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
+                >
+                  <span className="min-w-0 [overflow-wrap:anywhere]">
+                    <span lang={name.lang} className="font-bold">
+                      {name.text}
+                    </span>
+                    <span className="block text-[15px] text-muted-foreground">
+                      {dayText(entry.day)}
+                      {" · "}
+                      {entry.opened ? m.keptOpened : m.keptStillSealed}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    data-kept-show=""
+                    aria-pressed={showing}
+                    className="inline-flex min-h-11 items-center font-bold text-ai underline"
+                    onClick={() => {
+                      setViewing({ day: entry.day, neighbourhoodId: entry.neighbourhoodId });
+                      setCleared(false);
+                    }}
+                  >
+                    {showing ? m.keptShowing : m.keptShow}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <button
+            type="button"
+            data-kept-clear=""
+            className="inline-flex min-h-11 items-center font-bold text-beni underline"
+            onClick={() => {
+              clearKept(browserStorage());
+              keptRef.current = [];
+              setKept([]);
+              setViewing(null);
+              setDrawn(null);
+              setCleared(true);
+            }}
+          >
+            {m.keptClear}
+          </button>
+        </div>
+      )}
+      <div role="status" aria-live="polite" className="empty:hidden">
+        {cleared ? m.keptCleared : null}
+      </div>
     </section>
   );
 }
+
+/** A seal with nothing to wait for: shown open, and opening it again does nothing. */
+const OPEN_DOOR: DoorProps = {
+  opened: true,
+  onOpen: () => undefined,
+  position: null,
+  accuracyAllowanceMetres: 0,
+  locate: () => Promise.resolve({ kind: "unsupported" }),
+};
 
 export function SlipCard({
   locale,
@@ -206,16 +358,25 @@ export function SlipCard({
   heading,
   from,
   centre,
+  door,
+  dayText,
 }: {
   locale: Locale;
   region: PublicRegionProps;
   m: WalkMessageTable;
   write: string;
   planner: boolean;
-  slip: NonNullable<ReturnType<typeof slipFor>>;
+  slip: Slip;
   heading: string;
   from: Pin | null;
   centre: NeighbourhoodLike | undefined;
+  /**
+   * How the seal on the slip's question opens. Without it a question is shown open (a page that
+   * does not keep slips).
+   */
+  door?: DoorProps;
+  /** Set for a slip from an earlier day: its date, for the label. Unset is today's. */
+  dayText?: string;
 }) {
   const { place } = slip;
   const name = placeHeading(place.names, locale, region);
@@ -225,8 +386,24 @@ export function SlipCard({
   const leg = origin ? legFrom(origin, place.pin) : null;
   const direction = leg ? m[COMPASS_WORD[leg.compass]] : "";
   const newTab = { target: "_blank", rel: "noopener" } as const;
+  const { question } = slip;
+  const sealed = question !== undefined && questionText(question, locale) !== undefined;
   return (
     <>
+      {question !== undefined && (
+        <p
+          data-slip-label=""
+          className={`inline-block rounded-full border px-3 text-[15px] font-bold ${
+            place.hasStory ? "border-line text-kon" : "border-kasutera bg-kasutera/30 text-kon"
+          }`}
+        >
+          {place.hasStory
+            ? dayText === undefined
+              ? m.slipToday
+              : format(m.slipOfDay, { day: dayText })
+            : m.greatFortune}
+        </p>
+      )}
       <p className="text-[15px] font-bold text-muted-foreground">{heading}</p>
       <h3
         lang={name.primary.lang}
@@ -259,11 +436,25 @@ export function SlipCard({
               })}
         </p>
       )}
+      {sealed && (
+        <SealedQuestion
+          locale={locale}
+          m={m}
+          question={question}
+          placePath={path}
+          pin={place.pin}
+          door={door ?? { ...OPEN_DOOR, opened: true }}
+        />
+      )}
       {place.hasStory ? (
         <a className={LINK} href={`${path}?tab=stories`} {...newTab}>
           {m.readStories}
           <span className="sr-only"> ({m.newTab})</span>
         </a>
+      ) : sealed ? (
+        <p data-great-fortune-line="" className="font-bold">
+          {m.greatFortuneLine}
+        </p>
       ) : (
         <div className="space-y-2">
           <p className="font-bold">{format(m.firstStory, { name: name.primary.text })}</p>

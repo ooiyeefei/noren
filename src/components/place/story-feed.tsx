@@ -9,6 +9,7 @@ import { ShareStoryConnected } from "@/components/share/share-story";
 import type { StoryFeedEntry } from "@/components/public/mapping";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
+import { starterText } from "@/lib/slip/question";
 import { StoryPhotos } from "./story-photos";
 
 type Removable = { kind: StoryFeedEntry["kind"]; id: string };
@@ -16,6 +17,8 @@ type Removable = { kind: StoryFeedEntry["kind"]; id: string };
 export type StoryFeedActions = {
   remove(entry: Removable): Promise<unknown>;
   removePhoto?(photoId: string): Promise<unknown>;
+  /** Takes the question off a story (walk mode); offered to those who may remove the story. */
+  clearQuestion?(storyId: string): Promise<unknown>;
 };
 
 const LINK = "inline-flex min-h-11 items-center underline";
@@ -62,6 +65,7 @@ export function StoryFeed({
   const [confirming, setConfirming] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [removed, setRemoved] = useState(false);
+  const [cleared, setCleared] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const busy = useRef(false);
   async function remove(entry: Removable, send: StoryFeedActions) {
@@ -80,6 +84,30 @@ export function StoryFeed({
       setPending(false);
     }
   }
+  async function clearQuestion(storyId: string, send: StoryFeedActions) {
+    if (busy.current || !send.clearQuestion) return;
+    busy.current = true;
+    setPending(true);
+    setError(null);
+    try {
+      await send.clearQuestion(storyId);
+      setCleared(true);
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  }
+  const quoted = (text: string, lang: string) => (
+    <>
+      {ui.quoteOpen}
+      <span lang={lang} className="[overflow-wrap:anywhere]">
+        {text}
+      </span>
+      {ui.quoteClose}
+    </>
+  );
   const removeControl = (entry: Removable, canRemove: boolean) => {
     if (!canRemove || !actions) return null;
     if (confirming !== entry.id)
@@ -90,6 +118,7 @@ export function StoryFeed({
           onClick={() => {
             setConfirming(entry.id);
             setRemoved(false);
+            setCleared(false);
             setError(null);
           }}
         >
@@ -128,6 +157,14 @@ export function StoryFeed({
                     <li key={moment._id} className="space-y-2 pt-3 first:pt-0">
                       <p className="flex flex-wrap items-center gap-x-3 text-[15px] text-muted-foreground">
                         {dated(locale, moment.addedAt)}
+                        {moment.firstTeller && (
+                          <span
+                            data-first-teller=""
+                            className="rounded-full border border-kon/40 px-2 text-[14px] font-bold text-kon"
+                          >
+                            {ui.firstTeller}
+                          </span>
+                        )}
                         {moment.isMock && <DemoBadge locale={locale} />}
                         {removeControl({ kind: "written", id: moment._id }, moment.canRemove)}
                       </p>
@@ -137,6 +174,17 @@ export function StoryFeed({
                       >
                         {moment.body}
                       </p>
+                      {moment.answers && (
+                        <p data-story-answering="" className="text-[16px]">
+                          <span className="font-bold">{ui.answeringLabel}</span>{" "}
+                          {moment.answers.kind === "story"
+                            ? quoted(moment.answers.text, moment.answers.lang)
+                            : quoted(starterText(moment.answers.key, locale) ?? "", locale)}
+                          {moment.answers.kind === "story" && moment.answers.askedBy && (
+                            <> {format(ui.askedByName, { name: moment.answers.askedBy })}</>
+                          )}
+                        </p>
+                      )}
                       {photoBaseUrl && !!moment.photos?.length && (
                         <StoryPhotos
                           locale={locale}
@@ -145,6 +193,31 @@ export function StoryFeed({
                           authorName={moment.authorName}
                           remove={actions?.removePhoto}
                         />
+                      )}
+                      {moment.nextQuestion && (
+                        <div data-story-question="" className="space-y-1 text-[16px]">
+                          <p>
+                            <span className="font-bold">
+                              {moment.authorName
+                                ? format(ui.leftQuestion, { name: moment.authorName })
+                                : ui.leftQuestionAnon}
+                            </span>{" "}
+                            {quoted(moment.nextQuestion, moment.lang)}
+                          </p>
+                          {moment.canRemove && actions?.clearQuestion && (
+                            <button
+                              type="button"
+                              disabled={pending}
+                              className={`${LINK} text-ai disabled:opacity-50`}
+                              onClick={() => {
+                                setCleared(false);
+                                void clearQuestion(moment._id, actions);
+                              }}
+                            >
+                              {ui.clearQuestion}
+                            </button>
+                          )}
+                        </div>
                       )}
                       {actions && connectorOffered && moment.addedByMe && (
                         <ConnectorChoiceConnected locale={locale} storyId={moment._id} />
@@ -181,7 +254,7 @@ export function StoryFeed({
         ))}
       </ol>
       <div role="status" aria-live="polite">
-        {removed ? ui.removed : null}
+        {cleared ? ui.questionCleared : removed ? ui.removed : null}
       </div>
       {error !== null && <ErrorMessage error={error} locale={locale} />}
     </>

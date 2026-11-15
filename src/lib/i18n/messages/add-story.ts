@@ -62,6 +62,14 @@ export const addStoryMessages = defineMessages({
     connectorAllowed:
       "Done. AI may read this story, with your name: Noren's planner, and assistants such as Claude or ChatGPT through Noren's connector.",
     connectorStopped: "Done. AI may not read this story.",
+    questionLabel: "Leave a question for the next visitor (optional)",
+    questionHint:
+      "One line the next person here can ask. It is shown with your name, as you write it, and it is not translated. No links, email addresses, @names or phone numbers.",
+    questionCount: "{count} / {limit}",
+    questionProblem:
+      "Use one line of 140 characters or fewer, with no links, email addresses, @names or phone numbers.",
+    youWereAsked: "You were asked:",
+    askedBy: "Asked by {name}",
   },
   ja: {
     prompt: "訪れたことがありますか？聞いたこと、見たこと、味わったことを共有してください。",
@@ -121,5 +129,13 @@ export const addStoryMessages = defineMessages({
     connectorAllowed:
       "許可しました。AI があなたの名前とともにこの話を読むことがあります（Noren のプランナーと、Noren のコネクタを通じた Claude や ChatGPT などのアシスタント）。",
     connectorStopped: "許可をやめました。AI はこの話を読みません。",
+    questionLabel: "次に訪れる人への問いを残す（任意）",
+    questionHint:
+      "ここに来る次の人が、たずねられる一行です。あなたの名前とともに、書いたとおりに表示されます。翻訳はされません。リンク、メールアドレス、@名、電話番号は書けません。",
+    questionCount: "{count} / {limit}",
+    questionProblem:
+      "140文字以内の一行で書いてください。リンク、メールアドレス、@名、電話番号は書けません。",
+    youWereAsked: "あなたへの問い：",
+    askedBy: "{name} さんの問い",
   },
 });

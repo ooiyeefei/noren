@@ -33,3 +33,9 @@ export const EARLIER_CARDS_KEPT = 10;
 
 /** A slip's place this close to where you are (or to a neighbourhood's middle) is "right here". */
 export const SLIP_HERE_METRES = 30;
+
+/**
+ * A slip's sealed question opens when a reading puts the phone this close to the place's pin (the
+ * same accuracy rules as a story coming into range apply). The distance is worked out on the phone.
+ */
+export const SLIP_OPEN_METRES = 60;

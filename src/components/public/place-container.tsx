@@ -6,7 +6,7 @@ import { api } from "../../../convex/_generated/api";
 import { PageContainer } from "@/components/layout/page-container";
 import { useTasteLearning } from "@/components/memory/taste-learning";
 import type { Id } from "../../../convex/_generated/dataModel";
-import type { AddStoryActions } from "@/components/place/add-story";
+import type { Answering, AddStoryActions } from "@/components/place/add-story";
 import type { WrittenStoryArgs } from "@/components/place/add-story-form";
 import { uploadStoryPhoto } from "@/components/place/photo-upload";
 import type { StoryFeedActions } from "@/components/place/story-feed";
@@ -20,8 +20,34 @@ import { useShownAs } from "@/components/place/use-shown-as";
 import { useToday } from "./use-today";
 import type { PublicRegionProps } from "./mapping";
 import { readPlaceTab, type PlaceTabState } from "@/lib/place/tabs";
+import { parseAnswers, starterText } from "@/lib/slip/question";
 
 const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * What the form shows above the textarea for `?answers=`. A story's question must be one of this
+ * place's own stories with its question still on it; the server checks again when the story is sent.
+ */
+function answeringFrom(
+  ref: ReturnType<typeof parseAnswers>,
+  stories:
+    readonly { _id: string; nextQuestion?: string; lang: string; authorName: string }[] | undefined,
+  locale: Locale,
+): Answering | undefined {
+  if (ref === null) return undefined;
+  if (ref.kind === "starter") {
+    const text = starterText(ref.key, locale);
+    return text === undefined ? undefined : { ref, text, lang: locale };
+  }
+  const asked = stories?.find((story) => story._id === ref.storyId);
+  if (asked === undefined || !asked.nextQuestion) return undefined;
+  return {
+    ref,
+    text: asked.nextQuestion,
+    lang: asked.lang,
+    ...(asked.authorName ? { askedBy: asked.authorName } : {}),
+  };
+}
 
 /** The form's photo ids came from Convex a moment ago, and stories.add checks each one again. */
 const writtenStory = ({ photoIds, ...args }: WrittenStoryArgs, placeId: Id<"place">) => ({
@@ -33,16 +59,23 @@ const writtenStory = ({ photoIds, ...args }: WrittenStoryArgs, placeId: Id<"plac
 type Props = {
   params: Promise<{ lang: string; slug: string }>;
   /** `?tab=` and `&write=1` (contract C1). */
-  searchParams: Promise<{ tab?: string | string[]; write?: string | string[] }>;
+  searchParams: Promise<{
+    tab?: string | string[];
+    write?: string | string[];
+    /** `story:<id>` or `starter:<key>`: the question a story is being written to answer. */
+    answers?: string | string[];
+  }>;
   locale: Locale;
   region: PublicRegionProps;
 };
 export function PlaceContainer({ params, searchParams, locale, region }: Props) {
   const { slug } = use(params);
-  const address = readPlaceTab(use(searchParams));
+  const query = use(searchParams);
+  const address = readPlaceTab(query);
+  const answers = Array.isArray(query.answers) ? query.answers[0] : query.answers;
   return (
     <PublicQueryBoundary key={`${locale}/${region.regionId}/${slug}`} locale={locale}>
-      <PlaceQuery slug={slug} locale={locale} region={region} address={address} />
+      <PlaceQuery slug={slug} locale={locale} region={region} address={address} answers={answers} />
     </PublicQueryBoundary>
   );
 }
@@ -51,7 +84,12 @@ function PlaceQuery({
   locale,
   region,
   address,
-}: Omit<Props, "params" | "searchParams"> & { slug: string; address: PlaceTabState }) {
+  answers,
+}: Omit<Props, "params" | "searchParams"> & {
+  slug: string;
+  address: PlaceTabState;
+  answers?: string;
+}) {
   const place = useQuery(api.places.getBySlug, { regionId: region.regionId, slug });
   const args = place ? { placeId: place._id } : "skip";
   const sources = useQuery(api.sources.listForPlace, args);
@@ -98,6 +136,7 @@ function PlaceQuery({
   const removeSource = useMutation(api.sources.remove);
   const writeStory = useMutation(api.stories.add);
   const removeStory = useMutation(api.stories.remove);
+  const clearQuestion = useMutation(api.stories.clearQuestion);
   const removePhoto = useMutation(api.storyPhotos.remove);
   const previewLink = useAction(api.linkRead.previewLink);
   const draftNote = useAction(api.linkRead.draftNote);
@@ -114,6 +153,10 @@ function PlaceQuery({
         <PublicLoading locale={locale} />
       </PageContainer>
     );
+  // The question the link asks the writer to answer: a starter, or a story's question at this place.
+  const answering = region.relay
+    ? answeringFrom(parseAnswers(answers), stories, locale)
+    : undefined;
   const checks: PlaceCheckActions | undefined = place
     ? {
         signedIn: isLoading ? undefined : isAuthenticated,
@@ -128,6 +171,7 @@ function PlaceQuery({
         add: (args) => pressing("story", () => saved(addSource({ ...args, placeId: place._id }))),
         write: (args) => pressing("story", () => saved(writeStory(writtenStory(args, place._id)))),
         shownAs,
+        ...(answering ? { answering } : {}),
         photos:
           photoLimits && canAddPhotos?.allowed
             ? {
@@ -141,6 +185,7 @@ function PlaceQuery({
               }
             : undefined,
         removePhoto: (photoId) => removePhoto({ photoId: photoId as Id<"storyPhoto"> }),
+        clearQuestion: (storyId) => clearQuestion({ storyId: storyId as Id<"story"> }),
         preview: (url) => previewLink({ placeId: place._id, url }),
         draftNote: (args) => draftNote({ ...args, placeId: place._id, mine: true }),
         remove: ({ kind, id }) =>

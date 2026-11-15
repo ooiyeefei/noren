@@ -2,6 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { getFunctionName } from "convex/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { knockAtDoor } from "@/lib/slip/door";
+import { keepSlip, loadKept, markOpened, saveKept } from "@/lib/slip/kept";
 import { walkMessages } from "@/lib/i18n/messages/walk";
 import { WalkController } from "@/lib/walk/controller";
 import { convexWalkData } from "@/lib/walk/convex-data";
@@ -203,5 +205,74 @@ describe("walk mode's source", () => {
     expect(connector).toMatch(
       /export const omikujiToday = mutation\(\{\s*args: \{ regionId: v\.string\(\) \}/,
     );
+  });
+});
+
+// The sealed slip: the question comes down with the slip and opens on the phone. Opening it, by a
+// reading at the door or by "Open without location", asks Noren for nothing and says nothing.
+describe("opening a slip's seal", () => {
+  const ROOT = path.resolve(import.meta.dirname, "../..");
+  const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+
+  it("makes no data-port call, network request or beacon, and sends no position", async () => {
+    const fetchSpy = vi.fn();
+    const beacon = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    vi.stubGlobal("navigator", { sendBeacon: beacon });
+    const client = fakeConvex();
+    const data = convexWalkData(client as never, "nagasaki");
+    await data.drawToday();
+    const before = requests(client).length;
+    const store = new Map<string, string>();
+    const port = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    };
+    const slip = slips.slips[0]!;
+    let list = keepSlip([], { day: slips.day, neighbourhoodId: "shinchi", slip });
+    // At the door: one reading taken on the phone, then the seal is marked open on the phone.
+    const door = await knockAtDoor(
+      async () => ({ kind: "read", lat: ORIGIN.lat, lng: ORIGIN.lng, accuracy: 6 }),
+      slip.place.pin,
+      30,
+    );
+    expect(door.kind).toBe("open");
+    list = markOpened(list, { day: slips.day, neighbourhoodId: "shinchi" });
+    saveKept(port, list);
+    expect(loadKept(port)[0]?.opened).toBe(true);
+    expect(requests(client)).toHaveLength(before);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(beacon).not.toHaveBeenCalled();
+  });
+
+  it("is written so: the seal and the door touch no Noren call, network or logging", () => {
+    for (const file of [
+      "src/components/walk/slip-seal.tsx",
+      "src/lib/slip/door.ts",
+      "src/lib/slip/kept.ts",
+      "src/lib/slip/question.ts",
+    ]) {
+      const text = read(file);
+      for (const pattern of [
+        /\bfetch\s*\(/,
+        /sendBeacon/,
+        /XMLHttpRequest/,
+        /\b(WebSocket|EventSource)\b/,
+        /\b(useQuery|useMutation|useAction|useConvex)\b/,
+        /\.(query|mutation|action)\(/,
+        /\bconsole\.\w+\(/,
+        /\bdata\./,
+      ])
+        expect(text, `${file} ${pattern}`).not.toMatch(pattern);
+    }
+    // Kept slips are the only thing here that uses storage, and only through kept.ts.
+    for (const file of ["src/components/walk/slip-seal.tsx", "src/lib/slip/door.ts"])
+      expect(read(file)).not.toMatch(/\b(localStorage|sessionStorage|indexedDB)\b/);
+    // The panel asks Noren for the slips in exactly one place, the draw; nothing else in it talks.
+    const panel = read("src/components/walk/omikuji-panel.tsx");
+    expect(panel.match(/data\.\w+\(/g)).toEqual(["data.drawToday("]);
+    // Neither the door nor the seal ever puts a position or distance in a link.
+    expect(read("src/components/walk/slip-seal.tsx")).not.toMatch(/[?&](lat|lng|near|metres|distance)=/);
   });
 });
