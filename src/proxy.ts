@@ -7,7 +7,8 @@ const region = activeRegionConfig();
 
 // Not pages: never given a language prefix. Most static files do not reach the proxy (see the matcher),
 // but a .mjs file does, so the map worker folder (public/maplibre, see scripts/copy-maplibre-worker.mjs) is named here.
-const UNPREFIXED = /^\/(?:api|out|_next|maplibre)(?:\/|$)|^\/robots\.txt$/;
+const UNPREFIXED =
+  /^\/(?:api|out|_next|maplibre)(?:\/|$)|^\/(?:robots\.txt|sitemap\.xml|llms\.txt)$/;
 
 // The pages for a role need a signed-in visitor (contracts/http-api.md). This only sends a signed-out
 // visitor to the sign-in page. The role is checked again inside every Convex function (research D2),

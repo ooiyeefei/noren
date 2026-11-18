@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, type ReactNode } from "react";
 import { useAction, useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { PageContainer } from "@/components/layout/page-container";
@@ -81,15 +81,24 @@ type Props = {
   }>;
   locale: Locale;
   region: PublicRegionProps;
+  /** What the server sent to show until the place has loaded: its summary as plain HTML. */
+  loading?: ReactNode;
 };
-export function PlaceContainer({ params, searchParams, locale, region }: Props) {
+export function PlaceContainer({ params, searchParams, locale, region, loading }: Props) {
   const { slug } = use(params);
   const query = use(searchParams);
   const address = readPlaceTab(query);
   const answers = Array.isArray(query.answers) ? query.answers[0] : query.answers;
   return (
     <PublicQueryBoundary key={`${locale}/${region.regionId}/${slug}`} locale={locale}>
-      <PlaceQuery slug={slug} locale={locale} region={region} address={address} answers={answers} />
+      <PlaceQuery
+        slug={slug}
+        locale={locale}
+        region={region}
+        address={address}
+        answers={answers}
+        loading={loading}
+      />
     </PublicQueryBoundary>
   );
 }
@@ -99,6 +108,7 @@ function PlaceQuery({
   region,
   address,
   answers,
+  loading,
 }: Omit<Props, "params" | "searchParams"> & {
   slug: string;
   address: PlaceTabState;
@@ -169,9 +179,7 @@ function PlaceQuery({
   };
   if (place === undefined)
     return (
-      <PageContainer locale={locale}>
-        <PublicLoading locale={locale} />
-      </PageContainer>
+      <PageContainer locale={locale}>{loading ?? <PublicLoading locale={locale} />}</PageContainer>
     );
   // The question the link asks the writer to answer: a starter, or a story's question at this place.
   const answering = region.relay

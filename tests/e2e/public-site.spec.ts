@@ -88,17 +88,39 @@ for (const locale of ["ja", "en"] as const) {
   });
 }
 
-for (const path of ["/ja/map", "/en/map", "/ja/notice", "/en/takedown", "/en/e2e-does-not-exist"]) {
-  test(`${path} sends noindex, nofollow`, async ({ request }) => {
+// Search is open (legal.searchOpen): public pages carry no noindex header, the signed-in ones do.
+for (const path of ["/ja/map", "/en/map", "/ja/notice", "/en/takedown"]) {
+  test(`${path} is open to search engines`, async ({ request }) => {
     const response = await request.get(path, { headers: browserLikeHeaders });
+    expect(response.headers()["x-robots-tag"]).toBeUndefined();
+  });
+}
+
+for (const path of ["/en/steward", "/en/account", "/api/mcp"]) {
+  test(`${path} sends noindex, nofollow`, async ({ request }) => {
+    const response = await request.get(path, { headers: browserLikeHeaders, maxRedirects: 0 });
     expect(response.headers()["x-robots-tag"]).toBe("noindex, nofollow");
   });
 }
 
-test("robots.txt disallows everything", async ({ request }) => {
+test("robots.txt opens the public pages, keeps the signed-in ones out and names the sitemap", async ({
+  request,
+}) => {
   const response = await request.get("/robots.txt");
   expect(response.status()).toBe(200);
-  expect(await response.text()).toMatch(/User-agent:\s*\*\s+Disallow:\s*\/\s*(?:$|\n)/i);
+  const text = await response.text();
+  expect(text).toMatch(/Allow:\s*\/\s/i);
+  expect(text).toContain("Disallow: /en/steward");
+  expect(text).toContain("Sitemap: https://noren.yooi.me/sitemap.xml");
+});
+
+test("the sitemap and llms.txt answer", async ({ request }) => {
+  const sitemap = await request.get("/sitemap.xml");
+  expect(sitemap.status()).toBe(200);
+  expect(await sitemap.text()).toContain("https://noren.yooi.me/en/welcome");
+  const llms = await request.get("/llms.txt");
+  expect(llms.status()).toBe(200);
+  expect(await llms.text()).toContain("# Noren");
 });
 
 for (const role of ["creator", "owner", "steward"]) {

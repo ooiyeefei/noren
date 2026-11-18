@@ -55,7 +55,7 @@ it("regionPolicy keeps launch restrictions, with open listings handled as the dr
   expect(regionPolicy("nagasaki")).toEqual({
     realBusinessesDraftOnly: true,
     inviteOnly: false,
-    noindex: true,
+    noindex: false,
     allowPilotVisibility: false,
   });
 });
