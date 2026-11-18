@@ -28,6 +28,8 @@ import type * as lib_claimEffects from "../lib/claimEffects.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_foundPosts from "../lib/foundPosts.js";
 import type * as lib_gate from "../lib/gate.js";
+import type * as lib_instagramApi from "../lib/instagramApi.js";
+import type * as lib_instagramCancel from "../lib/instagramCancel.js";
 import type * as lib_liveStory from "../lib/liveStory.js";
 import type * as lib_mapCopies from "../lib/mapCopies.js";
 import type * as lib_mock from "../lib/mock.js";
@@ -122,6 +124,8 @@ declare const fullApi: ApiFromModules<{
   "lib/errors": typeof lib_errors;
   "lib/foundPosts": typeof lib_foundPosts;
   "lib/gate": typeof lib_gate;
+  "lib/instagramApi": typeof lib_instagramApi;
+  "lib/instagramCancel": typeof lib_instagramCancel;
   "lib/liveStory": typeof lib_liveStory;
   "lib/mapCopies": typeof lib_mapCopies;
   "lib/mock": typeof lib_mock;
