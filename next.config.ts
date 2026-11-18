@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
     "/*": ["./regions/**/*"],
     // The picture of a story draws its words in a Japanese font read from disk.
     "/api/share/[storyId]": ["./src/lib/share/fonts/*.ttf"],
+    "/api/instagram-card/[postId]": ["./src/lib/share/fonts/*.ttf"],
   },
   // FR-021: until the launch pack is complete every response, static files and error pages
   // included, is hidden from search engines. After that only the signed-in sections, /out and /api

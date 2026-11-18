@@ -18,6 +18,8 @@ import type * as collection from "../collection.js";
 import type * as connector from "../connector.js";
 import type * as crons from "../crons.js";
 import type * as ids from "../ids.js";
+import type * as instagramActions from "../instagramActions.js";
+import type * as instagramPosts from "../instagramPosts.js";
 import type * as interviews from "../interviews.js";
 import type * as lib_access from "../lib/access.js";
 import type * as lib_audit from "../lib/audit.js";
@@ -107,6 +109,8 @@ declare const fullApi: ApiFromModules<{
   connector: typeof connector;
   crons: typeof crons;
   ids: typeof ids;
+  instagramActions: typeof instagramActions;
+  instagramPosts: typeof instagramPosts;
   interviews: typeof interviews;
   "lib/access": typeof lib_access;
   "lib/audit": typeof lib_audit;

@@ -7,6 +7,7 @@ import { currentPerson, requirePerson, requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
 import { readMapNames, readMapPin } from "./lib/mapCopies";
+import { cancelPendingPosts } from "./lib/instagramCancel";
 import { regionConfig } from "./lib/region";
 import { townOf } from "../src/lib/region/neighbourhoods";
 import { placeLabel } from "../src/lib/share/caption";
@@ -30,7 +31,7 @@ const cardView = v.object({
  * on a real place that everyone may read. A hidden or removed story, a demo story and a place
  * that isn't public all come back as null, so no picture exists for them.
  */
-async function shareable(
+export async function shareable(
   ctx: QueryCtx,
   story: Doc<"story"> | null,
 ): Promise<{ story: Doc<"story">; place: Doc<"place"> } | null> {
@@ -42,7 +43,7 @@ async function shareable(
 }
 
 /** The words of a story and where it was told: what both the picture and the caption are made from. */
-async function describe(
+export async function describe(
   ctx: QueryCtx,
   { story, place }: { story: Doc<"story">; place: Doc<"place"> },
 ) {
@@ -62,7 +63,7 @@ async function describe(
 }
 
 /** The town a place is in, for the caption's hashtags: its pin's town, else the region's own name. */
-async function townOfPlace(ctx: QueryCtx, place: Doc<"place">) {
+export async function townOfPlace(ctx: QueryCtx, place: Doc<"place">) {
   const pin = place.mapPin !== undefined ? place.mapPin : await readMapPin(ctx, place._id);
   return townOf(regionConfig(place.regionId), pin);
 }
@@ -114,6 +115,8 @@ async function changeConsent(
       throw appError("invalid_input", "this region does not offer sharing on Instagram");
   }
   await ctx.db.patch("story", storyId, { shareConsentAt: on ? Date.now() : undefined });
+  // A post approved but not yet sent must not go out once the writer has said no.
+  if (!on) await cancelPendingPosts(ctx, storyId, "withdrawn");
   await writeAudit(ctx, {
     actorKind: "person",
     actorPersonId: person._id,
@@ -264,6 +267,8 @@ export const markPosted = mutation({
       throw appError("conflict", "this story is not offered for sharing");
     if (story.sharePostedAt !== undefined) return null;
     await ctx.db.patch("story", storyId, { sharePostedAt: Date.now() });
+    // Posted by hand: the automatic post, if one was waiting, must not make a second.
+    await cancelPendingPosts(ctx, storyId, "posted_by_hand");
     await writeAudit(ctx, {
       actorKind: "person",
       actorPersonId: steward._id,

@@ -153,6 +153,57 @@ export const communityTables = {
     issueNumber: v.optional(v.number()),
   }).index("by_status_and_receivedAt", ["status", "receivedAt"]),
 
+  /**
+   * One story's automatic post to Noren's Instagram account, from a steward's approval to the
+   * published post. It holds ids, a secret for the picture's address and Instagram's own ids, never
+   * the story's words, a name, or the access token. The caption and picture are made from the live
+   * story each time, so a story taken down is never sent.
+   */
+  instagramPost: defineTable({
+    storyId: v.id("story"),
+    placeId: v.id("place"),
+    regionId: v.string(),
+    status: v.union(
+      v.literal("queued"),
+      v.literal("publishing"),
+      v.literal("posted"),
+      v.literal("failed"),
+      v.literal("cancelled"),
+    ),
+    /** Why a failed post failed, or why a cancelled one was stopped. */
+    reason: v.optional(v.string()),
+    approvedBy: v.id("person"),
+    approvedAt: v.number(),
+    /** Unguessable part of the picture's address; the picture exists only while the post is queued or publishing. */
+    imageToken: v.string(),
+    /** Instagram's media container, once made; kept so a retry never makes a second one for the same attempt. */
+    containerId: v.optional(v.string()),
+    /** Set just before the publish call: a crash after it must look for the post, not publish again. */
+    publishRequestedAt: v.optional(v.number()),
+    mediaId: v.optional(v.string()),
+    permalink: v.optional(v.string()),
+    postedAt: v.optional(v.number()),
+    attempts: v.number(),
+    lastAttemptAt: v.optional(v.number()),
+    /** Not before this time (a full daily limit, or a pause before a retry). */
+    notBefore: v.optional(v.number()),
+    /** A steward took down the Instagram post by hand, after the story went away. */
+    removedByHandAt: v.optional(v.number()),
+  })
+    .index("by_storyId", ["storyId"])
+    .index("by_regionId_and_status", ["regionId", "status"])
+    .index("by_status_and_approvedAt", ["status", "approvedAt"])
+    .index("by_regionId_and_postedAt", ["regionId", "postedAt"]),
+
+  /**
+   * When the Instagram access token now in use was first seen, so a steward is warned before its 60
+   * days end. Holds only a hash of the token, which cannot give the token back. One row.
+   */
+  instagramToken: defineTable({
+    fingerprint: v.string(),
+    firstSeenAt: v.number(),
+  }).index("by_fingerprint", ["fingerprint"]),
+
   /** A fixed-window counter for the few public write paths (the takedown form); one row per key. */
   rateLimit: defineTable({
     key: v.string(),

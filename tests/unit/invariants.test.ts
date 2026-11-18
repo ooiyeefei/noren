@@ -94,6 +94,9 @@ const notPersonCreated = [
   "openTextSnippet",
   "phraseCard",
   "problemReport",
+  // Approved by a steward for a story that already passed the sharing rules; ids only.
+  "instagramPost",
+  "instagramToken",
   "takedownRequest",
   "rateLimit",
   "auditLog",

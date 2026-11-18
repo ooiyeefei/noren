@@ -113,6 +113,8 @@ describe("server fetch allowlist", () => {
       .map((file) => relative(root, file))
       .sort();
     expect(callers).toEqual([
+      // Instagram's content publishing API: graph.instagram.com only, with the token from the environment.
+      "convex/lib/instagramApi.ts",
       // Files a problem report in the team's private GitHub repository: api.github.com only.
       "convex/problemReportActions.ts",
       "src/lib/adapters/url.ts",
