@@ -358,6 +358,16 @@ const DELETION_STEPS: readonly DeletionStep[] = [
     }
     return page;
   },
+  // Deleted, so every link to one of their postcards stops working. A card keeps no copy of a story,
+  // so nothing depends on the order.
+  async (ctx, personId, paginationOpts) => {
+    const page = await ctx.db
+      .query("postcard")
+      .withIndex("by_senderPersonId", (q) => q.eq("senderPersonId", personId))
+      .paginate(paginationOpts);
+    for (const card of page.page) await ctx.db.delete("postcard", card._id);
+    return page;
+  },
   async (ctx, personId, paginationOpts) => {
     const page = await ctx.db
       .query("voiceUpload")

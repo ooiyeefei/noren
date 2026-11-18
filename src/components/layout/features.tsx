@@ -2,9 +2,9 @@
 
 import { createContext, useContext } from "react";
 
-export type FeatureLinks = { planner: boolean; walk: boolean };
+export type FeatureLinks = { planner: boolean; walk: boolean; postcard: boolean };
 
-const Features = createContext<FeatureLinks>({ planner: false, walk: false });
+const Features = createContext<FeatureLinks>({ planner: false, walk: false, postcard: false });
 
 /**
  * Which switched features are on in the region file (features.*), handed down from the server
@@ -14,9 +14,10 @@ const Features = createContext<FeatureLinks>({ planner: false, walk: false });
 export function FeatureLinksProvider({
   planner = false,
   walk = false,
+  postcard = false,
   children,
 }: Partial<FeatureLinks> & { children: React.ReactNode }) {
-  return <Features value={{ planner, walk }}>{children}</Features>;
+  return <Features value={{ planner, walk, postcard }}>{children}</Features>;
 }
 
 export function useFeatureLinks(): FeatureLinks {

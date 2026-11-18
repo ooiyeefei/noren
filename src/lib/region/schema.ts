@@ -209,6 +209,9 @@ export const regionSchema = z
      * "What Noren remembers" page. `walk`: walk mode, with the omikuji and first-story quests.
      * `thread`: "three doors", a question carried to another place and a slip that leads on to two
      * more doors. It works only while `walk` is on too (src/lib/slip/carry.ts, threadOn).
+     * `postcard`: a member picks moments from places they went to and sends a private link to a
+     * card for someone they love (specs/004-trip-postcard). Off, its pages answer 404 and its
+     * functions answer not found.
      */
     features: z
       .strictObject({
@@ -216,8 +219,9 @@ export const regionSchema = z
         planner: z.boolean().default(false),
         walk: z.boolean().default(false),
         thread: z.boolean().default(false),
+        postcard: z.boolean().default(false),
       })
-      .default({ connector: false, planner: false, walk: false, thread: false }),
+      .default({ connector: false, planner: false, walk: false, thread: false, postcard: false }),
     legal: z.strictObject({
       /** Named legal operator shown on notices; null until decided (blocks real people's stories). */
       operatorName: z.string().min(1).nullable(),

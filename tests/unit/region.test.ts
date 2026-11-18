@@ -164,6 +164,7 @@ describe("region policy", () => {
       planner: true,
       walk: true,
       thread: false,
+      postcard: false,
     });
   });
 

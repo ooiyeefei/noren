@@ -132,7 +132,9 @@ describe("the documents' text (T057)", () => {
       for (const kind of ["terms", "privacy"] as const)
         for (const s of legalDocuments[locale][kind].sections)
           for (const line of [...(s.paragraphs ?? []), ...(s.items ?? []), ...(s.closing ?? [])])
-            expect(placeholders(lineText(line)).filter((p) => p === "contact").length).toBeLessThan(2);
+            expect(placeholders(lineText(line)).filter((p) => p === "contact").length).toBeLessThan(
+              2,
+            );
   });
 
   it("labels AI text the way the site does", () => {
@@ -374,7 +376,14 @@ describe("the pages (T058)", () => {
     type Features = { connector?: boolean; planner?: boolean; walk?: boolean };
     const page = (locale: Locale, kind: "terms" | "privacy", features: Features = {}) => {
       const region = published((r) => {
-        r.features = { connector: false, planner: false, walk: false, thread: false, ...features };
+        r.features = {
+          connector: false,
+          planner: false,
+          walk: false,
+          thread: false,
+          postcard: false,
+          ...features,
+        };
       });
       const html = render(
         <LegalDocumentView locale={locale} kind={kind} values={documentValues(region, locale)!} />,
