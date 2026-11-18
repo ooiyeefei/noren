@@ -103,3 +103,14 @@ For the owner to approve; `legal-documents.ts` is not touched here. It belongs u
 > When a person at Noren has approved a story you ticked, Noren may post it, with your display name, on its own Instagram account through Instagram's own interface, so Instagram receives the picture, the caption and Noren's account details. Untick it on your story and Noren will not post it; a post already made stays up until we delete it, which we do within 14 days of your asking at {contact}.
 
 > あなたがチェックを入れた話を Noren の担当者が承認すると、Noren は Instagram の公式の仕組みを通じて、あなたの表示名を添えて Noren の Instagram アカウントに投稿することがあります。その際、Instagram には画像、キャプション、Noren のアカウント情報が送られます。ご自身の話でチェックを外せば投稿しません。すでに投稿されたものは、{contact} に依頼いただいてから14日以内に Noren が削除するまで残ります。
+
+## Phase 2 as built (18 Nov 2026, switched off)
+
+Automatic posting is built and **off** (`sharing.autoPost` is false in `regions/nagasaki.json`). The owner's setup steps are in `meta-setup.md`; they replace the list above.
+
+- **Flow.** A steward presses "Approve and post to Instagram" (`instagramPosts.approve`). A row in `instagramPost` goes `queued`, then `publishing`, then `posted` (with the permalink) or `failed` (with a reason code), or `cancelled`. `instagramPosts.dispatch` (cron every 10 minutes, and right after an approval) starts what is due, respecting the optional `sharing.autoPostSchedule` (per Japan-time day, from an hour). `instagramActions.publish` makes the media container, polls it until FINISHED, checks the rules once more in a transaction, publishes, and fetches the permalink.
+- **No double post.** The container id is stored before polling; `publishRequestedAt` is stored before the publish call; a rerun asks the container's status first and, if Instagram says PUBLISHED, takes the newest media instead of publishing again.
+- **Picture.** `/api/instagram-card/<post>?t=<secret>`: a 1080 x 1350 JPEG of the existing card, drawn from the live story, never a photo. The secret is made per post; the route answers only while the post is queued or publishing and the story is still shown with the tick on.
+- **Withdrawal.** Turning the tick off, removing the story, deleting the account, or marking it posted by hand cancels a post that has not gone out; the same rules are checked again just before the publish call. After posting, a withdrawn or removed story shows a "take down by hand" task with the link, because the Instagram-login API has no delete.
+- **Deviation from the plan above (item 4).** The token is not stored in a table and is not refreshed by a cron, because a stored token would sit in a document. It stays in Convex env, a steward is warned 14 days before its 60 days end (a hash of the token, with the day it was first seen, is all that is stored), and the owner renews it by hand.
+- **Not built.** Deleting an Instagram post through the API; Stories-size posts (feed only).

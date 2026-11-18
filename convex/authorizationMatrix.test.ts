@@ -455,6 +455,20 @@ const rows: Record<string, Row[]> = {
       allowed: ["steward"],
     },
   ],
+  instagramPosts: [
+    {
+      fn: "instagramPosts.overview",
+      call: (as) => as.query(api.instagramPosts.overview, { regionId: "nagasaki" }),
+      allowed: ["steward"],
+    },
+    {
+      // The region switch is off, so even a steward is refused with a conflict; no one else gets that far.
+      fn: "instagramPosts.approve",
+      call: (as, w) => as.mutation(api.instagramPosts.approve, { storyId: w.story }),
+      allowed: [],
+      denied: { steward: "conflict" },
+    },
+  ],
   people: [
     {
       fn: "people.setRole",

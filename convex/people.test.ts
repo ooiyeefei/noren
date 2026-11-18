@@ -558,6 +558,7 @@ const DELETION_DECISIONS = {
   "placeOwner.personId": "asks a steward",
   "person.verifiedBy": "stewards only",
   "problemReport.closedBy": "stewards only",
+  "instagramPost.approvedBy": "stewards only",
   "placeCheck.reviewedBy": "stewards only",
   "placeOwner.verifiedBy": "stewards only",
   "openTextSnippet.approvedBy": "stewards only",

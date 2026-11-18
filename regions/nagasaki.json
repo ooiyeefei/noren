@@ -169,7 +169,8 @@
     "refusingCaution": "no_photography"
   },
   "sharing": {
-    "norenAccount": true
+    "norenAccount": true,
+    "autoPost": false
   },
   "legal": {
     "operatorName": "Noren, an open-source project run by Yee Fei",

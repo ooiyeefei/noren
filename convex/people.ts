@@ -10,6 +10,7 @@ import { currentPerson, findPerson, nameIsConfirmed, requirePerson, requireRole 
 import { appError } from "./lib/errors";
 import { eraseFoundPost } from "./lib/foundPosts";
 import { internalMutation, mutation } from "./lib/gate";
+import { cancelPendingPosts } from "./lib/instagramCancel";
 import { removePhotos } from "./lib/storyPhotos";
 import { literals, roleValidator } from "./lib/validators";
 
@@ -351,7 +352,10 @@ const DELETION_STEPS: readonly DeletionStep[] = [
       .query("story")
       .withIndex("by_authorPersonId", (q) => q.eq("authorPersonId", personId))
       .paginate(paginationOpts);
-    for (const story of page.page) await ctx.db.delete("story", story._id);
+    for (const story of page.page) {
+      await cancelPendingPosts(ctx, story._id, "removed");
+      await ctx.db.delete("story", story._id);
+    }
     return page;
   },
   async (ctx, personId, paginationOpts) => {

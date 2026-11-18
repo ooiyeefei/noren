@@ -180,6 +180,21 @@ export const regionSchema = z
     sharing: z.strictObject({
       /** Off hides the written-story tick that lets Noren feature a story on its own accounts. */
       norenAccount: z.boolean(),
+      /**
+       * On lets a steward's approval post a story by itself to Noren's Instagram, through Instagram's
+       * own interface, once its credentials are set. Off (the default) keeps the share kit by hand.
+       */
+      autoPost: z.boolean().default(false),
+      /**
+       * Optional pacing of automatic posts: at most `perDay` each Japan-time day, none before
+       * `hourJst` o'clock. Absent means an approved post goes out at once.
+       */
+      autoPostSchedule: z
+        .strictObject({
+          perDay: z.number().int().min(1).max(25),
+          hourJst: z.number().int().min(0).max(23),
+        })
+        .optional(),
     }),
     voice: z
       .strictObject({

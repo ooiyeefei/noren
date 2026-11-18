@@ -21,6 +21,7 @@ import { currentPerson, requireConfirmedName, requirePerson } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { excerptTranslations, hasNoCard } from "./lib/foundPosts";
 import { mutation } from "./lib/gate";
+import { cancelPendingPosts } from "./lib/instagramCancel";
 import { withMock } from "./lib/mock";
 import { readMapNames } from "./lib/mapCopies";
 import { isPublicRealPlace, nameView, publicPool, toPoolPlace } from "./lib/publicPool";
@@ -700,6 +701,7 @@ export const remove = mutation({
     }
     if (story.status === "hidden") return null;
     await ctx.db.patch("story", storyId, { status: "hidden" });
+    await cancelPendingPosts(ctx, storyId, "removed");
     await removeStoryPhotos(ctx, storyId);
     if (person.role === "steward" && story.authorPersonId !== person._id)
       await writeAudit(ctx, {

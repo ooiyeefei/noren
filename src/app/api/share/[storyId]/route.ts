@@ -1,24 +1,10 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { fetchQuery } from "convex/nextjs";
 import { jsonError } from "@/lib/http/handler";
 import { isCardSize, cardFileName, type CardSize } from "@/lib/share/card";
-import { renderCard, type CardFont } from "@/lib/share/render";
+import { loadCardFonts } from "@/lib/share/fonts";
+import { renderCard } from "@/lib/share/render";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-
-const FONT_DIR = path.join(process.cwd(), "src/lib/share/fonts");
-
-async function loadFonts(): Promise<CardFont[]> {
-  const read = async (file: string) => {
-    const bytes = await readFile(path.join(FONT_DIR, file));
-    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  };
-  return [
-    { name: "BIZ UDPGothic", data: await read("BIZUDPGothic-Regular.ttf"), weight: 400 },
-    { name: "BIZ UDPGothic", data: await read("BIZUDPGothic-Bold.ttf"), weight: 700 },
-  ];
-}
 
 /**
  * A picture of one live story: its words, the place in English with Japanese beside, the writer's
@@ -59,7 +45,7 @@ export async function GET(
         card.lang === "ja" ? "全文は noren.yooi.me で読めます" : "Read it all on noren.yooi.me",
     },
     size,
-    await loadFonts(),
+    await loadCardFonts(),
   );
   const headers = new Headers(image.headers);
   // A removal should show up soon: keep a copy for minutes, not days.
