@@ -147,7 +147,7 @@ describe("real place publication", () => {
     expect(region.regionPolicy("nagasaki")).toMatchObject({
       realBusinessesDraftOnly: true,
       inviteOnly: false,
-      noindex: true,
+      noindex: false,
       allowPilotVisibility: false,
     });
     await b.as("steward").mutation(api.places.setVisibility, { placeId, visibility: "public" });

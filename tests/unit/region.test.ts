@@ -142,9 +142,10 @@ describe("region policy", () => {
   it("keeps the other restrictions while the launch pack is incomplete, with accounts open", () => {
     const region = loadRegions().get("nagasaki")!;
     expect(region.legal.launchPackComplete).toBe(false);
+    expect(region.legal.searchOpen).toBe(true);
     expect(deriveRegionPolicy(region)).toEqual({
       inviteOnly: false,
-      noindex: true,
+      noindex: false,
       allowPilotVisibility: false,
       realBusinessesDraftOnly: true,
     });
@@ -177,7 +178,12 @@ describe("region policy", () => {
     expect(
       deriveRegionPolicy({
         ...region,
-        legal: { ...region.legal, accountsOpen: true, documentsVersion: "2026-11-05" },
+        legal: {
+          ...region.legal,
+          accountsOpen: true,
+          searchOpen: false,
+          documentsVersion: "2026-11-05",
+        },
       }),
     ).toEqual({
       inviteOnly: false,
@@ -185,6 +191,32 @@ describe("region policy", () => {
       allowPilotVisibility: false,
       realBusinessesDraftOnly: true,
     });
+  });
+
+  it("opening search ends the hiding and changes no other launch rule", () => {
+    const region = loadRegions().get("nagasaki")!;
+    const legal = { ...region.legal, accountsOpen: false, searchOpen: true };
+    expect(deriveRegionPolicy({ ...region, legal })).toEqual({
+      inviteOnly: true,
+      noindex: false,
+      allowPilotVisibility: false,
+      realBusinessesDraftOnly: true,
+    });
+  });
+
+  it("refuses open search without the documents, an operator and a takedown contact", () => {
+    const problem = problemOf(
+      parse((r) => {
+        r.legal.accountsOpen = false;
+        r.legal.searchOpen = true;
+        r.legal.documentsVersion = null;
+        r.legal.operatorName = null;
+        r.takedown.contact = null;
+      }),
+    );
+    expect(problem).toContain("documentsVersion");
+    expect(problem).toContain("operatorName");
+    expect(problem).toContain("contact");
   });
 
   it("lifts them only when the launch pack is complete", () => {

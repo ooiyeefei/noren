@@ -209,6 +209,12 @@ export const regionSchema = z
       launchPackComplete: z.boolean(),
       /** Anyone old enough may make an account. It changes no other launch rule. */
       accountsOpen: z.boolean(),
+      /**
+       * Search engines and AI crawlers may read the public pages. The owner turned it on once the
+       * launch pack's documents existed; it changes no other launch rule (real businesses keep the
+       * draft rule until `launchPackComplete`).
+       */
+      searchOpen: z.boolean().default(false),
       /** The date of the published terms and privacy notice; null while neither page exists. */
       documentsVersion: z.string().min(1).nullable(),
     }),
@@ -320,6 +326,19 @@ export const regionSchema = z
       }
     }
 
+    // Search opens only with the same things in place: the documents, an operator and a contact.
+    if (region.legal.searchOpen) {
+      if (region.legal.documentsVersion === null) {
+        fail(["legal", "documentsVersion"], "required once searchOpen is true");
+      }
+      if (region.legal.operatorName === null) {
+        fail(["legal", "operatorName"], "required once searchOpen is true");
+      }
+      if (region.takedown.contact === null) {
+        fail(["takedown", "contact"], "required once searchOpen is true");
+      }
+    }
+
     // Constitution: sign-up opens only with the documents, a named operator and a way to ask for removal.
     if (region.legal.accountsOpen) {
       if (region.legal.documentsVersion === null) {
@@ -348,7 +367,7 @@ export type RegionPolicy = {
 };
 
 /**
- * `launchPackComplete: false` forces noindex on every page, no `pilot` visibility and real
+ * `launchPackComplete: false` forces noindex on every page (unless `searchOpen`), no `pilot` visibility and real
  * businesses in `draft` except openly licensed OSM listings (constitution, Privacy and Legal
  * Constraints). The listing exception never exposes real people's stories. Accounts stay
  * invite-only unless the launch pack is complete or `accountsOpen` is on, which changes nothing else.
@@ -357,7 +376,7 @@ export function deriveRegionPolicy(region: RegionConfig): RegionPolicy {
   const open = region.legal.launchPackComplete;
   return {
     inviteOnly: !(open || region.legal.accountsOpen),
-    noindex: !open,
+    noindex: !(open || region.legal.searchOpen),
     allowPilotVisibility: open,
     realBusinessesDraftOnly: !open,
   };

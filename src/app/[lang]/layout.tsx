@@ -10,6 +10,8 @@ import { ConvexClientProvider } from "@/components/providers/convex-client-provi
 import { clerkLocalization } from "@/lib/i18n/clerk-localization";
 import { getLocale } from "@/lib/i18n/server";
 import { getActiveRegion } from "@/lib/region";
+import { activeRegionConfig } from "@/lib/region/registry";
+import { SITE_ORIGIN, searchOpen } from "@/lib/seo/site";
 import "../globals.css";
 
 // BIZ UDPGothic: Morisawa's universal-design face, legible for older readers, Japanese and Latin in one family.
@@ -29,12 +31,17 @@ const shippori = Shippori_Mincho_B1({
 });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
-export const metadata: Metadata = {
-  title: "Noren",
-  description: "A map of Nagasaki's local places and the stories people have told about them.",
-  // FR-021: said in the page as well as in the X-Robots-Tag header.
-  robots: { index: false, follow: false },
-};
+// A function, so the region is read when a page is built rather than when this file loads.
+export function generateMetadata(): Metadata {
+  return {
+    title: "Noren",
+    description: "A map of Nagasaki's local places and the stories people have told about them.",
+    metadataBase: new URL(SITE_ORIGIN),
+    openGraph: { siteName: "Noren", type: "website" },
+    // FR-021: until the launch pack is complete, said in the page as well as in the X-Robots-Tag header.
+    ...(searchOpen(activeRegionConfig()) ? {} : { robots: { index: false, follow: false } }),
+  };
+}
 
 // Cache Components needs at least one value for every root param.
 export async function generateStaticParams() {

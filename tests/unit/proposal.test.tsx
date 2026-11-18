@@ -135,18 +135,14 @@ describe("the proposal page", () => {
     }
   });
 
-  it("is titled in each language and leaves noindex to the layout, which says it for every page", async () => {
+  it("is titled in each language and asks search engines to leave it out", async () => {
     for (const locale of ["ja", "en"] as const) {
       const metadata = await generateMetadata({
         params: Promise.resolve({ lang: locale }),
       } as Parameters<typeof generateMetadata>[0]);
       expect(metadata.title).toBe(`${proposalMessages[locale].metaTitle} | Noren`);
-      expect(metadata.robots).toBeUndefined();
+      expect(metadata.robots).toEqual({ index: false, follow: false });
     }
-    const layout = readFileSync(path.join(process.cwd(), "src/app/[lang]/layout.tsx"), "utf8");
-    expect(layout).toContain("robots: { index: false, follow: false }");
-    const config = readFileSync(path.join(process.cwd(), "next.config.ts"), "utf8");
-    expect(config).toContain('"noindex, nofollow"');
   });
 
   it("imports nothing from Convex or Clerk", () => {

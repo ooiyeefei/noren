@@ -17,11 +17,15 @@ describe("next.config", () => {
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it("marks every response noindex, nofollow (FR-021)", async () => {
-    expect(await headersForEverything()).toContainEqual({
-      key: "X-Robots-Tag",
-      value: "noindex, nofollow",
-    });
+  it("with search open, marks the signed-in sections noindex and leaves public pages alone", async () => {
+    const noindex = { key: "X-Robots-Tag", value: "noindex, nofollow" };
+    const rules = (await nextConfig.headers?.()) ?? [];
+    expect(await headersForEverything()).not.toContainEqual(noindex);
+    expect(rules.find((rule) => rule.source === "/:lang/steward/:path*")?.headers).toEqual([
+      noindex,
+    ]);
+    expect(rules.find((rule) => rule.source === "/api/:path*")?.headers).toEqual([noindex]);
+    expect(rules.some((rule) => rule.source.includes("places"))).toBe(false);
   });
 
   it("sends a report-only content security policy naming the services the app uses (T121)", async () => {
