@@ -539,6 +539,7 @@ const DELETION_DECISIONS = {
   "voiceUpload.personId": "deleted",
   "story.authorPersonId": "deleted",
   "storyPhoto.uploaderPersonId": "deleted",
+  "postcard.senderPersonId": "deleted",
   "placeCheck.personId": "deleted",
   "note.authorPersonId": "deleted",
   "source.addedBy": "hidden",

@@ -105,6 +105,11 @@ export function AccountMenuView({
         <DropdownMenuItem asChild>
           <Link href={localePath(locale, "/collection")}>{m.collection}</Link>
         </DropdownMenuItem>
+        {features.postcard && (
+          <DropdownMenuItem asChild>
+            <Link href={localePath(locale, "/postcards")}>{m.sendPostcard}</Link>
+          </DropdownMenuItem>
+        )}
         {features.planner && (
           <>
             <DropdownMenuItem asChild>

@@ -80,6 +80,8 @@ const inheritsMockFlag = [
   // From its person and place: a demo account or a demo place is refused at upload.
   "storyPhoto",
   "voiceUpload",
+  // From its person and its places: a demo account is refused, and a card names only real public places.
+  "postcard",
 ];
 const notPersonCreated = [
   "seedOsmCandidate",

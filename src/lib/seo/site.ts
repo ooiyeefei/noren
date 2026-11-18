@@ -23,6 +23,10 @@ export const PRIVATE_SECTIONS = [
   "remembers",
   "plan",
   "walk",
+  // A postcard's address is its key (features.postcard): never listed, never indexed. "postcards" is
+  // the sender's own page.
+  "postcard",
+  "postcards",
   "takedown/status",
 ] as const;
 

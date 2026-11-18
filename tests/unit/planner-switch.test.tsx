@@ -77,6 +77,7 @@ describe("the shipped switch", () => {
       planner: true,
       walk: true,
       thread: false,
+      postcard: false,
     });
   });
 });

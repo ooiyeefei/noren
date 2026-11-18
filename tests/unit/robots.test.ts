@@ -20,7 +20,14 @@ describe("robots.txt", () => {
     const file = robots();
     const rules = file.rules as { allow: string; disallow: string[] };
     expect(rules.allow).toBe("/");
-    for (const path of ["/api/", "/out/", "/en/steward", "/ja/account"]) {
+    for (const path of [
+      "/api/",
+      "/out/",
+      "/en/steward",
+      "/ja/account",
+      "/en/postcard",
+      "/ja/postcards",
+    ]) {
       expect(rules.disallow).toContain(path);
     }
     expect(rules.disallow.some((path) => path.includes("/places"))).toBe(false);
@@ -38,6 +45,9 @@ describe("the noindex header", () => {
     expect(sources).not.toContain("/:path*");
     expect(sources).toContain("/:lang/steward/:path*");
     expect(sources).toContain("/api/:path*");
+    // A postcard is reachable only by its link, so it is never indexed (specs/004-trip-postcard).
+    expect(sources).toContain("/:lang/postcard/:path*");
+    expect(sources).toContain("/:lang/postcards/:path*");
     expect(sources.some((source) => source.includes("places"))).toBe(false);
   });
 });

@@ -21,7 +21,7 @@ function setSwitches(features: {
 }) {
   vi.spyOn(region, "regionConfig").mockImplementation((id: string) => ({
     ...realRegionConfig(id),
-    features: { thread: false, ...features },
+    features: { thread: false, postcard: false, ...features },
   }));
 }
 const plannerOn = () => setSwitches({ connector: false, planner: true, walk: false });

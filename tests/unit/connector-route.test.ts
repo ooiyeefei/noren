@@ -57,6 +57,7 @@ describe("the region's switch", () => {
       planner: true,
       walk: true,
       thread: false,
+      postcard: false,
     });
   });
 

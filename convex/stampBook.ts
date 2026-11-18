@@ -38,7 +38,7 @@ const stampView = v.object({
  * the earliest time they did. A check-in keeps only its date, so it counts from midnight of that day. Something they or a steward took down no longer earns a stamp, and a post the story
  * finder found is not the steward's own (its origin is set), so it never does.
  */
-async function earliestByPlace(ctx: QueryCtx, person: Doc<"person">) {
+export async function earliestByPlace(ctx: QueryCtx, person: Doc<"person">) {
   const earliest = new Map<Id<"place">, number>();
   const note = (placeId: Id<"place">, at: number) => {
     const seen = earliest.get(placeId);

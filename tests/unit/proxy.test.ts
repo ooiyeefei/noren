@@ -124,6 +124,18 @@ describe("proxy", () => {
     expect(auth.protect).toHaveBeenCalledOnce();
   });
 
+  it("sends signed-out visitors to the postcard maker to sign in, and lets anyone open a card by its link", async () => {
+    const maker = visit("/en/postcards", false);
+    await maker.response;
+    expect(maker.auth.protect).toHaveBeenCalledOnce();
+    const card = visit(`/en/postcard/${"a".repeat(24)}`, false);
+    await card.response;
+    expect(card.auth.protect).not.toHaveBeenCalled();
+    const image = visit(`/api/postcard/${"a".repeat(24)}/image`, false);
+    await image.response;
+    expect(image.auth.protect).not.toHaveBeenCalled();
+  });
+
   it("sends signed-out visitors to the account page to sign in", async () => {
     const { auth, response } = visit("/en/account", false);
     await response;

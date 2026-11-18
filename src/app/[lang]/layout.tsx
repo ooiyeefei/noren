@@ -77,7 +77,11 @@ export default async function RootLayout({ children }: LayoutProps<"/[lang]">) {
           <ConvexClientProvider>
             <DraftsProvider>
               <DocumentLinksProvider published={documentsPublished(region)}>
-                <FeatureLinksProvider planner={region.features.planner} walk={region.features.walk}>
+                <FeatureLinksProvider
+                  planner={region.features.planner}
+                  walk={region.features.walk}
+                  postcard={region.features.postcard}
+                >
                   <SiteHeader
                     locale={locale}
                     regionName={region.name[locale] ?? region.id}
