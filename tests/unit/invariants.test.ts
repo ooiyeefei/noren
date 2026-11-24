@@ -126,7 +126,8 @@ it("no table or field is named like a rating, score or sentiment", () => {
 
 it("every index name fits Convex's 64-character identifier limit", () => {
   // The local test backend accepts a longer name; production refuses the whole deploy (24 Nov 2026).
-  const exported = JSON.parse(schema.export()) as {
+  // `export()` is what `npx convex deploy` sends; it is not in the public type.
+  const exported = JSON.parse((schema as unknown as { export(): string }).export()) as {
     tables: { tableName: string; indexes: { indexDescriptor: string }[] }[];
   };
   const tooLong = exported.tables.flatMap(({ tableName, indexes }) =>
