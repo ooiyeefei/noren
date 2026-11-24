@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { switchRegionsOff } from "../tests/fixtures/region-off";
 import { anyApi, type ApiFromModules } from "convex/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as modelFactory from "../src/lib/ai/claim-extractor";
@@ -491,6 +492,8 @@ describe("trips.candidates", () => {
         count: 7,
       });
     });
+    // Malaysia ships on, so switch it off here to prove an off region offers no candidates.
+    switchRegionsOff(tripRegion.id);
     vi.stubEnv("REGIONS_PREVIEW", "");
     expect(await readCandidates(b)).toEqual([]);
     vi.stubEnv("REGIONS_PREVIEW", tripRegion.id);

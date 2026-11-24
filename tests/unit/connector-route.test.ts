@@ -51,15 +51,15 @@ beforeEach(() => {
 });
 
 describe("the region's switch", () => {
-  it("is on in the shipped region file, with the planner and walk mode", () => {
+  it("is on in the shipped region file, with the planner, walk mode, trip agent and practical facts", () => {
     expect(region.features).toEqual({
       connector: true,
       planner: true,
       walk: true,
       thread: false,
       postcard: false,
-      trip: "off",
-      facts: false,
+      trip: "open",
+      facts: true,
     });
   });
 

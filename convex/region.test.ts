@@ -2,6 +2,7 @@
 import { convexTest } from "convex-test";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, it, vi } from "vitest";
+import { switchRegionsOff } from "../tests/fixtures/region-off";
 import schema from "./schema";
 import {
   enabledRegionIds,
@@ -73,16 +74,27 @@ it("isCategoryKey accepts only a configured category, including regions with no 
   expect(isCategoryKey({ ...region, categories: undefined }, "cafe")).toBe(false);
 });
 
-afterEach(() => vi.unstubAllEnvs());
-
-it("reads the home region and its trip and fact switches", () => {
-  vi.stubEnv("REGION_ID", undefined);
-  expect(homeRegion()).toBe(regionConfig("nagasaki"));
-  expect(tripSwitch()).toBe("off");
-  expect(factsOn()).toBe(false);
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
-it("lists only enabled or previewed region IDs", () => {
+it("reads the home region with its trip switch open and its facts on, as shipped", () => {
+  vi.stubEnv("REGION_ID", undefined);
+  expect(homeRegion()).toBe(regionConfig("nagasaki"));
+  expect(tripSwitch()).toBe("open");
+  expect(factsOn()).toBe(true);
+});
+
+it("lists Nagasaki and Malaysia as enabled in the shipped files, with or without a preview", () => {
+  vi.stubEnv("REGIONS_PREVIEW", undefined);
+  expect(enabledRegionIds()).toEqual(["nagasaki", "malaysia-west"]);
+  vi.stubEnv("REGIONS_PREVIEW", "malaysia-west");
+  expect(enabledRegionIds()).toEqual(["nagasaki", "malaysia-west"]);
+});
+
+it("lists only enabled or previewed region IDs once Malaysia is switched off", () => {
+  switchRegionsOff("malaysia-west");
   vi.stubEnv("REGIONS_PREVIEW", undefined);
   expect(enabledRegionIds()).toEqual(["nagasaki"]);
   vi.stubEnv("REGIONS_PREVIEW", "malaysia-west");

@@ -49,6 +49,7 @@ import { SUPPORTED_LOCALES, type Locale } from "@/lib/i18n";
 import { tripMessages } from "@/lib/i18n/messages/trip";
 import { requireTripDoor, tripDoor } from "@/lib/convex/trip-gate";
 import { PRIVATE_SECTIONS } from "@/lib/seo/site";
+import * as regionModule from "@/lib/region";
 import { getRegionConfig } from "@/lib/region/registry";
 import { buildTripRequest } from "@/lib/trip/snapshot";
 import {
@@ -623,8 +624,21 @@ describe("the door", () => {
     expect(tripDoor("open", {})).toBe("open");
   });
 
-  it("answers 404 on this region file, where the switch is off", async () => {
-    await expect(requireTripDoor("en", "/trip")).rejects.toThrow("NEXT_NOT_FOUND");
+  it("ships with the trip switch open on this region file", () => {
+    expect(regionModule.getActiveRegion().features.trip).toBe("open");
+  });
+
+  it("answers 404 when the switch is off", async () => {
+    const real = regionModule.getActiveRegion();
+    vi.spyOn(regionModule, "getActiveRegion").mockReturnValue({
+      ...real,
+      features: { ...real.features, trip: "off" },
+    });
+    try {
+      await expect(requireTripDoor("en", "/trip")).rejects.toThrow("NEXT_NOT_FOUND");
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it("keeps trips among the private sections", () => {

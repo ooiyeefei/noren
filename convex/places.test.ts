@@ -5,6 +5,7 @@ import malaysiaWest from "../regions/malaysia-west.json";
 import nagasaki from "../regions/nagasaki.json";
 import { MAP_PLACE_LIMIT, type Script } from "../src/lib/domain/constants";
 import { cellOf } from "../src/lib/geo/geohash";
+import { switchRegionsOff } from "../tests/fixtures/region-off";
 import {
   addClaim,
   addCorrectedTranscript,
@@ -1412,7 +1413,11 @@ describe("places map queries", () => {
     }
   });
 
-  it("caps the combined result and warns", async () => {
+  it.each([
+    ["with Malaysia on, as shipped", false, "nagasaki, malaysia-west"],
+    ["with Malaysia switched off", true, "nagasaki"],
+  ])("caps the combined result and warns %s", async (_name, malaysiaOff, named) => {
+    if (malaysiaOff) switchRegionsOff("malaysia-west");
     const b = await setup();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const mapCell = cellOf(pin);
@@ -1437,11 +1442,12 @@ describe("places map queries", () => {
     expect(rows).toHaveLength(MAP_PLACE_LIMIT);
     expect(rows.some(({ visibility }) => visibility === "demo_public")).toBe(true);
     expect(warn).toHaveBeenCalledWith(
-      `listForMap: ${MAP_PLACE_LIMIT} places in nagasaki, showing ${MAP_PLACE_LIMIT}`,
+      `listForMap: ${MAP_PLACE_LIMIT} places in ${named}, showing ${MAP_PLACE_LIMIT}`,
     );
   });
 
   it("limits places and coverage to enabled regions and uses the existing slug detail rules", async () => {
+    switchRegionsOff("malaysia-west");
     vi.stubEnv("REGIONS_PREVIEW", "");
     const b = await setup();
     const jpSlug = "jp-map-test";

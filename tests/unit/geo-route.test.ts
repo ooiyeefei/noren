@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { switchRegionsOff } from "../fixtures/region-off";
 import {
   createGeoSearchRoute,
   toSuggestions,
@@ -167,10 +168,14 @@ describe("geo search route", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it.each([false, true])(
-    "keeps hits inside the enabled boxes (Malaysia preview %s)",
-    async (preview) => {
-      vi.stubEnv("REGIONS_PREVIEW", preview ? "malaysia-west" : "");
+  it.each([
+    ["on, as shipped", true],
+    ["switched off", false],
+  ])(
+    "keeps hits inside the enabled boxes (Malaysia %s)",
+    async (_name, preview) => {
+      if (!preview) switchRegionsOff("malaysia-west");
+      vi.stubEnv("REGIONS_PREVIEW", "");
       try {
         const { get, fetch } = setup({ regions: enabledRegionConfigs() });
         fetch.mockImplementation(async () =>
@@ -189,6 +194,7 @@ describe("geo search route", () => {
         );
       } finally {
         vi.unstubAllEnvs();
+        vi.restoreAllMocks();
       }
     },
   );

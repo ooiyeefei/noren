@@ -17,6 +17,7 @@ import {
   newBackend,
 } from "../tests/convex/fixtures";
 import { emptySubmit, scriptedModel } from "../tests/fixtures/planner";
+import { switchRegionsOff } from "../tests/fixtures/region-off";
 import { TRIP_CONSENT_VERSION } from "../src/lib/trip/consent";
 import * as region from "./lib/region";
 import { api as generatedApi, internal } from "./_generated/api";
@@ -45,6 +46,9 @@ afterEach(() => {
 async function setup() {
   vi.stubEnv("REGION_ID", regionId);
   vi.stubEnv("REGIONS_PREVIEW", "malaysia-west");
+  // Malaysia ships on, so the "off" half of these tests switches it off here:
+  // an empty REGIONS_PREVIEW then leaves it off, as an `enabled: false` file would.
+  switchRegionsOff("malaysia-west");
   const b = newBackend(modules);
   const steward = await addPerson(b, "steward", "steward");
   const base = {

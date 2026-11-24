@@ -80,15 +80,15 @@ async function content(Page: () => ReactElement): Promise<ReactElement> {
 }
 
 describe("the shipped switch", () => {
-  it("is on, with the connector and walk mode", () => {
+  it("is on, with the connector, walk mode, trip agent and practical facts", () => {
     expect(regionSchema.parse(nagasaki).features).toEqual({
       connector: true,
       planner: true,
       walk: true,
       thread: false,
       postcard: false,
-      trip: "off",
-      facts: false,
+      trip: "open",
+      facts: true,
     });
   });
 });

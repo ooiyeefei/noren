@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { switchRegionsOff } from "../tests/fixtures/region-off";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiFromModules } from "convex/server";
 import { addPerson, addPlace, errorCode, newBackend, type Backend } from "../tests/convex/fixtures";
@@ -717,6 +718,8 @@ it("matches the URL across enabled regions and leaves a disabled region unmatche
     visibility: "public",
   });
   const args = { ...input, pageUrl: `/en/places/${slug}`, privacyOrMinor: true };
+  // Malaysia ships on, so switch it off here to prove a disabled region goes unmatched.
+  switchRegionsOff("malaysia-west");
   try {
     vi.stubEnv("REGIONS_PREVIEW", "");
     const disabled = await b.t.mutation(api.takedown.submit, args);

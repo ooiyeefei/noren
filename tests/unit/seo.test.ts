@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { switchRegionsOff } from "../fixtures/region-off";
 import { GET as sitemap } from "@/app/sitemap.xml/route";
 import { GET as llms } from "@/app/llms.txt/route";
 import { PRIVATE_SECTIONS } from "@/lib/seo/site";
@@ -8,13 +9,18 @@ const query = vi.hoisted(() => vi.fn());
 vi.mock("convex/nextjs", () => ({ fetchQuery: query }));
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   query.mockReset();
 });
 
-it.each([false, true])(
-  "both crawler routes read only enabled regions (preview %s)",
-  async (preview) => {
-    vi.stubEnv("REGIONS_PREVIEW", preview ? "malaysia-west" : "");
+it.each([
+  ["on, as shipped", true],
+  ["switched off", false],
+])(
+  "both crawler routes read only enabled regions (Malaysia %s)",
+  async (_name, preview) => {
+    if (!preview) switchRegionsOff("malaysia-west");
+    vi.stubEnv("REGIONS_PREVIEW", "");
     query.mockImplementation(async (_ref, { regionId }) => {
       const place = {
         visibility: "public",

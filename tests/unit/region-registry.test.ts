@@ -59,18 +59,38 @@ it("lays Malaysian area fields over the app-wide settings", () => {
     retention: home.retention,
     collection: { newAccount: home.collection.newAccount, utcOffsetHours: 8 },
     geo: { countrycodes: ["my"] },
-    enabled: false,
+    enabled: true,
   });
   expect(area?.neighbourhoods).toBeUndefined();
   expect(area?.geo.aerialPhoto).toBeUndefined();
 });
 
-it("lists Malaysia only with an explicit preview in the shipped config", () => {
+it("lists Malaysia as enabled in the shipped config, with or without a preview", () => {
   vi.stubEnv("REGION_ID", undefined);
   vi.stubEnv("REGIONS_PREVIEW", undefined);
-  expect(enabledRegionConfigs().map(({ id }) => id)).toEqual(["nagasaki"]);
+  expect(enabledRegionConfigs().map(({ id }) => id)).toEqual(["nagasaki", "malaysia-west"]);
   vi.stubEnv("REGIONS_PREVIEW", " , unknown , malaysia-west , malaysia-west ");
   expect(enabledRegionConfigs().map(({ id }) => id)).toEqual(["nagasaki", "malaysia-west"]);
+});
+
+it("lists Malaysia only with an explicit preview when its file says enabled: false", async () => {
+  // The registry reads the file at load, so load a copy of it with Malaysia switched off.
+  vi.resetModules();
+  vi.doMock("../../regions/malaysia-west.json", async (original) => {
+    const file = (await original<{ default: Record<string, unknown> }>()).default;
+    return { default: { ...file, enabled: false } };
+  });
+  try {
+    const off = await import("../../src/lib/region/registry");
+    vi.stubEnv("REGION_ID", undefined);
+    vi.stubEnv("REGIONS_PREVIEW", undefined);
+    expect(off.enabledRegionConfigs().map(({ id }) => id)).toEqual(["nagasaki"]);
+    vi.stubEnv("REGIONS_PREVIEW", " , unknown , malaysia-west , malaysia-west ");
+    expect(off.enabledRegionConfigs().map(({ id }) => id)).toEqual(["nagasaki", "malaysia-west"]);
+  } finally {
+    vi.doUnmock("../../regions/malaysia-west.json");
+    vi.resetModules();
+  }
 });
 
 it("rejects an area-only file chosen as home", () => {

@@ -15,7 +15,7 @@
     "lng": 100.95,
     "zoom": 7
   },
-  "enabled": false,
+  "enabled": true,
   "nameLanguages": [
     "ms",
     "en",
