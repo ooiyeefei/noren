@@ -3,6 +3,7 @@ import { getFunctionName } from "convex/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { TakedownsContainer } from "@/components/steward/takedowns-container";
 import { TakedownsView, type TakedownsProps } from "@/components/steward/takedowns-view";
+import type { Id } from "../../convex/_generated/dataModel";
 import { takedownsMessages } from "@/lib/i18n/messages/takedowns";
 const hooks = vi.hoisted(() => ({ active: false, index: 0, values: [] as unknown[] }));
 vi.mock("react", async (original) => {
@@ -36,11 +37,13 @@ vi.mock("@/components/drafts/drafts", async () => {
 });
 const backend = vi.hoisted(() => ({
   decide: vi.fn(),
+  hide: vi.fn(),
   calls: [] as unknown[],
   pages: new Map<string | null, unknown>(),
 }));
 vi.mock("convex/react", () => ({
   useMutation: (ref: Parameters<typeof getFunctionName>[0]) => {
+    if (getFunctionName(ref) === "facts:hide") return backend.hide;
     expect(getFunctionName(ref)).toBe("takedown:decide");
     return backend.decide;
   },
@@ -95,6 +98,7 @@ beforeEach(() => {
   hooks.values = [];
   backend.calls = [];
   backend.decide.mockReset().mockResolvedValue(null);
+  backend.hide.mockReset().mockResolvedValue(null);
   backend.pages.clear();
   backend.pages.set(null, { page: [row], isDone: false, continueCursor: "next" });
 });
@@ -203,4 +207,28 @@ it.each(["ja", "en"] as const)("%s removal-request nav marks its current destina
   expect(nav.match(/aria-current="page"/g)).toHaveLength(1);
   const current = nav.match(/<a\b[^>]*aria-current="page"[^>]*>/)![0];
   expect(current).toContain(`href="/${locale}/steward/takedowns"`);
+});
+
+it.each([
+  ["en", "Steps at the door", "No", "Hide"],
+  ["ja", "入口に段差", "いいえ", "非表示にする"],
+] as const)("%s shows the fact, reporter, place and Hide action", (locale, wording, no, hide) => {
+  const fact = {
+    id: "mock-fact" as Id<"placeFact">,
+    wording: { en: "Steps at the door", ja: "入口に段差" },
+    value: "no" as const,
+    reporterName: "Mock reporter",
+    status: "live" as const,
+  };
+  const factRow = { ...row, hiddenPlaceId: undefined, placeId: "mock-place", fact };
+  const html = render(<TakedownsView {...props()} locale={locale} rows={[factRow]} />);
+  expect(html).toContain(wording);
+  expect(html).toContain(no);
+  expect(html).toContain("Mock reporter");
+  expect(html).toContain("Mock place");
+  expect(html).toContain(`>${hide}</button>`);
+  const hidden = { ...factRow, fact: { ...fact, status: "hidden" as const } };
+  expect(render(<TakedownsView {...props()} locale={locale} rows={[hidden]} />)).not.toContain(
+    `>${hide}</button>`,
+  );
 });

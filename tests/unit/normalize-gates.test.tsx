@@ -25,7 +25,7 @@ vi.mock("convex/react", () => ({
   useQueries: () => ({}),
 }));
 
-const region = [...loadRegions().values()][0]!;
+const region = loadRegions().get("nagasaki")!;
 const rawId = "not-a-place-id";
 const cases = [
   {

@@ -1,6 +1,7 @@
+import { detectScript } from "../region/names";
 import type { Script } from "../domain/constants";
 import { categoryForTags, isForVisitors } from "./categories";
-import { branchOf, chainNames, detectScript, namesFromTags } from "./tags";
+import { branchOf, chainNames, namesFromTags } from "./tags";
 
 export type ListingCandidate = {
   _id: string;
@@ -17,21 +18,19 @@ export type ListingCandidate = {
 
 export function listingNames(tags: Record<string, string>, locales: readonly string[]) {
   const names: { lang: string; script: Script; value: string; isPrimary: boolean }[] = [];
-  const { ja, en } = namesFromTags(tags);
-  // A Latin-only `name` (e.g. a shop signed "TSUTAYA") is what people call it here, not a translation.
-  const local = ja ?? tags.name?.trim();
-  for (const [lang, raw] of [
-    ["ja", local],
-    ["en", en],
-  ] as const) {
+  const region = { nameLanguages: [...locales] };
+  const rawNames = namesFromTags(tags, locales);
+  // A Latin-only sign in Japan is also what people call the place locally.
+  if (locales.includes("ja")) rawNames.ja ??= tags.name?.trim();
+  for (const lang of locales) {
+    const raw = rawNames[lang];
     // OSM separates several values with ";" (e.g. a hot spring and its bath); keep every part.
     const value = raw
       ?.split(";")
       .map((part) => part.trim())
       .filter(Boolean)
       .join(" ");
-    if (value && locales.includes(lang))
-      names.push({ lang, script: detectScript(value), value, isPrimary: true });
+    if (value) names.push({ lang, script: detectScript(value, region), value, isPrimary: true });
   }
   return names;
 }
@@ -87,7 +86,9 @@ export function selectListings<T extends ListingCandidate>(
         ? "already dismissed"
         : !candidate.tags.name?.trim()
           ? "missing name tag"
-          : !focusCategories.includes(candidate.category ?? categoryForTags(candidate.tags))
+          : !focusCategories.includes(
+                candidate.category ?? categoryForTags(candidate.tags, focusCategories),
+              )
             ? "non-focus category"
             : !isForVisitors(candidate.tags, candidate.isChain === true)
               ? "not for visitors"

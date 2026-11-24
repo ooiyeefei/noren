@@ -1,7 +1,8 @@
 /// <reference types="vite/client" />
 import { anyApi, type ApiFromModules, type FunctionReturnType } from "convex/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { addPerson, addPlace, newBackend, ruleOf, type Backend } from "../tests/convex/fixtures";
+import malaysiaWest from "../regions/malaysia-west.json";
 import nagasaki from "../regions/nagasaki.json";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -11,6 +12,9 @@ import type { ParsedCandidate } from "../src/lib/osm/overpass";
 // Typed runtime proxy until the orchestrator regenerates api.d.ts; all fixtures are SYNTHETIC.
 const f = (anyApi as unknown as ApiFromModules<{ osmSeed: typeof osmSeed }>).osmSeed;
 const modules = import.meta.glob("./**/*.ts");
+
+afterEach(() => vi.unstubAllEnvs());
+
 const point = { lat: nagasaki.defaultCenter.lat, lng: nagasaki.defaultCenter.lng };
 const candidate = (osmId = 1): ParsedCandidate => ({
   osmType: "node" as const,
@@ -868,4 +872,65 @@ describe("synthetic open listing batch APIs", () => {
       }),
     ).rejects.toMatchObject({ data: { code: "invalid_input" } });
   });
+});
+
+it("imports Malaysia's market and worship categories and keeps local names when publishing", async () => {
+  const b = newBackend(modules);
+  const stewardPersonId = await addPerson(b, "synthetic-steward", "steward");
+  const { lat, lng } = malaysiaWest.defaultCenter;
+  const localNames = {
+    "name:ms": "Pasar Ujian",
+    "name:zh": "测试市场",
+    "name:ta": "சோதனை சந்தை",
+  };
+  const inputs = [
+    { ...candidate(801), tags: { name: "Pasar Ujian", amenity: "marketplace", ...localNames } },
+    { ...candidate(802), tags: { name: "Masjid Ujian", amenity: "place_of_worship" } },
+  ];
+  const options = { paginationOpts: { numItems: 10, cursor: null } };
+  const regionId = "malaysia-west";
+  await b.t.mutation(f.importCandidates, {
+    regionId,
+    retrievedAt: 1,
+    candidates: inputs.map((entry) => ({ ...entry, lat, lng })),
+  });
+  const { page } = await b.t.query(f.listingCandidates, { regionId, ...options });
+  expect(Object.fromEntries(page.map(({ osmId, category }) => [osmId, category]))).toEqual({
+    801: "market",
+    802: "worship",
+  });
+
+  // A candidate from before category copies took the same fallback path as a fresh import.
+  const mosque = page.find(({ osmId }) => osmId === 802)!;
+  await b.run((ctx) => ctx.db.patch("seedOsmCandidate", mosque._id, { category: undefined }));
+  const result = await b.t.mutation(f.publishListings, {
+    regionId,
+    stewardPersonId,
+    candidateIds: page.map(({ _id }) => _id),
+  });
+  expect(result.skipped).toEqual([]);
+  vi.stubEnv("REGIONS_PREVIEW", regionId);
+  const details = await Promise.all(
+    result.published.map(({ placeId }) => b.t.query(api.places.get, { placeId })),
+  );
+  expect(details).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        category: "market",
+        names: expect.arrayContaining([
+          { lang: "ms", script: "latin", value: localNames["name:ms"], isPrimary: true },
+          { lang: "zh", script: "hanzi", value: localNames["name:zh"], isPrimary: true },
+          { lang: "ta", script: "tamil", value: localNames["name:ta"], isPrimary: true },
+        ]),
+      }),
+      expect.objectContaining({ category: "worship" }),
+    ]),
+  );
+
+  await b.t.mutation(
+    f.importCandidates,
+    importArgs(inputs.map((entry) => ({ ...entry, osmId: entry.osmId + 2 }))),
+  );
+  const japan = await b.t.query(f.listingCandidates, { regionId: "nagasaki", ...options });
+  expect(japan.page.map(({ category }) => category)).toEqual(["other", "other"]);
 });

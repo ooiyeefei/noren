@@ -3,11 +3,13 @@ import { defineSchema } from "convex/server";
 import { collectionTables } from "./tables/collection";
 import { communityTables } from "./tables/community";
 import { connectorTables } from "./tables/connector";
+import { factTables } from "./tables/facts";
 import { interviewTables } from "./tables/interviews";
 import { placeTables } from "./tables/places";
 import { postcardTables } from "./tables/postcard";
 import { storyFinderTables } from "./tables/storyFinder";
 import { storyPhotoTables } from "./tables/storyPhotos";
+import { tripTables } from "./tables/trip";
 
 export default defineSchema({
   ...placeTables,
@@ -19,4 +21,6 @@ export default defineSchema({
   ...voiceTables,
   ...connectorTables,
   ...postcardTables,
+  ...factTables,
+  ...tripTables,
 });

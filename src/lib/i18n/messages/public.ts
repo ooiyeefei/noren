@@ -4,6 +4,8 @@ import { defineMessages } from "@/lib/i18n";
 export const publicMessages = defineMessages({
   ja: {
     exploreTitle: "長崎の地元のお店",
+    exploreTitleIn: "{region}の地元のお店",
+    exploreTitlePlain: "地元のお店",
     search: "お店を探す",
     clearSearch: "検索を消す",
     all: "すべて",
@@ -17,6 +19,7 @@ export const publicMessages = defineMessages({
     matchCount: "{n} 件が一致",
     matchCountOne: "{n} 件が一致",
     noPlacesInArea: "この範囲にお店はありません。地図を動かすか、縮小してください。",
+    zoomedOutEmpty: "拡大するか町を選ぶと、お店が表示されます。",
     showMorePlaces: "もっとお店を表示",
     nearest: "近い順",
     storiesFirst: "話がある順",
@@ -89,6 +92,8 @@ export const publicMessages = defineMessages({
   },
   en: {
     exploreTitle: "Nagasaki's local places",
+    exploreTitleIn: "{region}'s local places",
+    exploreTitlePlain: "Local places",
     search: "Search places",
     clearSearch: "Clear search",
     all: "All",
@@ -102,6 +107,7 @@ export const publicMessages = defineMessages({
     matchCount: "{n} places match",
     matchCountOne: "{n} place matches",
     noPlacesInArea: "No places in this area. Move or zoom out the map.",
+    zoomedOutEmpty: "Zoom in or choose a town to see places.",
     showMorePlaces: "Show more places",
     nearest: "Nearest first",
     storiesFirst: "Stories first",

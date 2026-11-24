@@ -2,6 +2,7 @@ import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { placeHasOwner } from "./lib/access";
+import { isRegionOn } from "./lib/region";
 import { writeAudit } from "./lib/audit";
 import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
@@ -46,7 +47,7 @@ function view(snippet: Doc<"openTextSnippet">): SnippetView {
  */
 async function requirePinnedLandmark(ctx: QueryCtx, placeId: Id<"place">): Promise<void> {
   const place = await ctx.db.get("place", placeId);
-  if (place === null) throw appError("not_found", "place not found");
+  if (place === null || !isRegionOn(place.regionId)) throw appError("not_found", "place not found");
   const pin = await ctx.db
     .query("pin")
     .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
@@ -74,6 +75,8 @@ export const listForPlace = query({
   returns: v.array(snippetView),
   handler: async (ctx, { placeId }) => {
     await requireRole(ctx, ["steward"]);
+    const place = await ctx.db.get("place", placeId);
+    if (place === null || !isRegionOn(place.regionId)) return [];
     const snippets = await ctx.db
       .query("openTextSnippet")
       .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
@@ -89,6 +92,11 @@ export const link = mutation({
     const steward = await requireRole(ctx, ["steward"]);
     const snippet = await ctx.db.get("openTextSnippet", snippetId);
     if (snippet === null) throw appError("not_found", "snippet not found");
+    if (snippet.placeId !== undefined && snippet.placeId !== placeId) {
+      const linked = await ctx.db.get("place", snippet.placeId);
+      if (linked !== null && !isRegionOn(linked.regionId))
+        throw appError("not_found", "snippet not found");
+    }
     await requirePinnedLandmark(ctx, placeId);
     if (snippet.placeId !== undefined && snippet.placeId !== placeId) {
       throw appError("conflict", "snippet is already linked to another place");

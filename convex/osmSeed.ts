@@ -10,8 +10,8 @@ import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
-import { isInsideRegion, isRegionLocale, regionConfig } from "./lib/region";
-import { slugBase, uniqueSlug } from "./lib/slug";
+import { isRegionOn, isInsideRegion, regionConfig } from "./lib/region";
+import { requireSlugAvailableOutsideRegion, slugBase, uniqueSlug } from "./lib/slug";
 import { scriptValidator } from "./lib/validators";
 
 const attribution = "© OpenStreetMap contributors";
@@ -84,6 +84,7 @@ async function insertCandidatePlace(
     candidate.regionId,
     base === "place" ? `osm-${candidate.osmType}-${candidate.osmId}` : base,
   );
+  await requireSlugAvailableOutsideRegion(ctx, candidate.regionId, slug);
   const placeId = await ctx.db.insert(
     "place",
     withMock(steward, {
@@ -128,7 +129,8 @@ async function hasExternalRef(ctx: QueryCtx, ref: string): Promise<boolean> {
 
 async function availableCandidate(ctx: QueryCtx, candidateId: Id<"seedOsmCandidate">) {
   const candidate = await ctx.db.get("seedOsmCandidate", candidateId);
-  if (!candidate) throw appError("not_found", "candidate not found");
+  if (!candidate || !isRegionOn(candidate.regionId))
+    throw appError("not_found", "candidate not found");
   if (candidate.confirmedPlaceId || candidate.dismissedAt !== undefined)
     throw appError("conflict", "candidate is already confirmed or dismissed");
   return candidate;
@@ -139,6 +141,8 @@ export const importCandidates = internalMutation({
   returns: v.object({ inserted: v.number(), updated: v.number(), skipped: v.number() }),
   handler: async (ctx, { regionId, retrievedAt, candidates }) => {
     const region = regionConfig(regionId);
+    const categoryKeys = region.categories?.map(({ key }) => key) ?? [];
+    const nameLanguages = region.nameLanguages ?? region.locales;
     if (candidates.length > 100 || !Number.isFinite(retrievedAt) || retrievedAt < 0)
       throw appError(
         "invalid_input",
@@ -151,7 +155,7 @@ export const importCandidates = internalMutation({
         !isInsideRegion(region, candidate) ||
         !Number.isSafeInteger(candidate.osmId) ||
         candidate.osmId <= 0 ||
-        !namesFromTags(tags).primary
+        !namesFromTags(tags, nameLanguages).primary
       ) {
         result.skipped++;
         continue;
@@ -166,7 +170,7 @@ export const importCandidates = internalMutation({
         result.skipped++;
         continue;
       }
-      const category = categoryForTags(tags);
+      const category = categoryForTags(tags, categoryKeys);
       checkCategory(regionId, category);
       const values = {
         ...candidate,
@@ -200,7 +204,9 @@ export const listCandidates = query({
   returns: paginationResultValidator(candidateView),
   handler: async (ctx, args) => {
     await requireRole(ctx, ["steward"]);
+    if (!isRegionOn(args.regionId)) return { page: [], isDone: true, continueCursor: "" };
     const region = regionConfig(args.regionId);
+    const categoryKeys = region.categories?.map(({ key }) => key) ?? [];
     if (args.category !== undefined) checkCategory(args.regionId, args.category);
     const focus = region.categories?.filter((item) => item.focus).map((item) => item.key) ?? [];
     // Paginate the indexed candidates first; ref joins may yield a short or empty page. Clients
@@ -220,7 +226,7 @@ export const listCandidates = query({
     const result = await base.paginate(args.paginationOpts);
     const page = [];
     for (const candidate of result.page) {
-      const category = candidate.category ?? categoryForTags(candidate.tags);
+      const category = candidate.category ?? categoryForTags(candidate.tags, categoryKeys);
       if (
         candidate.confirmedPlaceId ||
         candidate.dismissedAt !== undefined ||
@@ -257,6 +263,7 @@ export const confirmCandidate = mutation({
     const steward = await requireRole(ctx, ["steward"]);
     const candidate = await availableCandidate(ctx, candidateId);
     const region = regionConfig(candidate.regionId);
+    const nameLanguages = region.nameLanguages ?? region.locales;
     checkCategory(candidate.regionId, category);
     if (!isInsideRegion(region, pin))
       throw appError("invalid_input", "pin must be inside the region bbox");
@@ -270,7 +277,7 @@ export const confirmCandidate = mutation({
       if (
         !value ||
         value.length > 120 ||
-        !isRegionLocale(region, name.lang) ||
+        !nameLanguages.includes(name.lang) ||
         seen.has(key) ||
         (name.isPrimary && primaries.has(name.lang))
       )
@@ -327,7 +334,8 @@ export const listingCandidates = internalQuery({
   args: { regionId: v.string(), paginationOpts: paginationOptsValidator },
   returns: paginationResultValidator(listingCandidate),
   handler: async (ctx, { regionId, paginationOpts }) => {
-    regionConfig(regionId);
+    const region = regionConfig(regionId);
+    const categoryKeys = region.categories?.map(({ key }) => key) ?? [];
     const result = await ctx.db
       .query("seedOsmCandidate")
       .withIndex("by_regionId", (q) => q.eq("regionId", regionId))
@@ -341,7 +349,7 @@ export const listingCandidates = internalQuery({
         tags: candidate.tags,
         lat: candidate.lat,
         lng: candidate.lng,
-        category: candidate.category,
+        category: candidate.category ?? categoryForTags(candidate.tags, categoryKeys),
         isChain: candidate.isChain,
         confirmedPlaceId: candidate.confirmedPlaceId,
         dismissedAt: candidate.dismissedAt,
@@ -368,6 +376,8 @@ export const publishListings = internalMutation({
       throw appError("invalid_input", "a mock steward cannot publish real listings");
     if (candidateIds.length > 50) throw appError("invalid_input", "publish at most 50 candidates");
     const region = regionConfig(regionId);
+    const categoryKeys = region.categories?.map(({ key }) => key) ?? [];
+    const nameLanguages = region.nameLanguages ?? region.locales;
     const focusCategories =
       region.categories?.filter((item) => item.focus).map((item) => item.key) ?? [];
     const published: { candidateId: Id<"seedOsmCandidate">; placeId: Id<"place">; slug: string }[] =
@@ -384,10 +394,10 @@ export const publishListings = internalMutation({
         skipped.push({ candidateId, reason: reason! });
         continue;
       }
-      const selection = selectListings([candidate], { focusCategories });
+      const category = candidate.category ?? categoryForTags(candidate.tags, categoryKeys);
+      const selection = selectListings([{ ...candidate, category }], { focusCategories });
       reason = selection.skipped[0]?.reason ?? null;
-      const category = candidate.category ?? categoryForTags(candidate.tags);
-      const names = listingNames(candidate.tags, region.locales);
+      const names = listingNames(candidate.tags, nameLanguages);
       const ref = `${candidate.osmType}/${candidate.osmId}`;
       if (!reason && !isInsideRegion(region, candidate)) reason = "outside region bbox";
       if (!reason && (!names.length || names.some((name) => name.value.length > 120)))

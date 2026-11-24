@@ -17,8 +17,8 @@ import { appError } from "./lib/errors";
 import { internalMutation } from "./lib/gate";
 import { readMapNames, readMapPin } from "./lib/mapCopies";
 import { withMock } from "./lib/mock";
-import { isInsideRegion, isRegionLocale, regionConfig } from "./lib/region";
-import { slugBase, uniqueSlug } from "./lib/slug";
+import { isInsideRegion, regionConfig } from "./lib/region";
+import { requireSlugAvailableOutsideRegion, slugBase, uniqueSlug } from "./lib/slug";
 import { licenceValidator, scriptValidator } from "./lib/validators";
 
 /**
@@ -193,6 +193,7 @@ export const publishPlaces = internalMutation({
     if (places.length > PUBLISH_BATCH)
       throw appError("invalid_input", `publish at most ${PUBLISH_BATCH} places`);
     const region = regionConfig(regionId);
+    const nameLanguages = region.nameLanguages ?? region.locales;
     const focus = region.categories?.filter((item) => item.focus).map((item) => item.key) ?? [];
     const published: { gers: string; placeId: Id<"place">; slug: string }[] = [];
     const skipped: { gers: string; reason: string }[] = [];
@@ -211,7 +212,7 @@ export const publishPlaces = internalMutation({
           !reason &&
           (!name.value.trim() ||
             name.value.length > 120 ||
-            !isRegionLocale(region, name.lang) ||
+            !nameLanguages.includes(name.lang) ||
             seen.has(key) ||
             (name.isPrimary && primaries.has(name.lang)))
         )
@@ -232,6 +233,7 @@ export const publishPlaces = internalMutation({
         regionId,
         base === "place" ? `overture-${item.gers.slice(-12)}` : base,
       );
+      await requireSlugAvailableOutsideRegion(ctx, regionId, slug);
       const placeId = await ctx.db.insert(
         "place",
         withMock(person, {

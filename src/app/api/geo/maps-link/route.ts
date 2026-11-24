@@ -1,7 +1,9 @@
+import { isInsideRegion, isRegionOn } from "../../../../../convex/lib/region";
 import { auth } from "@clerk/nextjs/server";
 import { requirePersonOnServer } from "@/lib/convex/server";
 import { isAllowedMapsHost, parseMapsUrl, resolveMapsLink } from "@/lib/geo/maps-link";
 import { jsonError } from "@/lib/http/handler";
+import { REGION_CONFIGS } from "@/lib/region/registry";
 
 // Accept per-instance limits; upgrade to a shared Convex limiter when traffic grows.
 const lastCalls = new Map<string, number>();
@@ -38,6 +40,11 @@ export async function GET(request: Request): Promise<Response> {
         "No coordinates were found in this link. Place the pin on the map or try another link.",
       );
       return new Response(response.body, { status: 422, headers: response.headers });
+    }
+    const point = { lat: suggestion.lat, lng: suggestion.lng };
+    const matching = [...REGION_CONFIGS.values()].filter((region) => isInsideRegion(region, point));
+    if (matching.length > 0 && !matching.some(({ id }) => isRegionOn(id))) {
+      return jsonError("not_found", "Not found");
     }
     return Response.json(
       { suggestion, source: "the link you pasted" },

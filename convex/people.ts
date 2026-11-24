@@ -13,6 +13,7 @@ import { internalMutation, mutation } from "./lib/gate";
 import { cancelPendingPosts } from "./lib/instagramCancel";
 import { removePhotos } from "./lib/storyPhotos";
 import { literals, roleValidator } from "./lib/validators";
+import { canOpenTrips } from "./trips";
 
 const FALLBACK_NAME = "New member";
 
@@ -46,6 +47,7 @@ export const current = query({
       nameConfirmed: v.boolean(),
       joinedAt: v.number(),
       filmSeen: v.boolean(),
+      trip: v.boolean(),
     }),
   ),
   handler: async (ctx) => {
@@ -59,6 +61,7 @@ export const current = query({
           nameConfirmed: nameIsConfirmed(person),
           joinedAt: person._creationTime,
           filmSeen: person.introFilmSeen === true,
+          trip: canOpenTrips(person),
         };
   },
 });
@@ -284,6 +287,33 @@ export const bootstrapSteward = internalMutation({
   },
 });
 
+/** Adds or removes a private trial from the owner’s Convex command line. */
+export const setTrial = internalMutation({
+  args: { clerkUserId: v.string(), trial: v.string(), on: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, { clerkUserId, trial, on }) => {
+    const person = await ctx.db
+      .query("person")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", clerkUserId))
+      .unique();
+    if (person === null) throw appError("not_found", "person not found");
+    const trials = person.trials ?? [];
+    if (trials.includes(trial) === on) return null;
+    if (on && trials.length >= 8) throw appError("conflict", "at most eight trials per person");
+    await ctx.db.patch("person", person._id, {
+      trials: on ? [...trials, trial] : trials.filter((name) => name !== trial),
+    });
+    await writeAudit(ctx, {
+      actorKind: "system",
+      action: "person.set_trial",
+      targetType: "person",
+      targetId: person._id,
+      diff: { trial, on },
+    });
+    return null;
+  },
+});
+
 /**
  * Sets the name shown beside what a person shares, from the CLI: `npx convex run people:setDisplayName`.
  * A sign-in that carries no name leaves the fallback, and it stays until someone changes it here.
@@ -438,6 +468,15 @@ const DELETION_STEPS: readonly DeletionStep[] = [
     }
     return page;
   },
+  // All of the member's practical facts go, including reports already hidden or removed.
+  async (ctx, personId, paginationOpts) => {
+    const page = await ctx.db
+      .query("placeFact")
+      .withIndex("by_personId_and_placeId_and_key", (q) => q.eq("personId", personId))
+      .paginate(paginationOpts);
+    for (const fact of page.page) await ctx.db.delete("placeFact", fact._id);
+    return page;
+  },
 ];
 
 async function holdsInterviewOrOwnership(ctx: QueryCtx, personId: Id<"person">): Promise<boolean> {
@@ -462,6 +501,12 @@ async function emptyPerson(ctx: MutationCtx, person: Doc<"person">): Promise<voi
     .withIndex("by_personId", (q) => q.eq("personId", person._id))
     .unique();
   if (collection !== null) await ctx.db.delete("personCollection", collection._id);
+  // A member can keep at most 50 private links. Withdraw them with the account.
+  const links = await ctx.db
+    .query("tripShare")
+    .withIndex("by_ownerPersonId", (q) => q.eq("ownerPersonId", person._id))
+    .take(50);
+  for (const link of links) await ctx.db.delete("tripShare", link._id);
   // A replace, so any profile field added later goes too unless it is listed here.
   await ctx.db.replace("person", person._id, {
     tokenIdentifier: deletedIdentity(person._id),

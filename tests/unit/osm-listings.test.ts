@@ -293,3 +293,14 @@ describe("publication CLI with an offline runner", () => {
     expect(log.mock.calls[1]?.[0]).toMatchObject({ hidden: 101, published: 0 });
   });
 });
+
+it("keeps a sole Chinese or Tamil sign in its script without an English translation", () => {
+  for (const [value, lang, script] of [
+    ["示例", "zh", "hanzi"],
+    ["மாதிரி", "ta", "tamil"],
+  ]) {
+    expect(listingNames({ name: value! }, ["ms", "en", "zh", "ta"])).toEqual([
+      { lang, script, value, isPrimary: true },
+    ]);
+  }
+});

@@ -116,3 +116,33 @@ for (const path of pages) {
     });
   });
 }
+
+// Zoomed out past where places load, the map shows one marker for each town and a note instead.
+for (const path of ["/ja/map", "/en/map"]) {
+  test.describe(`${path} zoomed out`, () => {
+    test("axe WCAG A/AA has no serious or critical violations once the town markers show", async ({
+      page,
+    }) => {
+      await page.goto(path);
+      const zoomOut = page.getByRole("button", { name: path === "/ja/map" ? "縮小" : "Zoom out" });
+      const note = page.locator("[data-zoomed-out]");
+      await expect(zoomOut).toBeVisible();
+      for (let step = 0; step < 14 && !(await note.isVisible()); step++) {
+        await zoomOut.click();
+        await page.waitForTimeout(400);
+      }
+      await expect(note).toBeVisible();
+      // Each town marker is a button with the town's name as its text.
+      const towns = page.locator("button[data-town-id]");
+      await expect(towns.first()).toBeVisible();
+      for (const town of await towns.all()) await expect(town).toHaveAccessibleName(/\S/);
+      const { violations } = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+        .analyze();
+      expect(
+        violations.filter((item) => item.impact === "serious" || item.impact === "critical"),
+        "Serious/critical axe violations (including affected nodes)",
+      ).toEqual([]);
+    });
+  });
+}

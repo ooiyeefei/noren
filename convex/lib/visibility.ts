@@ -1,6 +1,7 @@
 import type { Doc } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { isPubliclyReadablePlace } from "./access";
+import { isRegionOn } from "./region";
 
 /** The verified caller's person row, or null for a signed-out visitor. */
 export type Viewer = Doc<"person"> | null;
@@ -20,6 +21,7 @@ export async function canReadPlace(
   viewer: Viewer,
   place: Doc<"place">,
 ): Promise<boolean> {
+  if (!isRegionOn(place.regionId)) return false;
   if (isPubliclyReadablePlace(place)) return true;
   if (place.visibility === "pilot") return viewer !== null;
   if (viewer === null) return false;
@@ -45,6 +47,7 @@ export async function readablePlaces(
   options: { regionId: string; limit?: number },
 ): Promise<Doc<"place">[]> {
   const { regionId, limit = 100 } = options;
+  if (!isRegionOn(regionId)) return [];
   const inRegion = (visibility: Doc<"place">["visibility"]) =>
     ctx.db
       .query("place")

@@ -27,7 +27,7 @@ import { readMapNames } from "./lib/mapCopies";
 import { isPublicRealPlace, nameView, publicPool, toPoolPlace } from "./lib/publicPool";
 import { carriedQuestionShown, placeRef, placeRefOf, type PlaceRef } from "./lib/relay";
 import { limitContribution } from "./lib/rateLimit";
-import { isRegionLocale, regionConfig } from "./lib/region";
+import { isRegionOn, isRegionLocale, regionConfig } from "./lib/region";
 import {
   attachPhotos,
   placePhotoRules,
@@ -132,7 +132,9 @@ async function answeredBy(
   }
   if (!carry || asked.nextQuestionFor !== place._id) return undefined;
   const source = await ctx.db.get("place", asked.placeId);
-  return carriedQuestionShown(source, asked) ? { kind: "story", storyId: asked._id } : undefined;
+  return source !== null && isRegionOn(source.regionId) && carriedQuestionShown(source, asked)
+    ? { kind: "story", storyId: asked._id }
+    : undefined;
 }
 
 /**
@@ -366,7 +368,8 @@ export const listForPlace = query({
     const others = new Map<Id<"place">, Doc<"place"> | null>();
     const otherPlace = async (id: Id<"place">) => {
       if (!others.has(id)) others.set(id, await ctx.db.get("place", id));
-      return others.get(id) ?? null;
+      const other = others.get(id) ?? null;
+      return other !== null && isRegionOn(other.regionId) ? other : null;
     };
     /** Where a question is carried to, when it still shows there; else undefined. */
     const carriedTarget = async (story: Doc<"story">): Promise<PlaceRef | undefined> => {
@@ -454,7 +457,7 @@ export const carryTargets = query({
   ),
   handler: async (ctx, { placeId }) => {
     const place = await ctx.db.get("place", placeId);
-    if (place === null) return [];
+    if (place === null || !isRegionOn(place.regionId)) return [];
     const region = regionConfig(place.regionId);
     if (!threadOn(region.features)) return [];
     const here = await toPoolPlace(ctx, region, place);
@@ -505,7 +508,8 @@ export const carriedTo = query({
     for (const story of carried) {
       if (rows.length >= CARRIED_SHOWN_LIMIT) break;
       const source = await ctx.db.get("place", story.placeId);
-      if (source === null || !carriedQuestionShown(source, story)) continue;
+      if (source === null || !isRegionOn(source.regionId) || !carriedQuestionShown(source, story))
+        continue;
       rows.push({
         storyId: story._id,
         text: story.nextQuestion!,
@@ -561,6 +565,7 @@ export const latest = query({
   args: { regionId: v.string() },
   returns: v.array(latestEntry),
   handler: async (ctx, { regionId }) => {
+    if (!isRegionOn(regionId)) return [];
     const places = new Map<Id<"place">, Doc<"place"> | null>();
     async function readable(placeId: Id<"place">) {
       if (!places.has(placeId)) {
@@ -654,9 +659,13 @@ export const clearQuestion = mutation({
     const person = await requirePerson(ctx);
     const story: Doc<"story"> | null = await ctx.db.get("story", storyId);
     if (story === null) throw appError("not_found", "story not found");
+    const place = await ctx.db.get("place", story.placeId);
+    if (place !== null && !isRegionOn(place.regionId))
+      throw appError("not_found", "story not found");
     const target =
       story.nextQuestionFor === undefined ? null : await ctx.db.get("place", story.nextQuestionFor);
-    const targetEditor = target !== null && canEditPlace(person, target);
+    const targetEditor =
+      target !== null && isRegionOn(target.regionId) && canEditPlace(person, target);
     if (story.authorPersonId !== person._id && !targetEditor) {
       const place = await loadReadablePlace(ctx, person, story.placeId);
       if (!canEditPlace(person, place))
@@ -691,6 +700,9 @@ export const remove = mutation({
     const person = await requirePerson(ctx);
     const story: Doc<"story"> | null = await ctx.db.get("story", storyId);
     if (story === null) throw appError("not_found", "story not found");
+    const place = await ctx.db.get("place", story.placeId);
+    if (place !== null && !isRegionOn(place.regionId))
+      throw appError("not_found", "story not found");
     if (story.authorPersonId !== person._id) {
       const place = await loadReadablePlace(ctx, person, story.placeId);
       if (!canEditPlace(person, place))

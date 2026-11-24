@@ -61,7 +61,11 @@ export const checkBatch = internalAction({
         const started = Date.now();
         try {
           const reported = await checker.check({
-            place: { names: candidate.placeNames, category: candidate.category },
+            place: {
+              names: candidate.placeNames,
+              category: candidate.category,
+              regionId: candidate.regionId,
+            },
             post: {
               platform: candidate.platform,
               text: candidate.text,

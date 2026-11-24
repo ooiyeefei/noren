@@ -1,4 +1,4 @@
-import type { Script } from "../domain/constants";
+import { detectScript as regionScript } from "../region/names";
 
 export const CATEGORY_KEYS = ["amenity", "shop", "craft", "tourism", "historic"] as const;
 
@@ -6,6 +6,9 @@ export const ALLOWED_TAG_KEYS = [
   "name",
   "name:ja",
   "name:en",
+  "name:ms",
+  "name:zh",
+  "name:ta",
   "name:ja-Hrkt",
   "amenity",
   "shop",
@@ -60,29 +63,50 @@ export function branchOf(
   return undefined;
 }
 
-export function pickTags(tags: unknown): Record<string, string> {
+export function pickTags(
+  tags: unknown,
+  nameLanguages: readonly string[] = ["ja", "en", "ms", "zh", "ta"],
+): Record<string, string> {
   if (!tags || typeof tags !== "object" || Array.isArray(tags)) return {};
   const result: Record<string, string> = {};
   for (const key of ALLOWED_TAG_KEYS) {
+    if (key.startsWith("name:")) {
+      const language = key === "name:ja-Hrkt" ? "ja" : key.slice(5);
+      if (!nameLanguages.includes(language)) continue;
+    }
     const value = (tags as Record<string, unknown>)[key];
     if (typeof value === "string" && value.trim()) result[key] = value.trim().slice(0, 200);
   }
   return result;
 }
 
-export function detectScript(value: string): Script {
-  // A mixed Japanese name follows its most specific script, even with Latin brand text.
-  if (/\p{Script=Han}/u.test(value)) return "kanji";
-  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(value)) return "kana";
-  return "latin";
+export function detectScript(value: string) {
+  return regionScript(value, {});
 }
 
-export function namesFromTags(tags: Record<string, string>): {
+export function namesFromTags(
+  tags: Record<string, string>,
+  nameLanguages: readonly string[] = ["ja", "en"],
+): {
+  [lang: string]: string | undefined;
   ja?: string;
   en?: string;
   primary?: string;
 } {
-  const clean = pickTags(tags);
+  const clean = pickTags(tags, nameLanguages);
+  if (nameLanguages.some((lang) => lang !== "ja" && lang !== "en")) {
+    const names: Record<string, string> = {};
+    for (const lang of nameLanguages) {
+      const value = clean[`name:${lang}`];
+      if (value) names[lang] = value;
+    }
+    if (clean.name) {
+      const script = regionScript(clean.name, { nameLanguages: [...nameLanguages] });
+      const local = script === "hanzi" ? "zh" : script === "tamil" ? "ta" : nameLanguages[0];
+      if (local && nameLanguages.includes(local)) names[local] ??= clean.name;
+    }
+    return { ...names, primary: clean.name ?? Object.values(names)[0] };
+  }
   const primary = clean.name ?? clean["name:ja"] ?? clean["name:en"] ?? clean["name:ja-Hrkt"];
   const japanese = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
   const ja = clean["name:ja"] ?? (clean.name && japanese.test(clean.name) ? clean.name : undefined);

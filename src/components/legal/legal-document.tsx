@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { PageContainer } from "@/components/layout/page-container";
-import { format, type Locale } from "@/lib/i18n";
+import { format, localePath, type Locale } from "@/lib/i18n";
 import {
   legalDocuments,
   legalMessages,
   lineShown,
+  malayPrivacy,
   lineText,
   type LegalLine,
   type NoticeSwitch,
@@ -34,29 +36,49 @@ function Filled({ text, values }: { text: string; values: DocumentValues }) {
   );
 }
 
-/** The terms or the privacy notice, with the region's facts filled in and its version date on top. */
+/**
+ * The terms or the privacy notice, with the region's facts filled in and its version date on top.
+ * `malay` shows the Malay notice instead (T038): the page chrome stays in the interface language and
+ * only the document is in Malay.
+ */
 export function LegalDocumentView({
   locale,
   kind,
   values,
+  malay = false,
 }: {
   locale: Locale;
   kind: "terms" | "privacy";
   values: DocumentValues;
+  malay?: boolean;
 }) {
-  const legal = legalDocuments[locale][kind];
+  const legal = malay ? malayPrivacy.document : legalDocuments[locale][kind];
+  const language = malay ? "ms" : locale;
   const on = (key: NoticeSwitch) => values[key] === "on";
   const lines = (list: readonly LegalLine[] | undefined) =>
     (list ?? []).filter((line) => lineShown(line, on)).map(lineText);
   const shown = legal.sections.filter((section) => section.when === undefined || on(section.when));
   return (
     <PageContainer locale={locale} title={legal.title}>
-      <div lang={locale} className="max-w-prose space-y-8 leading-[1.8]">
+      <div lang={language} className="max-w-prose space-y-8 leading-[1.8]">
         <div className="space-y-2">
-          <p className="text-[15px] text-muted-foreground">
+          <p lang={malay ? locale : undefined} className="text-[15px] text-muted-foreground">
             {format(legalMessages[locale].version, { version: values.version })}
           </p>
           <p>{legal.lead}</p>
+          {malay && (
+            <>
+              <p>{malayPrivacy.unreviewed.ms}</p>
+              <p lang="en">{malayPrivacy.unreviewed.en}</p>
+            </>
+          )}
+          {kind === "privacy" && !malay && on("malaysia") && (
+            <p>
+              <Link className="underline" href={localePath(locale, "/privacy/ms")}>
+                {legalMessages[locale].malayLink}
+              </Link>
+            </p>
+          )}
         </div>
         {shown.map((section) => (
           <section key={section.id} aria-labelledby={section.id} className="space-y-3">

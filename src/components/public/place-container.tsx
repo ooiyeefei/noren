@@ -16,7 +16,13 @@ import type { Locale } from "@/lib/i18n";
 import { PublicQueryBoundary } from "./home-container";
 import { PublicLoading } from "./home-view";
 import { readLocation } from "@/lib/collection/location";
-import { PlaceView, pressedAfter, type PlaceCollection, type PressedFrom } from "./place-view";
+import {
+  PlaceView,
+  pressedAfter,
+  type PlaceCollection,
+  type PlaceFacts,
+  type PressedFrom,
+} from "./place-view";
 import { useShownAs } from "@/components/place/use-shown-as";
 import { useToday } from "./use-today";
 import { placeHeading, type PublicRegionProps } from "./mapping";
@@ -80,21 +86,25 @@ type Props = {
     answers?: string | string[];
   }>;
   locale: Locale;
+  /** The home region's settings: what the page uses until the place has loaded. */
   region: PublicRegionProps;
+  /** The settings of every region that is on, by id; the place's own `regionId` picks one. */
+  regions?: Readonly<Record<string, PublicRegionProps>>;
   /** What the server sent to show until the place has loaded: its summary as plain HTML. */
   loading?: ReactNode;
 };
-export function PlaceContainer({ params, searchParams, locale, region, loading }: Props) {
+export function PlaceContainer({ params, searchParams, locale, region, regions, loading }: Props) {
   const { slug } = use(params);
   const query = use(searchParams);
   const address = readPlaceTab(query);
   const answers = Array.isArray(query.answers) ? query.answers[0] : query.answers;
   return (
-    <PublicQueryBoundary key={`${locale}/${region.regionId}/${slug}`} locale={locale}>
+    <PublicQueryBoundary key={`${locale}/${slug}`} locale={locale}>
       <PlaceQuery
         slug={slug}
         locale={locale}
-        region={region}
+        home={region}
+        regions={regions}
         address={address}
         answers={answers}
         loading={loading}
@@ -105,16 +115,21 @@ export function PlaceContainer({ params, searchParams, locale, region, loading }
 function PlaceQuery({
   slug,
   locale,
-  region,
+  home,
+  regions,
   address,
   answers,
   loading,
-}: Omit<Props, "params" | "searchParams"> & {
+}: Omit<Props, "params" | "searchParams" | "region"> & {
+  home: PublicRegionProps;
   slug: string;
   address: PlaceTabState;
   answers?: string;
 }) {
-  const place = useQuery(api.places.getBySlug, { regionId: region.regionId, slug });
+  // The place is found by its slug alone, and the page takes its area's settings (name order,
+  // attribution, what is on) from the place's own region, not from the one the server started in.
+  const place = useQuery(api.places.bySlug, { slug });
+  const region = (place && regions?.[place.regionId]) ?? home;
   const args = place ? { placeId: place._id } : "skip";
   const sources = useQuery(api.sources.listForPlace, args);
   const stories = useQuery(api.stories.listForPlace, args);
@@ -148,6 +163,14 @@ function PlaceQuery({
     api.storyPhotos.forPlace,
     photoLimits && place && isAuthenticated ? { placeId: place._id } : "skip",
   );
+  const regionFacts = region.facts;
+  const placeFacts = useQuery(
+    api.facts.forPlace,
+    regionFacts && place ? { placeId: place._id } : "skip",
+  );
+  const reportFact = useMutation(api.facts.report);
+  const removeFact = useMutation(api.facts.remove);
+  const hideFact = useMutation(api.facts.hide);
   const [pressedFrom, setPressedFrom] = useState<PressedFrom>(null);
   // Said before the work is done, so the stamp arrives already pressing rather than flashing first.
   const pressing = async <T,>(from: NonNullable<PressedFrom>, work: () => Promise<T>) => {
@@ -255,6 +278,30 @@ function PlaceQuery({
           },
         }
       : undefined;
+  const facts: PlaceFacts | undefined =
+    place && regionFacts && regionFacts.vocabulary.length > 0
+      ? {
+          vocabulary: regionFacts.vocabulary,
+          maxAgeDays: regionFacts.maxAgeDays,
+          facts: placeFacts,
+          ...(person?.role === "steward"
+            ? { hide: (factId, reason) => hideFact({ factId: factId as Id<"placeFact">, reason }) }
+            : {}),
+          tick: {
+            signedIn: isLoading ? undefined : isAuthenticated,
+            shownAs,
+            mine: Object.fromEntries(
+              (placeFacts ?? []).flatMap((fact) =>
+                fact.basis === "member" && fact.addedByMe
+                  ? [[fact.key, { factId: fact._id, value: fact.value }]]
+                  : [],
+              ),
+            ),
+            report: (key, value) => reportFact({ placeId: place._id, key, value }),
+            remove: (factId) => removeFact({ factId: factId as Id<"placeFact"> }),
+          },
+        }
+      : undefined;
   return (
     <PlaceView
       locale={locale}
@@ -270,6 +317,7 @@ function PlaceQuery({
       mission={mission}
       collection={collection}
       stamp={stamp && { stampedAt: stamp.stampedAt, pressedFrom }}
+      facts={facts}
       initialTab={address.tab}
       initialWrite={address.write}
     />

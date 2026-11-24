@@ -47,10 +47,19 @@ vi.mock("@/lib/region", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/region")>();
   return {
     ...original,
-    getActiveRegion: () => ({
-      ...original.getRegion("nagasaki")!,
-      features: { connector: false, planner: active.planner, walk: false, thread: false },
-    }),
+    getActiveRegion: () => {
+      const region = original.getRegion("nagasaki")!;
+      return {
+        ...region,
+        features: {
+          ...region.features,
+          connector: false,
+          planner: active.planner,
+          walk: false,
+          thread: false,
+        },
+      };
+    },
   };
 });
 
@@ -78,6 +87,8 @@ describe("the shipped switch", () => {
       walk: true,
       thread: false,
       postcard: false,
+      trip: "off",
+      facts: false,
     });
   });
 });

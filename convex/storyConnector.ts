@@ -5,7 +5,7 @@ import { writeAudit } from "./lib/audit";
 import { currentPerson, requirePerson } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
-import { regionConfig } from "./lib/region";
+import { isRegionOn, regionConfig } from "./lib/region";
 
 /**
  * Whether the viewer, as the writer, has allowed AI to read this story with their name: Noren's
@@ -22,7 +22,12 @@ export const choiceOf = query({
     if (viewer === null || story === null || story.authorPersonId !== viewer._id) return null;
     if (story.status !== "live") return null;
     const place = await ctx.db.get("place", story.placeId);
-    if (place === null || !aiReadingOffered(regionConfig(place.regionId).features)) return null;
+    if (
+      place === null ||
+      !isRegionOn(place.regionId) ||
+      !aiReadingOffered(regionConfig(place.regionId).features)
+    )
+      return null;
     return { allowed: story.connectorAllowedAt !== undefined };
   },
 });
@@ -41,11 +46,13 @@ export const setAllowed = mutation({
     const person = await requirePerson(ctx);
     const story = await ctx.db.get("story", storyId);
     if (story === null) throw appError("not_found", "story not found");
+    const place = await ctx.db.get("place", story.placeId);
+    if (place !== null && !isRegionOn(place.regionId))
+      throw appError("not_found", "story not found");
     if (story.authorPersonId !== person._id)
       throw appError("forbidden", "only the writer may change this");
     if (on === (story.connectorAllowedAt !== undefined)) return null;
     if (on) {
-      const place = await ctx.db.get("place", story.placeId);
       if (story.status !== "live" || place === null)
         throw appError("conflict", "only a story that is showing can be offered to the connector");
       if (!aiReadingOffered(regionConfig(place.regionId).features))

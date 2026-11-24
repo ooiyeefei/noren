@@ -14,7 +14,7 @@ export const ASSIGNABLE_ROLES = [
  * readable by signed-in people; nothing sets it in the product now.
  */
 export const VISIBILITIES = ["draft", "demo_public", "pilot", "public"] as const;
-export const SCRIPTS = ["kanji", "kana", "romaji", "latin"] as const;
+export const SCRIPTS = ["kanji", "kana", "romaji", "latin", "hanzi", "tamil"] as const;
 
 /**
  * `landmark` is a legacy label that grants nothing: it never makes a place public, and a place is a business
@@ -108,7 +108,14 @@ export const EXTERNAL_PROVIDERS = [
 export const PAGE_VERSION_STATUSES = ["held", "published"] as const;
 export const NOTE_STATUSES = ["new", "held", "visible", "hidden"] as const;
 export const TAKEDOWN_STATUSES = ["received", "hidden", "decided", "appealed", "closed"] as const;
-export const TAKEDOWN_TARGET_TYPES = ["place", "source", "claim", "interview", "note"] as const;
+export const TAKEDOWN_TARGET_TYPES = [
+  "place",
+  "source",
+  "claim",
+  "interview",
+  "note",
+  "fact",
+] as const;
 export const ACTOR_KINDS = ["person", "ai", "system"] as const;
 
 export type Role = (typeof ROLES)[number];

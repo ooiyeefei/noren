@@ -1,4 +1,5 @@
 import type { Script } from "../../src/lib/domain/constants";
+import { REGION_CONFIGS } from "../../src/lib/region/registry";
 import type { QueryCtx } from "../_generated/server";
 import { appError } from "./errors";
 
@@ -29,4 +30,20 @@ export async function uniqueSlug(ctx: QueryCtx, regionId: string, base: string):
     if (existing === null) return slug;
   }
   throw appError("conflict", "all 50 slugs for this name are already in use in this region");
+}
+
+/** A place URL contains only the slug, even when the other region is currently off. */
+export async function requireSlugAvailableOutsideRegion(
+  ctx: QueryCtx,
+  regionId: string,
+  slug: string,
+): Promise<void> {
+  for (const otherRegionId of REGION_CONFIGS.keys()) {
+    if (otherRegionId === regionId) continue;
+    const existing = await ctx.db
+      .query("place")
+      .withIndex("by_regionId_and_slug", (q) => q.eq("regionId", otherRegionId).eq("slug", slug))
+      .first();
+    if (existing !== null) throw appError("conflict", "slug already used in another region");
+  }
 }

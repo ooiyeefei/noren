@@ -1,5 +1,5 @@
 import { renderToStaticMarkup as render } from "react-dom/server";
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { HomeView, PublicLoading } from "@/components/public/home-view";
 import { toHomeModel, type LatestStoryLike } from "@/components/public/mapping";
 import { format } from "@/lib/i18n";
@@ -7,6 +7,8 @@ import { publicMessages } from "@/lib/i18n/messages/public";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { exploreItems, type MapView } from "@/components/explore/helpers";
 import { PlaceMap } from "@/components/map/place-map";
+import { mergeLoaded, openingBounds, townMarkers } from "@/components/map/map-helpers";
+import { cellOf, cellsForView } from "@/lib/geo/geohash";
 import { landmark, place, region } from "../fixtures/public-ui";
 
 vi.mock("maplibre-gl", () => {
@@ -401,3 +403,92 @@ it("scrolls the desktop side panel as one piece, with search kept in reach", () 
   expect(panel).toContain("lg:overflow-y-auto");
   expect(html).toMatch(/class="[^"]*lg:sticky lg:top-0[^"]*"><div class="relative/);
 });
+
+describe("the map loads by view", () => {
+  const nagasaki = region.center;
+  it("opens on cells that fit one request at Nagasaki's opening view", () => {
+    const bounds = openingBounds(nagasaki)!;
+    expect(bounds).not.toBeNull();
+    const cells = cellsForView(bounds)!;
+    expect(cells.cells.length).toBeGreaterThan(0);
+    expect(cells.cells).toContain(cellOf(nagasaki).slice(0, cells.precision));
+    // The opening view lies inside the bounds, so no place a person sees at opening is left out.
+    expect(bounds.west).toBeLessThan(nagasaki.lng);
+    expect(bounds.east).toBeGreaterThan(nagasaki.lng);
+  });
+
+  it("keeps held places while the next answer arrives, replaces covered cells and drops far ones", () => {
+    const row = (id: string, lat: number, lng: number) => ({ _id: id, pin: { lat, lng } });
+    const near = row("near", 32.75, 129.88);
+    const hidden = row("hidden", 32.751, 129.881);
+    const far = row("far", 35.68, 139.76);
+    const held = new Map([near, hidden, far].map((entry) => [entry._id, entry]));
+    const here = cellsForView(view)!;
+    // The answer for the view's own cells no longer lists "hidden"; "far" is outside what is kept.
+    const next = mergeLoaded(held, [near], here, view);
+    expect([...next.keys()]).toEqual(["near"]);
+    // An answer for a neighbouring view leaves the places of the first one in place.
+    const east = { ...view, west: 129.93, east: 129.96 };
+    const moved = mergeLoaded(next, [row("east", 32.75, 129.94)], cellsForView(east)!, east);
+    expect([...moved.keys()].sort()).toEqual(["east", "near"]);
+    // Nothing is held before the first answer.
+    expect(mergeLoaded(null, [near], here, view).size).toBe(1);
+  });
+
+  it("answers null for a view too wide to load, and names towns in the reader's language", () => {
+    expect(cellsForView({ west: 99, south: 3, east: 103, north: 6.5 })).toBeNull();
+    const towns = townMarkers(
+      [
+        {
+          id: "ipoh",
+          names: { en: "Ipoh", ms: "Ipoh", zh: "怡保" },
+          center: { lat: 4.6, lng: 101.08 },
+          radiusMetres: 9000,
+        },
+        {
+          id: "only-ja",
+          names: { ja: "島原" },
+          center: { lat: 32.8, lng: 130.3 },
+          radiusMetres: 5000,
+        },
+      ],
+      "zh",
+      "en",
+    );
+    expect(towns.map((town) => town.label)).toEqual(["怡保", "島原"]);
+    expect(towns[0]).toEqual({
+      id: "ipoh",
+      label: "怡保",
+      lat: 4.6,
+      lng: 101.08,
+      radiusMetres: 9000,
+    });
+  });
+
+  for (const locale of ["en", "ja"] as const) {
+    it(`says why there are no places and hands the towns to the map when zoomed out (${locale})`, () => {
+      const towns = [{ id: "ipoh", label: "Ipoh", lat: 4.6, lng: 101.08, radiusMetres: 9000 }];
+      const html = render(
+        <HomeView
+          locale={locale}
+          region={region}
+          model={toHomeModel([], locale, region)}
+          zoomedOut
+          towns={towns}
+        />,
+      );
+      expect(html).toContain(placeUiMessages[locale].zoomForPlaces);
+      const props = vi.mocked(PlaceMap).mock.lastCall![0];
+      expect(props.markers).toEqual([]);
+      expect(props.explore).toEqual(expect.objectContaining({ zoomedOut: true, towns }));
+      // No count or ranking on the status, and no status at all while places are loading by view.
+      expect(html).not.toMatch(/\b(?:rating|score|star)s?\b/i);
+      expect(home(locale)).not.toContain(placeUiMessages[locale].zoomForPlaces);
+    });
+  }
+});
+function home(locale: "en" | "ja") {
+  return render(
+    <HomeView locale={locale} region={region} model={toHomeModel([place], locale, region)} />,
+  );
+}

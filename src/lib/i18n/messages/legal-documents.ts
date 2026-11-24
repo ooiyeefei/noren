@@ -24,8 +24,11 @@ import { defineMessages, type Locale } from "../index";
 /**
  * What the notice follows from the region file: photos, the three switched features, and whether
  * a writer can let AI read a story (the tick shows while the connector or the planner is on).
+ * `malaysia` is on while the region malaysia-west is on, `facts` follows features.facts, and `trip`
+ * is on only while features.trip is "open" (a trial member is told on the trip pages instead, T077).
  */
-export type NoticeSwitch = "photos" | "connector" | "planner" | "walk" | "aiReading";
+export type NoticeSwitch =
+  "photos" | "connector" | "planner" | "walk" | "aiReading" | "malaysia" | "facts" | "trip";
 
 /** A line shown only while a switch is on (`when`) or only while it is off (`unless`). */
 export type SwitchedLine = { text: string; when?: NoticeSwitch; unless?: NoticeSwitch };
@@ -74,12 +77,15 @@ export type LegalDocument = {
 export const legalMessages = defineMessages({
   ja: {
     version: "版の日付：{version}",
+    // The link to the Malay notice, shown on the privacy page only while Malaysia is on.
+    malayLink: "マレー語版（Bahasa Melayu）。マレー語を読める方の確認は、まだ済んでいません。",
     // Clerk's sign-up tick, kept with Clerk's link tokens. Clerk fills the links from its Legal settings.
     consentLabel:
       '私は{age}歳以上で、{{termsOfServiceLink || link("利用規約")}}と{{privacyPolicyLink || link("プライバシーポリシー")}}に同意します',
   },
   en: {
     version: "Version: {version}",
+    malayLink: "Bahasa Melayu (Malay) version. A Malay speaker has not yet reviewed it.",
     consentLabel:
       'I am {age} or over and agree to the {{ termsOfServiceLink || link("Terms") }} and the {{ privacyPolicyLink || link("Privacy Notice") }}',
   },
@@ -151,6 +157,10 @@ export const legalDocuments: Readonly<
           ],
           closing: [
             "Noren を見守る運営担当者は、このルールに反するものを非表示にできます。違反を繰り返すアカウントは閉じることがあります。",
+            {
+              when: "malaysia",
+              text: "マレーシアの法律があなたに適用される場合、ここで共有するものには、この規約に加えてその法律も適用されます。",
+            },
           ],
         },
         {
@@ -179,6 +189,10 @@ export const legalDocuments: Readonly<
           heading: "AI と情報の正確さ",
           paragraphs: [
             "Noren の文章には AI が書いたものがあり、「Noren の AI が仕立てました」と表示しています。AI は投稿を読み違えることがあるので、元の投稿もお読みください。オープンデータから載せた場所は、情報が古いことがあります。お出かけの前にご確認ください。",
+            {
+              when: "facts",
+              text: "事実の報告は、ご自身で見たことにしてください。聞いただけのこと、写したこと、推測は報告せず、他の人の代わりに報告もしないでください。",
+            },
           ],
         },
         {
@@ -187,6 +201,12 @@ export const legalDocuments: Readonly<
           heading: "一日のプラン",
           paragraphs: [
             "「一日のプラン」は、メンバーが書いた場所から立ち寄り先を無作為に選び、AI がその話から一文を選びます。文を書いたのはメンバーで、場所はその後に変わっているかもしれません。営業時間や決まりは、お出かけの前にご確認ください。保存したルールは場所選びに使いますが、Noren が確かめられるのは一部だけで、どれかは画面に表示します。アレルギーが大事な場合は、その場所にご自身でお尋ねください。",
+            // The line below sits in the Plan my day section, so it shows only while both the planner
+            // and the trip are on. Put it in "accuracy" if the trip may open without the planner.
+            {
+              when: "trip",
+              text: "プランは、会員が書いた場所から引いた提案です。その場所が開いている、合っている、安全だという約束ではありません。出かける前に確かめ、医療・食事・安全に関わる必要のためにこれだけに頼らないでください。",
+            },
           ],
         },
         {
@@ -432,6 +452,47 @@ export const legalDocuments: Readonly<
             "アシスタントが読んだ内容は、その会社が持ち、その会社の規約とプライバシーポリシーに従って扱います。",
           ],
         },
+        // The three parts below are the draft in specs/005-trip-agent/notice-draft.md. Each shows only
+        // while its switch is on, and the wording is the owner's to settle (T018). Turning any of them
+        // on changes the published notice, so set a new documentsVersion in that change (R17).
+        {
+          id: "facts",
+          when: "facts",
+          heading: "場所についての事実の報告",
+          items: [
+            "会員は、段差のない入口や礼拝室など、その場所で見つけたことを報告できます。報告には会員の表示名と報告した日が表示されます。",
+            "報告は会員が自分で見たことについての説明です。Noren はその人の言葉として表示し、評価や集計には使いません。",
+            "表示名をまだ確認していない会員には、報告とともに表示名と日付を表示することへの同意を、報告の前に求めます。",
+            "自分の報告は、その場所のページから取り消せます。取り消した報告はページに表示されなくなり、アカウントを削除するまでは削除済みの印を付けて保持されます。自動で消える期限はありません。報告時の監査記録にはアカウントと報告の識別子、はい・いいえの回答が残ります。監査記録に自動で消える期限はなく、アカウントを削除した後も残る場合があります。",
+          ],
+        },
+        {
+          id: "trip",
+          when: "trip",
+          heading: "プランと旅行",
+          items: [
+            "同行者の説明や旅行の情報、入力した名前や呼び名、受け取ったプランは、この端末のブラウザに保存されます。",
+            "プランを作るか更新するとき、ブラウザは道順、日数、入力した日付やピン、年齢層、必要な配慮や好みなどを、オーストラリアにある Noren のサーバーに送ります。同行者の情報には識別用のキーを使い、名前や呼び名は送りません。Noren はこの情報で場所を選び、プランを返します。依頼の内容や結果のプランをデータベースには保存しません。",
+            "「書いたことを読んでもらう」を押すと、Noren は提案を出すために、入力した言葉と言語を、変更時には日、枠、場所名、項目の種類を含む概要も、設定されたプラン作成用の AI に送ります。送り先はサービス一覧にある米国の Meta Platforms または Anthropic です。別の質問で入力した同行者の説明は送りません。この欄に書いた名前や必要な配慮は AI に届く場合があります。Noren の録音機能で音声を送るときは、「AI とあなたの言葉」にある音声認識への別の同意が必要です。",
+            "食事や移動の配慮から、宗教上の信条や健康状態が分かることがあります。プランの作成・変更や AI への送信ボタンのそばに、送る内容と送り先を表示し、ボタンを押して同意するようお願いします。",
+            "プランに必要なことだけを入力してください。同行者の個人情報を送る前に、本人の同意を得てください。18 歳未満の場合は、親、後見人、または親としての責任を負う方の同意を得てください。",
+            "共有リンクを作ると、Noren はリンクのコード、アカウントの識別子、端末上の旅行の識別子と地域、共有する題名と旅程を保存します。旅程には日付、道順、立ち寄り先、ピンや誰の番かを示す呼び名、誰のためかは表示しない確認項目が含まれる場合があります。リンクを知っている人は誰でも見られます。リンクをオフにするかアカウントを削除すると、リンクの記録を削除します。リンクに自動で切れる期限はありません。",
+            "Noren はアカウントごとに、プランと AI への依頼を 1 分と 24 時間の枠で、共有リンクの作成・更新を 24 時間の枠で数えます。各記録には枠の開始時刻と回数が残り、枠が終わった後の次の利用で数え直します。自動では消えず、アカウント削除時にも消えません。",
+          ],
+        },
+        {
+          id: "malaysia",
+          when: "malaysia",
+          heading: "マレーシアでの Noren",
+          items: [
+            "この項は、旅行プランを含む {region} のマレーシア向けサービスで Noren が取り扱う個人データに適用されます。",
+            "Noren は、2024年個人データ保護改正法による改正後のマレーシアの2010年個人データ保護法が、マレーシア向けサービスに適用されるものとして従います。",
+            "個人データの責任者は {operator} です。Noren はオーストラリアのシドニーにある Convex を使って、アカウントや投稿のデータを保存し、プランの依頼を処理します。任意の AI や音声機能では、国外のサービスにデータが送られることがあります。送り先と目的は、サービス一覧と「プランと旅行」をご覧ください。",
+            "個人データを国外へ送るのは、同法第129条で認められる場合です。同意を根拠とするときは、別途同意を求めます。個人データの漏えいなどが起きた場合は、法律に従い、マレーシアの個人データ保護コミッショナーと影響を受けた方に必要な通知を行います。",
+            "個人データに関する依頼は {contact} までお寄せください。開示、訂正、利用の制限、同意の撤回を求められます。技術的に可能で形式に互換性がある場合は、Noren が持つご自身の個人データを指定した別の管理者に直接送るよう、電子的な書面でも依頼できます。",
+            "英語版とマレー語版の内容が異なる場合は、英語版が優先されます。マレーシアの法律で認められた権利は引き続き適用されます。",
+          ],
+        },
         // Shown only while photos are on. Turning them on changes this notice, so set a new
         // documentsVersion in the same change.
         {
@@ -592,6 +653,10 @@ export const legalDocuments: Readonly<
           ],
           closing: [
             "Stewards, the people who look after Noren, can hide what breaks these rules. An account that keeps breaking them may be closed.",
+            {
+              when: "malaysia",
+              text: "Where Malaysian law applies to you, it applies to what you share here in addition to the rest of these terms.",
+            },
           ],
         },
         {
@@ -620,6 +685,10 @@ export const legalDocuments: Readonly<
           heading: "AI and accuracy",
           paragraphs: [
             "Some text on Noren is written by AI and marked “Stitched by Noren's AI”. AI can misread what people wrote, so go and read the original posts. A place from open data can be out of date. Check before you travel.",
+            {
+              when: "facts",
+              text: "A report of a fact must be what you saw yourself. Do not report what you only heard, copied or guessed, and do not report for someone else.",
+            },
           ],
         },
         {
@@ -628,6 +697,10 @@ export const legalDocuments: Readonly<
           heading: "Plan my day",
           paragraphs: [
             "Plan my day picks stops at random from places members have written about, and its AI chooses lines from their stories. Members wrote those lines, and a place may have changed since, so check opening times and rules before you go. Your saved rules help choose places, but Noren can check only some of them, and the page says which. If an allergy matters, ask the place yourself.",
+            {
+              when: "trip",
+              text: "A plan is a suggestion drawn from places members have written about. It is not a promise that a place is open, suitable or safe. Check before you go, and do not rely on it for a medical, dietary or safety need.",
+            },
           ],
         },
         {
@@ -873,6 +946,47 @@ export const legalDocuments: Readonly<
             "What an assistant reads is then held by the company behind it, under that company's own terms and privacy notice.",
           ],
         },
+        // The three parts below are the draft in specs/005-trip-agent/notice-draft.md. Each shows only
+        // while its switch is on, and the wording is the owner's to settle (T018). Turning any of them
+        // on changes the published notice, so set a new documentsVersion in that change (R17).
+        {
+          id: "facts",
+          when: "facts",
+          heading: "Reports of a place's facts",
+          items: [
+            "A member can report what they found at a place, such as a step-free entrance or a prayer room. The report shows their display name and the day they made it.",
+            "A report is the member's own account of what they saw. Noren displays it as their statement and does not use it as a rating or a count.",
+            "Before a member whose display name is still unconfirmed can report, Noren asks them to agree to showing their name and the day with the report.",
+            "You can remove your own report from the place page. It stops being shown there. Noren keeps the report marked as removed until account deletion, with no earlier automatic expiry. The audit entry made when you reported, including the account and report IDs and the yes or no answer, has no automatic expiry and can remain after account deletion.",
+          ],
+        },
+        {
+          id: "trip",
+          when: "trip",
+          heading: "Plans and trips",
+          items: [
+            "Your browser keeps the party description and your trips on this device, including names or labels you enter and the plan you receive.",
+            "To make or update a plan, your browser sends Noren's server in Australia the route, days and any dates or pins, and group details such as age bands, rules and likes under traveller keys without their names or labels. Noren uses these details to choose places and returns the plan. The trip planner writes neither the request nor the resulting plan to its database.",
+            "When you press Read what I wrote, Noren sends your words, the language and, for changes, a short outline with days, slots, place names and item types to its configured planning AI service for suggestions. Noren uses the planning service described in the service list, which can be Meta Platforms or Anthropic in the United States. The planner does not send the separate group description to that service. Any names or needs in the words you send can reach it. If you use Noren's recorder, the separate speech-recognition agreement covers sending the recording, as described under AI and your words.",
+            "Dietary and access needs may reveal religious beliefs or health information. Beside the plan, change and AI buttons, Noren explains what each action sends and where, and asks you to agree by pressing the button.",
+            "Include only what the plan needs. Get each traveller's agreement before sending their personal details. For a traveller under 18, get agreement from a parent, guardian or someone with parental responsibility.",
+            "If you make a share link, Noren stores its code, your account ID, the trip's device ID and region, and the shared title and itinerary. The itinerary can include dates, routes, stops, labels for pins or whose turn it is, and checks shown at stops without saying who needs them. Anyone with the link can read it. Noren deletes the link record when you switch it off or delete the account. Links have no automatic expiry.",
+            "Noren stores counts per account for plan and AI requests in one-minute and 24-hour windows, and for share-link creation or updates in 24-hour windows. Each counter stores its window start and count. It resets on the next use after its window ends, and its row has no automatic expiry or account-deletion cleanup.",
+          ],
+        },
+        {
+          id: "malaysia",
+          when: "malaysia",
+          heading: "Noren in Malaysia",
+          items: [
+            "This part covers personal data Noren processes in providing its Malaysian coverage in {region}, including trips.",
+            "Noren treats Malaysia's Personal Data Protection Act 2010, as amended by the Personal Data Protection (Amendment) Act 2024, as applying to its Malaysian coverage and follows it.",
+            "{operator} is responsible for your personal data. Noren uses Convex in Sydney, Australia, to store account and contribution data and process trip requests. The optional AI and speech features can send data to services abroad. See the service list and Plans and trips for who receives it and why.",
+            "Personal data is transferred abroad only on a ground allowed by section 129. When Noren relies on consent for a transfer, it asks separately. Noren will notify the Malaysian Personal Data Protection Commissioner and people affected by a breach when required by law.",
+            "Contact {contact} for privacy requests. You can ask to access or correct personal data, limit its use or withdraw consent. You can also ask in writing electronically for Noren to send personal data it holds about you directly to another controller you choose, where technically feasible and the formats are compatible.",
+            "If the English and Malay notices differ, the English text governs. Your rights under Malaysian law still apply.",
+          ],
+        },
         // Shown only while photos are on. Turning them on changes this notice, so set a new
         // documentsVersion in the same change.
         {
@@ -969,5 +1083,74 @@ export const legalDocuments: Readonly<
         },
       ],
     },
+  },
+};
+
+/**
+ * The privacy notice's Malaysian parts in Malay (T038), a document of its own at /privacy/ms. Malay is
+ * not an interface language: the site stays in Japanese and English and only this page is in Malay.
+ * Section 7(3) of Malaysia's Act asks for a notice in the national language and in English, if the Act
+ * reaches Noren (research.md, "Verify at build time" item 5).
+ *
+ * The Malay is machine-drafted from the English and no Malay speaker has read it. The page says so
+ * until one has, as the Japanese did. When a Malay speaker has read it, change `unreviewed` and
+ * record who read it and when.
+ *
+ * It holds only the three parts the draft gives in Malay (malaysia, facts, trip). The rest of the
+ * notice is in the English text, and the lead says so. Each part shows under the same switch
+ * as the English one.
+ */
+export const malayPrivacy: {
+  document: LegalDocument;
+  /** The plain line saying the Malay has not been reviewed, in Malay and then in English. */
+  unreviewed: { ms: string; en: string };
+} = {
+  unreviewed: {
+    ms: "Teks Bahasa Melayu ini belum disemak oleh penutur Bahasa Melayu.",
+    en: "A Malay speaker has not yet reviewed this Malay text.",
+  },
+  document: {
+    title: "Notis Privasi Noren (Bahasa Melayu)",
+    lead: "Halaman ini mengandungi bahagian notis privasi Noren yang berkaitan dengan Malaysia. Selebihnya ada dalam notis privasi dalam bahasa Inggeris.",
+    sections: [
+      {
+        id: "malaysia",
+        when: "malaysia",
+        heading: "Noren di Malaysia",
+        items: [
+          "Bahagian ini meliputi data peribadi yang diproses oleh Noren untuk liputan Malaysia di {region}, termasuk perancangan perjalanan.",
+          "Noren menganggap Akta Perlindungan Data Peribadi 2010 Malaysia, sebagaimana dipinda oleh Akta Perlindungan Data Peribadi (Pindaan) 2024, terpakai kepada liputannya di Malaysia dan mematuhinya.",
+          "{operator} bertanggungjawab terhadap data peribadi anda. Noren menggunakan Convex di Sydney, Australia, untuk menyimpan data akaun dan sumbangan serta memproses permintaan perjalanan. Ciri AI dan suara yang anda pilih boleh menghantar data kepada perkhidmatan di luar negara. Lihat senarai perkhidmatan dalam notis bahasa Inggeris dan bahagian Rancangan dan perjalanan untuk mengetahui penerima dan tujuannya.",
+          "Data peribadi dipindahkan ke luar negara hanya atas dasar yang dibenarkan oleh seksyen 129. Jika Noren bergantung pada persetujuan untuk pemindahan, Noren memintanya secara berasingan. Noren akan memaklumkan Pesuruhjaya Perlindungan Data Peribadi Malaysia dan orang yang terjejas oleh pelanggaran data apabila dikehendaki oleh undang-undang.",
+          "Hubungi {contact} bagi semua permintaan privasi. Anda boleh meminta akses kepada data peribadi anda, membetulkannya, mengehadkan penggunaannya atau menarik balik persetujuan. Anda juga boleh membuat permintaan bertulis secara elektronik supaya Noren menghantar data peribadi anda terus kepada pengawal data lain pilihan anda, jika boleh dilaksanakan secara teknikal dan format data serasi.",
+          "Jika terdapat perbezaan antara notis bahasa Inggeris dan bahasa Melayu, teks bahasa Inggeris terpakai. Hak anda di bawah undang-undang Malaysia tetap terpakai.",
+        ],
+      },
+      {
+        id: "facts",
+        when: "facts",
+        heading: "Laporan fakta tentang sesuatu tempat",
+        items: [
+          "Ahli boleh melaporkan apa yang mereka temui di sesuatu tempat, seperti pintu masuk tanpa tangga atau bilik solat. Nama paparan ahli dan hari laporan dibuat dipaparkan bersama laporan.",
+          "Laporan ialah kenyataan ahli tentang apa yang dilihatnya sendiri. Noren memaparkannya sebagai kenyataan ahli dan tidak menggunakannya sebagai penilaian atau kiraan.",
+          "Jika ahli belum mengesahkan nama paparannya, Noren meminta persetujuan sebelum ahli boleh melapor supaya nama dan hari itu dipaparkan bersama laporan.",
+          "Anda boleh menarik balik laporan anda sendiri dari halaman tempat itu. Laporan itu tidak lagi dipaparkan. Noren menyimpannya dengan tanda ditarik balik sehingga akaun dipadamkan, tanpa tempoh luput automatik yang lebih awal. Catatan audit yang dibuat semasa anda melapor mengandungi ID akaun dan laporan serta jawapan ya atau tidak. Catatan itu tidak luput secara automatik dan boleh kekal selepas akaun dipadamkan.",
+        ],
+      },
+      {
+        id: "trip",
+        when: "trip",
+        heading: "Rancangan dan perjalanan",
+        items: [
+          "Pelayar pada peranti ini menyimpan penerangan kumpulan dan perjalanan anda, termasuk nama atau gelaran yang anda masukkan dan rancangan yang anda terima.",
+          "Untuk membuat atau mengemas kini rancangan, pelayar anda menghantar laluan, bilangan hari, tarikh atau pin yang dimasukkan, serta butiran kumpulan seperti julat umur, keperluan dan kegemaran kepada pelayan Noren di Australia. Butiran kumpulan menggunakan pengecam tanpa nama atau gelaran. Noren menggunakan butiran ini untuk memilih tempat dan memulangkan rancangan. Perancang perjalanan tidak menyimpan permintaan atau hasil rancangan dalam pangkalan datanya.",
+          "Apabila anda menekan butang untuk membaca tulisan anda, Noren menghantar kata-kata anda dan bahasa kepada AI perancang untuk mendapatkan cadangan. Jika anda meminta perubahan, Noren turut menghantar ringkasan yang mengandungi hari, slot, nama tempat dan jenis item. Perkhidmatan yang ditetapkan boleh jadi Meta Platforms atau Anthropic di Amerika Syarikat, seperti dalam senarai perkhidmatan. Penerangan kumpulan daripada soalan lain tidak dihantar kepada AI itu. Nama atau keperluan dalam kata-kata yang anda hantar boleh diterima oleh AI itu. Jika anda menggunakan perakam Noren, penghantaran rakaman memerlukan persetujuan berasingan untuk pengecaman suara seperti yang diterangkan dalam bahagian AI dan kata-kata anda.",
+          "Keperluan makanan dan akses boleh mendedahkan kepercayaan agama atau maklumat kesihatan. Di sebelah butang untuk membuat atau mengubah rancangan dan menghantar kata-kata kepada AI, Noren menerangkan apa yang dihantar dan ke mana, lalu meminta anda bersetuju dengan menekan butang itu.",
+          "Masukkan hanya maklumat yang diperlukan untuk rancangan. Dapatkan persetujuan setiap orang sebelum menghantar butiran peribadi mereka. Bagi orang di bawah umur 18 tahun, dapatkan persetujuan ibu bapa, penjaga atau orang yang mempunyai tanggungjawab ibu bapa.",
+          "Jika anda membuat pautan kongsi, Noren menyimpan kod pautan, ID akaun, ID perjalanan pada peranti dan rantau, serta tajuk dan jadual perjalanan yang dikongsi. Jadual itu boleh mengandungi tarikh, laluan, tempat singgah, label pin atau giliran seseorang, serta semakan di tempat singgah tanpa menyatakan siapa yang memerlukannya. Sesiapa yang mempunyai pautan boleh membacanya. Noren memadamkan rekod pautan apabila anda mematikannya atau memadamkan akaun. Pautan tidak luput secara automatik.",
+          "Noren menyimpan kiraan bagi setiap akaun untuk permintaan rancangan dan AI dalam tempoh satu minit dan 24 jam, serta untuk pembuatan atau pengemaskinian pautan kongsi dalam tempoh 24 jam. Setiap rekod menyimpan waktu mula tempoh dan kiraan. Kiraan bermula semula apabila digunakan selepas tempoh tamat. Rekod kiraan tidak luput secara automatik atau dipadam bersama akaun.",
+        ],
+      },
+    ],
   },
 };

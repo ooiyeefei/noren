@@ -123,12 +123,15 @@ export function isNotAPlaceName(name: string): boolean {
 export function categoryForTaxonomy(
   hierarchy: readonly string[] | null | undefined,
   name?: string,
+  focusCategories: readonly string[] = [],
 ): OvertureCategory | null {
   const path = hierarchy ?? [];
   for (const row of OVERTURE_CATEGORY_ROWS) {
     if (!row.terms.some((term) => path.includes(term))) continue;
     return row.category === "restaurant" && name && IZAKAYA_NAME.test(name) ? "bar" : row.category;
   }
+  if (focusCategories.includes("worship") && path.includes("place_of_worship")) return "worship";
+  if (focusCategories.includes("market") && path.includes("farmers_market")) return "market";
   return null;
 }
 

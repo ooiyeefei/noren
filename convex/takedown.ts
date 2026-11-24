@@ -1,14 +1,19 @@
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v } from "convex/values";
-import { activeRegionConfig } from "../src/lib/region/registry";
-import type { MutationCtx } from "./_generated/server";
+import { getRegionConfig } from "../src/lib/region/registry";
+import type { Doc } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { query } from "./_generated/server";
+import { hideFact } from "./facts";
 import { writeAudit } from "./lib/audit";
-import { requireRole } from "./lib/auth";
+import { currentPerson, requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
 import { consumeRateLimit } from "./lib/rateLimit";
+import { enabledRegionIds, isRegionOn } from "./lib/region";
 import { takedownStatusValidator } from "./lib/validators";
+import { canReadPlace } from "./lib/visibility";
+import { factStatus, factValue } from "./tables/facts";
 
 const ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz";
 const CODE = /^[23456789abcdefghjkmnpqrstuvwxyz]{12}$/;
@@ -88,6 +93,7 @@ async function enforceLimit(
 export const submit = mutation({
   args: {
     pageUrl: v.string(),
+    factId: v.optional(v.id("placeFact")),
     details: v.string(),
     privacyOrMinor: v.boolean(),
     contact: v.optional(v.string()),
@@ -113,26 +119,41 @@ export const submit = mutation({
       throw appError("invalid_input", "Contact must be at most 200 characters.");
     }
     const target = targetPath(args.pageUrl);
-    const region = activeRegionConfig();
-    const place =
-      target.slug === undefined
-        ? null
-        : await ctx.db
-            .query("place")
-            .withIndex("by_regionId_and_slug", (q) =>
-              q.eq("regionId", region.id).eq("slug", target.slug!),
-            )
-            .unique();
+    let place: Doc<"place"> | null = null;
+    const slug = target.slug;
+    if (slug !== undefined) {
+      for (const regionId of enabledRegionIds()) {
+        place = await ctx.db
+          .query("place")
+          .withIndex("by_regionId_and_slug", (q) => q.eq("regionId", regionId).eq("slug", slug))
+          .unique();
+        if (place !== null) break;
+      }
+    }
+    const factId = args.factId;
+    if (factId !== undefined) {
+      const fact = await ctx.db.get("placeFact", factId);
+      if (
+        !place ||
+        fact?.placeId !== place._id ||
+        !isRegionOn(fact.regionId) ||
+        fact.status !== "live" ||
+        fact.isMock !== place.isMock ||
+        !(await canReadPlace(ctx, await currentPerson(ctx), place))
+      )
+        throw appError("not_found", "Practical fact not found on that page.");
+    }
     await enforceLimit(ctx, "takedown:submit", 30, HOUR, now);
     if (place !== null) await enforceLimit(ctx, `takedown:place:${place._id}`, 5, DAY, now);
     const code = await uniqueCode(ctx);
     const hidden =
+      factId === undefined &&
       args.privacyOrMinor &&
       place !== null &&
       ["public", "demo_public", "pilot"].includes(place.visibility);
     const requestId = await ctx.db.insert("takedownRequest", {
-      targetType: "place",
-      targetId: place?._id ?? target.path,
+      targetType: factId === undefined ? "place" : "fact",
+      targetId: factId ?? place?._id ?? target.path,
       reason: details,
       privacyOrMinor: args.privacyOrMinor,
       requesterContact: args.contact?.trim() ?? "",
@@ -171,6 +192,20 @@ export const submit = mutation({
   },
 });
 
+async function targetOf(ctx: QueryCtx, request: Doc<"takedownRequest">) {
+  const factId =
+    request.targetType === "fact" ? ctx.db.normalizeId("placeFact", request.targetId) : null;
+  const fact = factId === null ? null : await ctx.db.get("placeFact", factId);
+  const placeId =
+    request.hiddenPlaceId ??
+    fact?.placeId ??
+    (request.targetType === "place" ? ctx.db.normalizeId("place", request.targetId) : null);
+  const place = placeId === null ? null : await ctx.db.get("place", placeId);
+  const visible =
+    (fact === null || isRegionOn(fact.regionId)) && (place === null || isRegionOn(place.regionId));
+  return { fact, place, visible };
+}
+
 export const statusByCode = query({
   args: { code: v.string() },
   returns: v.union(
@@ -191,7 +226,7 @@ export const statusByCode = query({
       .query("takedownRequest")
       .withIndex("by_code", (q) => q.eq("code", code))
       .unique();
-    if (request === null) return null;
+    if (request === null || !(await targetOf(ctx, request)).visible) return null;
     return {
       status: request.status,
       receivedAt: request.receivedAt,
@@ -215,7 +250,11 @@ export const appeal = mutation({
           .withIndex("by_code", (q) => q.eq("code", code))
           .unique()
       : null;
-    if (request === null || request.status !== "decided") {
+    if (
+      request === null ||
+      !(await targetOf(ctx, request)).visible ||
+      request.status !== "decided"
+    ) {
       throw appError(
         "conflict",
         "An appeal is available only after a request has a decided outcome.",
@@ -245,6 +284,15 @@ const listItem = v.object({
   placeId: v.optional(v.id("place")),
   placeSlug: v.optional(v.string()),
   placeName: v.optional(v.string()),
+  fact: v.optional(
+    v.object({
+      id: v.id("placeFact"),
+      wording: v.object({ en: v.string(), ja: v.string() }),
+      value: factValue,
+      reporterName: v.string(),
+      status: factStatus,
+    }),
+  ),
   details: v.string(),
   privacyOrMinor: v.boolean(),
   contact: v.optional(v.string()),
@@ -275,10 +323,8 @@ export const list = query({
             .paginate(paginationOpts);
     const page = await Promise.all(
       result.page.map(async (request) => {
-        const placeId =
-          request.hiddenPlaceId ??
-          (request.targetType === "place" ? ctx.db.normalizeId("place", request.targetId) : null);
-        const place = placeId === null ? null : await ctx.db.get("place", placeId);
+        const { fact, place, visible } = await targetOf(ctx, request);
+        if (!visible) return null;
         const names =
           place === null
             ? []
@@ -289,12 +335,30 @@ export const list = query({
         const name =
           names.find((name) => name.isPrimary && name.lang === request.locale) ??
           names.find((name) => name.isPrimary);
+        const labels =
+          fact &&
+          getRegionConfig(fact.regionId)?.factVocabulary?.find(({ key }) => key === fact.key)
+            ?.labels;
+        const reporter = fact?.personId
+          ? (await ctx.db.get("person", fact.personId))?.displayName
+          : fact?.sourceId
+            ? (await ctx.db.get("source", fact.sourceId))?.authorHandle
+            : undefined;
         return {
           _id: request._id,
           code: request.code,
           placeId: place?._id,
           placeSlug: place?.slug,
           placeName: name?.value,
+          fact: fact
+            ? {
+                id: fact._id,
+                wording: { en: labels?.en ?? fact.key, ja: labels?.ja ?? fact.key },
+                value: fact.value,
+                reporterName: reporter ?? "",
+                status: fact.status,
+              }
+            : undefined,
           details: request.reason,
           privacyOrMinor: request.privacyOrMinor,
           contact: request.requesterContact || undefined,
@@ -307,7 +371,7 @@ export const list = query({
         };
       }),
     );
-    return { ...result, page };
+    return { ...result, page: page.filter((item) => item !== null) };
   },
 });
 
@@ -325,7 +389,8 @@ export const decide = mutation({
       "Outcome (the requester reads this; do not include personal data)",
     );
     const request = await ctx.db.get("takedownRequest", requestId);
-    if (request === null) throw appError("not_found", "Takedown request not found.");
+    if (request === null || !(await targetOf(ctx, request)).visible)
+      throw appError("not_found", "Takedown request not found.");
     // A decided request that nobody appealed is finished by closing it, so decided -> closed is allowed.
     const decidable = ["received", "hidden", "appealed"].includes(request.status);
     if (!decidable && !(request.status === "decided" && status === "closed")) {
@@ -333,6 +398,12 @@ export const decide = mutation({
         "conflict",
         "Only a received, hidden or appealed request can be decided, and a decided one can be closed.",
       );
+    }
+    if (request.targetType === "fact" && status === "decided") {
+      const factId = ctx.db.normalizeId("placeFact", request.targetId);
+      // The writer may have deleted their account while the request was in the queue.
+      if (factId && (await ctx.db.get("placeFact", factId)))
+        await hideFact(ctx, steward, factId, outcome);
     }
     await ctx.db.patch("takedownRequest", requestId, {
       status,

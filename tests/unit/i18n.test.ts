@@ -33,7 +33,7 @@ const messages = defineMessages({ ja: { hello: "こんにちは" }, en: { hello:
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getActiveRegion).mockReset();
-  vi.mocked(getActiveRegion).mockReturnValue([...loadRegions().values()][0]!);
+  vi.mocked(getActiveRegion).mockReturnValue(loadRegions().get("nagasaki")!);
   mocks.lang.mockResolvedValue("ja");
   mocks.useParams.mockReturnValue({ lang: "ja" });
 });

@@ -24,14 +24,17 @@ import {
   attributionText,
   boundsFor,
   isWorkerFailure,
+  layoutTowns,
   MAPLIBRE_WORKER_PATH,
   normalisePoint,
   markerPresentation,
   markersToFeatures,
   showAerialPhoto,
+  TOWN_ZOOM,
   visibleView,
   NOREN_PATH,
   type MapMarker,
+  type TownMarker,
 } from "./map-helpers";
 import type { AerialPhoto } from "@/lib/region/schema";
 
@@ -83,6 +86,12 @@ export type PlaceMapProps = {
     onViewChange?(view: MapView): void;
     /** Moves the map to show these points; each new object moves it once. */
     fitTo?: MapFit | null;
+    /**
+     * Set while the map is zoomed out too far to load places: one marker for each town, and a note
+     * saying why there are no places. Pressing a marker zooms to the town.
+     */
+    zoomedOut?: boolean;
+    towns?: readonly TownMarker[];
   };
   picker?: {
     value: { lat: number; lng: number } | null;
@@ -395,6 +404,47 @@ export function PlaceMap({
     };
   }, [runtime, isExplore]);
 
+  const zoomedOut = Boolean(explore?.zoomedOut);
+  const towns = explore?.towns;
+  useEffect(() => {
+    if (!runtime?.isActive() || !isExplore || !zoomedOut || !towns?.length) return;
+    const { map, lib } = runtime;
+    const placed = new Map<string, InstanceType<typeof lib.Marker>>();
+    const draw = () => {
+      // Only the towns whose buttons do not cover each other are in the page at this zoom; the rest
+      // are not rendered at all, so a screen reader does not find a button nobody can see.
+      const shown = new Map(layoutTowns(towns, map.getZoom()).map((town) => [town.id, town]));
+      for (const [id, marker] of placed) {
+        if (shown.has(id)) continue;
+        marker.remove();
+        placed.delete(id);
+      }
+      for (const [id, town] of shown) {
+        if (placed.has(id)) continue;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = town.label;
+        button.dataset.townId = town.id;
+        button.className =
+          "min-h-11 rounded-full border border-line bg-white px-4 text-[15px] font-medium text-kon shadow-[var(--shadow-float)] focus-visible:outline-2 focus-visible:outline-offset-2";
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          map.flyTo({ center: [town.lng, town.lat], zoom: Math.max(map.getZoom(), TOWN_ZOOM) });
+        });
+        placed.set(
+          id,
+          new lib.Marker({ element: button }).setLngLat([town.lng, town.lat]).addTo(map),
+        );
+      }
+    };
+    draw();
+    map.on("moveend", draw);
+    return () => {
+      map.off("moveend", draw);
+      placed.forEach((marker) => marker.remove());
+    };
+  }, [runtime, isExplore, zoomedOut, towns]);
+
   const fitTo = explore?.fitTo;
   useEffect(() => {
     if (!runtime?.isActive() || !fitTo?.points.length) return;
@@ -642,6 +692,15 @@ export function PlaceMap({
             <Minus aria-hidden="true" size={22} />
           </button>
         </div>
+      )}
+      {isExplore && zoomedOut && !failed && (
+        <p
+          role="status"
+          data-zoomed-out
+          className="absolute top-36 left-3 z-10 max-w-64 rounded-[10px] bg-white p-3 text-sm text-kon shadow-[var(--shadow-float)] lg:top-5"
+        >
+          {messages.zoomForPlaces}
+        </p>
       )}
       {failed && (
         <p

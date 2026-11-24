@@ -15,7 +15,7 @@ import { hideClaims } from "./lib/claimEffects";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
-import { isRegionLocale, regionConfig } from "./lib/region";
+import { isRegionOn, isRegionLocale, regionConfig } from "./lib/region";
 import { interviewStatusValidator, transcriptOriginValidator } from "./lib/validators";
 
 const segmentValidator = v.object({
@@ -285,7 +285,12 @@ export const listMine = query({
       .withIndex("by_interviewerId", (q) => q.eq("interviewerId", person._id))
       .order("desc")
       .take(100);
-    return interviews.map(summary);
+    const visible = [];
+    for (const interview of interviews) {
+      const place = await ctx.db.get("place", interview.placeId);
+      if (place === null || isRegionOn(place.regionId)) visible.push(summary(interview));
+    }
+    return visible;
   },
 });
 
@@ -350,6 +355,9 @@ export const withdraw = mutation({
   returns: v.null(),
   handler: async (ctx, { interviewId }) => {
     const interview = await loadInterview(ctx, interviewId);
+    const place = await ctx.db.get("place", interview.placeId);
+    if (place !== null && !isRegionOn(place.regionId))
+      throw appError("not_found", "interview not found");
     const person = await requireRole(ctx, ["business_owner", "steward"], {
       placeId: interview.placeId,
     });

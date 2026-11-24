@@ -17,6 +17,8 @@ export type FormProps = {
   pending: boolean;
   error?: string;
   copied: boolean;
+  factDescription?: string;
+  factUnavailable?: boolean;
   onChange: (draft: FormDraft) => void;
   onSubmit: () => void | Promise<void>;
   onCopy: () => void | Promise<void>;
@@ -27,6 +29,7 @@ export function FormView(p: FormProps) {
     <PageContainer locale={p.locale} title={m.title}>
       {p.locale === "ja" && <UnreviewedBadge locale={p.locale} />}
       <p>{m.intro}</p>
+      {p.factDescription && <p aria-live="polite">{p.factDescription}</p>}
       {p.error && <p role="alert">{p.error}</p>}
       {p.result ? (
         <section className="space-y-4" aria-live="polite">
@@ -60,6 +63,7 @@ export function FormView(p: FormProps) {
               <Input
                 className="min-h-11 rounded-[10px] border-line"
                 name="pageUrl"
+                readOnly={p.factDescription !== undefined}
                 required
                 value={p.draft.pageUrl}
                 onChange={(e) => p.onChange({ ...p.draft, pageUrl: e.target.value })}
@@ -87,9 +91,9 @@ export function FormView(p: FormProps) {
                 aria-describedby="privacy-help"
                 onChange={(e) => p.onChange({ ...p.draft, privacyOrMinor: e.target.checked })}
               />
-              {m.privacy}
+              {p.factDescription ? m.factPrivacy : m.privacy}
             </label>
-            <p id="privacy-help">{m.privacyHelp}</p>
+            <p id="privacy-help">{p.factDescription ? m.factPrivacyHelp : m.privacyHelp}</p>
             <label className="block">
               {m.contact}
               <Input
@@ -110,7 +114,11 @@ export function FormView(p: FormProps) {
               value={p.draft.website}
               onChange={(e) => p.onChange({ ...p.draft, website: e.target.value })}
             />
-            <Button className="min-h-11 rounded-[10px] px-5 whitespace-normal" type="submit">
+            <Button
+              className="min-h-11 rounded-[10px] px-5 whitespace-normal"
+              type="submit"
+              disabled={p.factUnavailable}
+            >
               {p.pending ? m.sending : m.send}
             </Button>
           </fieldset>

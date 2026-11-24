@@ -1,9 +1,12 @@
 import { isValidElement, type ReactNode } from "react";
 import { PlaceMap } from "@/components/map/place-map";
 import { renderToStaticMarkup as render } from "react-dom/server";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { PlaceView } from "@/components/public/place-view";
-import type { PlaceDetailLike } from "@/components/public/mapping";
+import { getFunctionName } from "convex/server";
+import { PlaceContainer } from "@/components/public/place-container";
+import { getRegionConfig } from "@/lib/region/registry";
+import { publicRegionProps, type PlaceDetailLike } from "@/components/public/mapping";
 import { publicMessages } from "@/lib/i18n/messages/public";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { shellMessages } from "@/lib/i18n/messages/shell";
@@ -228,5 +231,51 @@ it("includes the localised site footer after the main landmark, including missin
       expect(html).toContain(`href="/${locale}/notice"`);
       expect(html).toContain(shellMessages[locale].japaneseReview);
     }
+  }
+});
+
+it("has no 'What people found here' section with the shipped region file (switch off, no fact list)", () => {
+  expect(region).not.toHaveProperty("facts");
+  for (const locale of ["ja", "en"] as const) {
+    const html = render(
+      <PlaceView locale={locale} region={region} place={place} page={page} sources={sources} />,
+    );
+    expect(html).not.toContain("facts-heading");
+  }
+});
+
+vi.mock("convex/react", () => ({
+  useConvex: () => ({}),
+  useConvexAuth: () => ({ isAuthenticated: false, isLoading: false }),
+  useMutation: () => vi.fn(),
+  useAction: () => vi.fn(),
+  useQuery(ref: Parameters<typeof getFunctionName>[0], args: unknown) {
+    if (args === "skip") return undefined;
+    if (getFunctionName(ref) === "places:bySlug") return { ...place, regionId: "malaysia-west" };
+    if (getFunctionName(ref) === "facts:forPlace") return [];
+    return undefined;
+  },
+}));
+
+it("shows the section for a place with a vocabulary only when the inherited facts switch is on", async () => {
+  const area = getRegionConfig("malaysia-west")!;
+  const { renderToReadableStream } = await import("react-dom/server");
+  for (const enabled of [false, true]) {
+    const own = publicRegionProps(
+      { ...area, features: { ...area.features, facts: enabled } },
+      "en",
+    );
+    const stream = await renderToReadableStream(
+      <PlaceContainer
+        params={Promise.resolve({ lang: "en", slug: place.slug })}
+        searchParams={Promise.resolve({})}
+        locale="en"
+        region={region}
+        regions={{ [area.id]: own }}
+      />,
+    );
+    const html = await new Response(stream).text();
+    expect(html.includes('id="facts-heading"')).toBe(enabled);
+    if (enabled) expect(own.facts?.maxAgeDays).toBe(area.factMaxAgeDays);
   }
 });

@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { categoryForTags, isForVisitors } from "../src/lib/osm/categories";
 import { chainBranches, selectListings, type ListingCandidate } from "../src/lib/osm/listings";
+import { importBoxes, insideImportBox } from "../src/lib/osm/overpass";
 import { getRegionConfig } from "../src/lib/region/registry";
 import { createCliRunner, type ConvexRunner } from "./lib/convex-run";
 
@@ -52,6 +53,7 @@ export async function runPublish(
   const flags = parseFlags(argv);
   const region = getRegionConfig(flags.region)!;
   const run = options.run ?? createCliRunner({ prod: flags.prod, cwd: options.cwd });
+  const boxes = importBoxes(region);
   const candidates: ListingCandidate[] = [];
   let cursor: string | null = null;
   do {
@@ -59,16 +61,19 @@ export async function runPublish(
       regionId: region.id,
       paginationOpts: { numItems: 200, cursor },
     })) as CandidatePage;
-    candidates.push(...page.page);
+    candidates.push(
+      ...page.page.filter((candidate) =>
+        boxes.some((box) => box.id === region.id || insideImportBox(candidate, box.bbox)),
+      ),
+    );
     cursor = page.isDone ? null : page.continueCursor;
   } while (cursor !== null);
   // Branches OSM left untagged; mark them locally too, so everything below sees what the server stores.
   const branches = chainBranches(candidates);
   for (const { branch } of branches) branch.isChain = true;
-  const selection = selectListings(candidates, {
-    focusCategories:
-      region.categories?.filter((category) => category.focus).map((category) => category.key) ?? [],
-  });
+  const focusCategories =
+    region.categories?.filter((category) => category.focus).map((category) => category.key) ?? [];
+  const selection = selectListings(candidates, { focusCategories });
   // Listings published before the errand rule existed; the mutation checks each one again.
   const errands = candidates.filter(
     (candidate) =>
@@ -77,7 +82,7 @@ export async function runPublish(
   );
   const categories: Record<string, number> = {};
   for (const candidate of selection.publish) {
-    const category = candidate.category ?? categoryForTags(candidate.tags);
+    const category = candidate.category ?? categoryForTags(candidate.tags, focusCategories);
     categories[category] = (categories[category] ?? 0) + 1;
   }
   options.log({

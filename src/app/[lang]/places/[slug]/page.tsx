@@ -8,6 +8,7 @@ import { publicRegionProps } from "@/components/public/mapping";
 import { getLocale } from "@/lib/i18n/server";
 import { publicPhotoProps } from "@/lib/photos/settings";
 import { getActiveRegion } from "@/lib/region";
+import { enabledRegionConfigs } from "@/lib/region/registry";
 import { loadPlaceSeo } from "@/lib/seo/place-data";
 import { languageAlternates } from "@/lib/seo/site";
 
@@ -43,10 +44,15 @@ export async function generateMetadata({
 export default async function Page({ params, searchParams }: PageProps<"/[lang]/places/[slug]">) {
   const locale = await getLocale();
   const active = getActiveRegion();
-  const region = {
-    ...publicRegionProps(active, locale),
-    photos: publicPhotoProps(active, process.env) ?? undefined,
-  };
+  const settings = (config: typeof active) => ({
+    ...publicRegionProps(config, locale),
+    photos: publicPhotoProps(config, process.env) ?? undefined,
+  });
+  const region = settings(active);
+  // Every region that is on, so the page can use the settings of the place's own region.
+  const regions = Object.fromEntries(
+    [active, ...enabledRegionConfigs()].map((config) => [config.id, settings(config)]),
+  );
   return (
     <Suspense
       fallback={
@@ -60,6 +66,7 @@ export default async function Page({ params, searchParams }: PageProps<"/[lang]/
         searchParams={searchParams}
         locale={locale}
         region={region}
+        regions={regions}
         loading={
           <Suspense fallback={<PublicLoading locale={locale} />}>
             <PlaceSummary params={params} locale={locale} />

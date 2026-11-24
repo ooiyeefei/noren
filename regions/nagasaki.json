@@ -154,7 +154,14 @@
     }
   },
   "voice": { "enabled": true, "maxSeconds": 120 },
-  "features": { "connector": true, "planner": true, "walk": true, "postcard": false },
+  "features": {
+    "connector": true,
+    "planner": true,
+    "walk": true,
+    "postcard": false,
+    "trip": "off",
+    "facts": false
+  },
   "photos": {
     "enabled": true,
     "maxPerStory": 4,

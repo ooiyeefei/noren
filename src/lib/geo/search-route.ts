@@ -18,6 +18,7 @@ export type GeoSearchResponse = { suggestions: GeoSuggestion[] };
 
 export type GeoSearchRouteDeps = {
   region: RegionConfig;
+  regions?: readonly RegionConfig[];
   env: Readonly<Record<string, string | undefined>>;
   fetch: typeof globalThis.fetch;
   /** Wraps requireRoleOnServer(["creator"]) in production; a fake in tests. */
@@ -53,6 +54,16 @@ export function createGeoSearchRoute(
       .refine((lang) => deps.region.locales.includes(lang))
       .optional(),
   });
+  const regions = deps.regions ?? [deps.region];
+  const boxes = regions.map((region) => region.bbox);
+  // Nominatim accepts one viewbox per request. Limit hits to the individual boxes before display.
+  const bbox: RegionConfig["bbox"] = [
+    Math.min(...boxes.map(([west]) => west)),
+    Math.min(...boxes.map((box) => box[1])),
+    Math.max(...boxes.map((box) => box[2])),
+    Math.max(...boxes.map((box) => box[3])),
+  ];
+  const countrycodes = [...new Set(regions.flatMap((region) => region.geo.countrycodes))];
   let search: Search | undefined;
 
   return async (request) => {
@@ -62,6 +73,7 @@ export function createGeoSearchRoute(
     const query = parseQuery(schema, request.url);
     if (!query.ok) return query.response;
 
+    if (!regions.length) return Response.json({ suggestions: [] });
     const userAgent = geoUserAgent(deps.env);
     if (userAgent === null) {
       return jsonError(
@@ -70,14 +82,14 @@ export function createGeoSearchRoute(
       );
     }
     search ??= createGeoSearch({
-      search: createNominatimSearch({ fetch: deps.fetch, userAgent }),
+      search: createNominatimSearch({ fetch: deps.fetch, userAgent, boxes }),
       policy: nominatimPolicy(userAgent),
       now: deps.now,
     });
     const result = await search.search(query.data.q, {
       mode: "submit",
-      bbox: deps.region.bbox,
-      countrycodes: deps.region.geo.countrycodes,
+      bbox,
+      countrycodes,
       languages: deps.region.locales,
     });
     if (!result.ok) {

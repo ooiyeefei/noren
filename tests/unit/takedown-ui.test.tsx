@@ -42,13 +42,20 @@ const backend = vi.hoisted(() => ({
   appeal: vi.fn(),
   status: undefined as unknown,
   query: new URLSearchParams({ page: " /en/places/mock " }),
+  facts: [] as unknown[],
   calls: [] as unknown[],
 }));
-vi.mock("next/navigation", () => ({ useSearchParams: () => backend.query, usePathname: () => null }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => backend.query,
+  usePathname: () => null,
+}));
 vi.mock("convex/react", () => ({
   useMutation: (ref: Parameters<typeof getFunctionName>[0]) =>
     getFunctionName(ref) === "takedown:submit" ? backend.submit : backend.appeal,
-  useQuery: (_ref: unknown, args: unknown) => {
+  useQuery: (ref: Parameters<typeof getFunctionName>[0], args: unknown) => {
+    if (args === "skip") return undefined;
+    if (getFunctionName(ref) === "places:bySlug") return { _id: "p1", regionId: "mock" };
+    if (getFunctionName(ref) === "facts:forPlace") return backend.facts;
     backend.calls.push(args);
     return backend.status;
   },
@@ -82,11 +89,15 @@ const status = (): StatusProps => ({
   onNote: noop,
   onAppeal: noop,
 });
-function wireForm() {
+function wireForm(locale: "ja" | "en" = "en") {
   hooks.active = true;
   hooks.index = 0;
   try {
-    return FormContainer({ locale: "en", decideDays: 7 }).props as FormProps;
+    return FormContainer({
+      locale,
+      decideDays: 7,
+      factLabels: { mock: { steps: locale === "en" ? "Steps at the door" : "入口に段差" } },
+    }).props as FormProps;
   } finally {
     hooks.active = false;
   }
@@ -106,6 +117,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ code: "MOCK-CODE", hidden: true, matchedPlace: true, receivedAt: 0 });
   backend.appeal.mockReset().mockResolvedValue(null);
+  backend.facts = [];
   backend.status = undefined;
   backend.calls = [];
   backend.query = new URLSearchParams({ page: " /en/places/mock " });
@@ -221,4 +233,40 @@ it("removal, lookup and appeal controls have phone-sized targets without changin
     expect(html).toContain('aria-describedby="details-count"');
     expect(lookup).toContain('aria-describedby="appeal-count"');
   }
+});
+
+for (const locale of ["ja", "en"] as const) {
+  it(`shows the selected report and sends its ID with the place address (${locale})`, async () => {
+    backend.query.set("factId", "f2");
+    backend.facts = ["f1", "f2"].map((_id) => ({
+      _id,
+      basis: "member",
+      key: "steps",
+      value: _id === "f1" ? "no" : "yes",
+      day: "2026-11-03",
+      reporterName: _id === "f1" ? "Other" : "Aiko",
+    }));
+    const html = render(<FormView {...wireForm(locale)} />);
+    expect(html).toContain(locale === "en" ? "Steps at the door" : "入口に段差");
+    expect(html).toContain(locale === "en" ? "Yes" : "はい");
+    expect(html).toContain("Aiko");
+    expect(html).not.toContain("Other");
+    expect(html).not.toContain(takedownMessages[locale].privacyHelp);
+    wireForm(locale).onChange(form().draft);
+    await wireForm(locale).onSubmit();
+    expect(backend.submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageUrl: "/en/places/mock",
+        factId: "f2",
+        locale,
+      }),
+    );
+  });
+}
+it("a missing fact cannot submit a removal request for the whole place", async () => {
+  backend.query.set("factId", "missing");
+  wireForm().onChange(form().draft);
+  expect(render(<FormView {...wireForm()} />)).toContain(takedownMessages.en.factUnavailable);
+  await wireForm().onSubmit();
+  expect(backend.submit).not.toHaveBeenCalled();
 });

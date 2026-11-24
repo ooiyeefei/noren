@@ -1,10 +1,17 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { deriveRegionPolicy, loadRegions, parseRegionFile, type RegionConfig } from "@/lib/region";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  deriveRegionPolicy,
+  getActiveRegion,
+  loadRegions,
+  parseRegionFile,
+  type RegionConfig,
+} from "@/lib/region";
 
 const nagasakiText = readFileSync(path.join(process.cwd(), "regions/nagasaki.json"), "utf8");
 const nagasaki = () => JSON.parse(nagasakiText) as RegionConfig;
+const malaysiaText = readFileSync(path.join(process.cwd(), "regions/malaysia-west.json"), "utf8");
 
 function parse(mutate: (region: RegionConfig) => void, fileName = "nagasaki.json") {
   const region = nagasaki();
@@ -138,6 +145,96 @@ describe("region loader", () => {
   });
 });
 
+describe("home region selection", () => {
+  let scratchDirectory: string | undefined;
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    if (scratchDirectory) rmSync(scratchDirectory, { recursive: true, force: true });
+    scratchDirectory = undefined;
+  });
+
+  function regionDirectory(...wholeIds: string[]) {
+    const scratch = path.join(process.cwd(), ".scratch");
+    mkdirSync(scratch, { recursive: true });
+    const dir = mkdtempSync(path.join(scratch, "region-test-"));
+    scratchDirectory = dir;
+    for (const id of wholeIds) {
+      const whole = nagasaki();
+      whole.features.trip = id === "example-west" ? "trial" : "off";
+      writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ ...whole, id }));
+    }
+    writeFileSync(path.join(dir, "malaysia-west.json"), malaysiaText);
+    return dir;
+  }
+
+  it("returns Nagasaki from the shipped directory and shares its settings with Malaysia", () => {
+    vi.stubEnv("REGION_ID", undefined);
+    expect(getActiveRegion().id).toBe("nagasaki");
+    const regions = loadRegions();
+    expect(regions.get("malaysia-west")).toMatchObject({
+      features: getActiveRegion().features,
+      legal: getActiveRegion().legal,
+      collection: { utcOffsetHours: 8, newAccount: getActiveRegion().collection.newAccount },
+      geo: { countrycodes: ["my"] },
+    });
+    expect(regions.get("malaysia-west")?.geo.aerialPhoto).toBeUndefined();
+    expect(regions.get("malaysia-west")?.neighbourhoods).toBeUndefined();
+  });
+
+  it("prefers Nagasaki among whole region files when REGION_ID is unset", () => {
+    vi.stubEnv("REGION_ID", undefined);
+    const dir = regionDirectory("example-west", "nagasaki");
+    const regions = loadRegions(dir);
+    expect(regions.get("example-west")?.features.trip).toBe("trial");
+    expect(regions.get("malaysia-west")?.features.trip).toBe("off");
+  });
+
+  it("inherits from the named whole region when REGION_ID is set", () => {
+    const dir = regionDirectory("example-west", "nagasaki");
+    vi.stubEnv("REGION_ID", "example-west");
+    expect(loadRegions(dir).get("malaysia-west")?.features.trip).toBe("trial");
+  });
+
+  it("falls back to the only whole file when there is no Nagasaki file", () => {
+    vi.stubEnv("REGION_ID", undefined);
+    const dir = regionDirectory("example-west");
+    expect(loadRegions(dir).get("malaysia-west")?.features.trip).toBe("trial");
+  });
+
+  it("requires REGION_ID when there are several whole files and none is Nagasaki", () => {
+    vi.stubEnv("REGION_ID", undefined);
+    const dir = regionDirectory("example-west", "example-east");
+    expect(() => loadRegions(dir)).toThrow("Several regions exist");
+  });
+
+  it("requires a whole file when selecting a home", () => {
+    vi.stubEnv("REGION_ID", "malaysia-west");
+    expect(() => getActiveRegion()).toThrow("the home region must be a whole region");
+    vi.stubEnv("REGION_ID", undefined);
+    expect(() => loadRegions(regionDirectory())).toThrow("No whole region exists");
+  });
+
+  it("reports the closer schema and preserves the filename check for areas", () => {
+    expect(parseRegionFile("malaysia-west.json", malaysiaText)).toMatchObject({
+      ok: true,
+      kind: "area",
+    });
+    expect(problemOf(parseRegionFile("wrong.json", malaysiaText))).toContain(
+      'declares id "malaysia-west" but the file name says "wrong"',
+    );
+    const brokenArea = { ...JSON.parse(malaysiaText), enabled: "yes" };
+    const areaProblem = problemOf(
+      parseRegionFile("malaysia-west.json", JSON.stringify(brokenArea)),
+    );
+    expect(areaProblem).toContain("Reading as a region area");
+    expect(areaProblem).toContain("enabled");
+    const wholeProblem = problemOf(parse((r) => (r.minimumAge = -1)));
+    expect(wholeProblem).toContain("Reading as a whole region");
+    expect(wholeProblem).toContain("minimumAge");
+  });
+});
+
 describe("region policy", () => {
   it("keeps the other restrictions while the launch pack is incomplete, with accounts open", () => {
     const region = loadRegions().get("nagasaki")!;
@@ -165,6 +262,8 @@ describe("region policy", () => {
       walk: true,
       thread: false,
       postcard: false,
+      trip: "off",
+      facts: false,
     });
   });
 

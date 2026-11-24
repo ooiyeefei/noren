@@ -5,7 +5,7 @@ import { LegalDocumentView } from "@/components/legal/legal-document";
 import { isSupportedLocale } from "@/lib/i18n";
 import { legalDocuments } from "@/lib/i18n/messages/legal-documents";
 import { getLocale } from "@/lib/i18n/server";
-import { activeRegionConfig } from "@/lib/region/registry";
+import { activeRegionConfig, enabledRegionConfigs } from "@/lib/region/registry";
 
 export async function generateMetadata({
   params,
@@ -18,7 +18,11 @@ export async function generateMetadata({
 
 export default async function Page() {
   const locale = await getLocale();
-  const values = documentValues(activeRegionConfig(), locale);
+  const values = documentValues(
+    activeRegionConfig(),
+    locale,
+    enabledRegionConfigs().map((region) => region.id),
+  );
   if (values === null) notFound();
   return <LegalDocumentView locale={locale} kind="privacy" values={values} />;
 }

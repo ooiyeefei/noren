@@ -9,7 +9,7 @@ import { currentPerson, requirePerson, requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { readMapNames } from "./lib/mapCopies";
-import { regionConfig } from "./lib/region";
+import { isRegionOn, regionConfig } from "./lib/region";
 import {
   attachPhotos,
   limitPhoto,
@@ -95,7 +95,12 @@ export const uploadTicket = query({
   returns: v.object({ incomingKey: v.string(), key: v.string() }),
   handler: async (ctx, { photoId }) => {
     const { person, photo } = await ownUpload(ctx, photoId);
-    if (photo.status !== "uploading") throw appError("conflict", "this upload is finished");
+    if (photo.status !== "uploading") {
+      const place = await ctx.db.get("place", photo.placeId);
+      if (place !== null && !isRegionOn(place.regionId))
+        throw appError("not_found", "upload not found");
+      throw appError("conflict", "this upload is finished");
+    }
     const place = await loadReadablePlace(ctx, person, photo.placeId);
     const refusal = await uploadRefusal(ctx, person, place);
     if (refusal !== null) throw appError("forbidden", refusal);
@@ -135,10 +140,13 @@ export const remove = mutation({
     if (person.isMock) throw appError("forbidden", "a demo account can't remove real photos");
     const photo = await ctx.db.get("storyPhoto", photoId);
     if (photo === null) throw appError("not_found", "photo not found");
+    const place = await ctx.db.get("place", photo.placeId);
+    if (place !== null && !isRegionOn(place.regionId))
+      throw appError("not_found", "photo not found");
     const mine = photo.uploaderPersonId === person._id;
     if (!mine) {
-      const place = await loadReadablePlace(ctx, person, photo.placeId);
-      if (!canEditPlace(person, place))
+      const readable = await loadReadablePlace(ctx, person, photo.placeId);
+      if (!canEditPlace(person, readable))
         throw appError(
           "forbidden",
           "only the writer, the place's editor or a steward may remove it",
@@ -233,7 +241,14 @@ export const listWaiting = query({
     for (const photo of rows) {
       const story = photo.storyId && (await ctx.db.get("story", photo.storyId));
       const place = await ctx.db.get("place", photo.placeId);
-      if (!story || !place || photo.width === undefined || photo.height === undefined) continue;
+      if (
+        !story ||
+        !place ||
+        !isRegionOn(place.regionId) ||
+        photo.width === undefined ||
+        photo.height === undefined
+      )
+        continue;
       const author = await ctx.db.get("person", photo.uploaderPersonId);
       photos.push({
         _id: photo._id,
@@ -262,6 +277,9 @@ export const approve = mutation({
     const person = await requireRealSteward(ctx);
     const photo = await ctx.db.get("storyPhoto", photoId);
     if (photo === null) throw appError("not_found", "photo not found");
+    const place = await ctx.db.get("place", photo.placeId);
+    if (place !== null && !isRegionOn(place.regionId))
+      throw appError("not_found", "photo not found");
     if (photo.status !== "waiting") throw appError("conflict", "this photo is not waiting");
     await ctx.db.patch("storyPhoto", photoId, { status: "live" });
     await writeAudit(ctx, {

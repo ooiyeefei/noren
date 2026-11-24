@@ -1,5 +1,6 @@
 import type { Map as LibreMap } from "maplibre-gl";
 import type { MapView } from "@/components/explore/helpers";
+import { cellOf, cellsForView, type ViewBounds, type ViewCells } from "@/lib/geo/geohash";
 import type { AerialPhoto } from "@/lib/region/schema";
 
 export const MAPLIBRE_WORKER_PATH = "/maplibre/maplibre-gl-worker.mjs";
@@ -182,3 +183,171 @@ export function setMarkerSelection(
   }
   element.setAttribute("aria-pressed", String(selected));
 }
+
+/**
+ * Roughly what the map shows when it opens at this centre and zoom, before the map has said what it
+ * really shows. It is a little wider than a phone or a desktop window needs, and is narrowed until
+ * its cells fit one request, so the first answer arrives while the map is still starting.
+ */
+export function openingBounds(center: {
+  lat: number;
+  lng: number;
+  zoom: number;
+}): ViewBounds | null {
+  const tile = 360 / 2 ** center.zoom;
+  const squash = Math.max(0.05, Math.cos((center.lat * Math.PI) / 180));
+  for (const tiles of [4, 3, 2, 1.5, 1]) {
+    const lng = (tile * tiles) / 2;
+    const lat = lng * squash;
+    const bounds = {
+      west: center.lng - lng,
+      east: center.lng + lng,
+      south: Math.max(-90, center.lat - lat),
+      north: Math.min(90, center.lat + lat),
+    };
+    if (cellsForView(bounds) !== null) return bounds;
+  }
+  return null;
+}
+
+type Pinned = { _id: string; pin: { lat: number; lng: number } | null };
+
+/** The view widened by two views on each side: places further out than this are let go. */
+function keepBounds(view: ViewBounds) {
+  const width = view.east >= view.west ? view.east - view.west : view.east + 360 - view.west;
+  const height = view.north - view.south;
+  const west = view.west - width * 2;
+  return {
+    west,
+    total: width * 5,
+    south: view.south - height * 2,
+    north: view.north + height * 2,
+  };
+}
+
+/**
+ * The places the map holds after a new answer. Places the map already held stay, so nothing
+ * flickers while the next answer is on its way; the cells this answer covered are replaced by what
+ * it says (a place hidden since then goes); and places far outside the view are dropped so memory
+ * stays bounded.
+ */
+export function mergeLoaded<T extends Pinned>(
+  held: ReadonlyMap<string, T> | null,
+  rows: readonly T[],
+  answered: ViewCells,
+  view: ViewBounds,
+): Map<string, T> {
+  const covered = new Set(answered.cells);
+  const keep = keepBounds(view);
+  const next = new Map<string, T>();
+  for (const [id, row] of held ?? []) {
+    const pin = row.pin;
+    if (pin === null) continue;
+    if (covered.has(cellOf(pin).slice(0, answered.precision))) continue;
+    const across = (((pin.lng - keep.west) % 360) + 360) % 360;
+    if (keep.total < 360 && across > keep.total) continue;
+    if (pin.lat < keep.south || pin.lat > keep.north) continue;
+    next.set(id, row);
+  }
+  for (const row of rows) next.set(row._id, row);
+  return next;
+}
+
+export type TownMarker = {
+  id: string;
+  label: string;
+  lat: number;
+  lng: number;
+  /** How far the town reaches; the larger town keeps its button when two would overlap. */
+  radiusMetres: number;
+};
+
+/** One marker for each town, named in the reader's language, with no count on it. */
+export function townMarkers(
+  towns: readonly {
+    id: string;
+    names: Readonly<Record<string, string>>;
+    center: { lat: number; lng: number };
+    radiusMetres: number;
+  }[],
+  locale: string,
+  fallbackLocale: string,
+): TownMarker[] {
+  return towns.map((town) => ({
+    id: town.id,
+    label:
+      town.names[locale] ??
+      town.names[fallbackLocale] ??
+      town.names.en ??
+      Object.values(town.names)[0] ??
+      town.id,
+    lat: town.center.lat,
+    lng: town.center.lng,
+    radiusMetres: town.radiusMetres,
+  }));
+}
+
+/** MapLibre draws a 512-pixel tile at each zoom, so the world is this many pixels wide. */
+const WORLD_PIXELS = 512;
+/** A town button is at least 44 pixels high; its width follows its text (see `buttonBox`). */
+const BUTTON_HEIGHT = 44;
+const BUTTON_PADDING = 32;
+const BUTTON_GAP = 4;
+
+function pixelsAt(point: { lat: number; lng: number }, zoom: number): { x: number; y: number } {
+  const world = WORLD_PIXELS * 2 ** zoom;
+  const lat = Math.max(-85.0511, Math.min(85.0511, point.lat));
+  const sin = Math.sin((lat * Math.PI) / 180);
+  return {
+    x: ((point.lng + 180) / 360) * world,
+    y: (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * world,
+  };
+}
+
+/** Roughly how wide a town's button is: its text at 15 pixels, wide letters counted double. */
+function buttonWidth(label: string): number {
+  let width = BUTTON_PADDING;
+  for (const letter of label) width += (letter.codePointAt(0) ?? 0) >= 0x2e80 ? 16 : 8.5;
+  return width;
+}
+
+/**
+ * The towns whose buttons are shown at this zoom, so that no button covers another. Towns are taken
+ * in a fixed order (larger radius first, then id); a town is shown only if its button does not touch
+ * one already shown, and is left out otherwise, until the map is zoomed in far enough for both to fit.
+ * Nothing about the order depends on where the map is looking, so a button does not jump between moves.
+ */
+export function layoutTowns(towns: readonly TownMarker[], zoom: number): TownMarker[] {
+  const ordered = [...towns].sort(
+    (a, b) => b.radiusMetres - a.radiusMetres || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  const shown: { town: TownMarker; x: number; y: number; half: number }[] = [];
+  for (const town of ordered) {
+    const { x, y } = pixelsAt(town, zoom);
+    const half = buttonWidth(town.label) / 2;
+    const touches = shown.some(
+      (other) =>
+        Math.abs(other.x - x) < other.half + half + BUTTON_GAP &&
+        Math.abs(other.y - y) < BUTTON_HEIGHT + BUTTON_GAP,
+    );
+    if (!touches) shown.push({ town, x, y, half });
+  }
+  return shown.map((entry) => entry.town);
+}
+
+/** The region the view's centre is inside, or null: only regions that are on are looked at. */
+export function regionAtCentre<T extends { bounds: readonly [number, number, number, number] }>(
+  centre: { lat: number; lng: number },
+  regions: Readonly<Record<string, T>>,
+): T | null {
+  for (const id of Object.keys(regions).sort()) {
+    const region = regions[id]!;
+    const [west, south, east, north] = region.bounds;
+    if (centre.lng >= west && centre.lng <= east && centre.lat >= south && centre.lat <= north)
+      return region;
+  }
+  return null;
+}
+
+/** The zoom a town's marker moves the map to: near enough that a view is a few cells. */
+export const TOWN_ZOOM = 12;

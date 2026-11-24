@@ -10,7 +10,7 @@ import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { liveStory } from "./lib/liveStory";
 import { readMapNames, readMapPin } from "./lib/mapCopies";
-import { regionConfig } from "./lib/region";
+import { isRegionOn, regionConfig } from "./lib/region";
 import { scriptValidator } from "./lib/validators";
 import { canReadPlace, type Viewer } from "./lib/visibility";
 
@@ -139,6 +139,7 @@ export const book = query({
     ),
   }),
   handler: async (ctx, { regionId }) => {
+    if (!isRegionOn(regionId)) return { sets: [], badges: [] };
     const viewer = await currentPerson(ctx);
     const row = await rowOf(ctx, viewer);
     const live = await ctx.db
@@ -158,14 +159,17 @@ export const book = query({
         panels: await artFor(ctx, set, dyed),
       });
     }
-    const badges = await Promise.all(
-      (row?.badges ?? []).map(async ({ setId, names: badgeNames, wholeArtId, finishedOn }) => ({
+    const badges = [];
+    for (const { setId, names: badgeNames, wholeArtId, finishedOn } of row?.badges ?? []) {
+      const set = await ctx.db.get("collectionSet", setId);
+      if (set !== null && !isRegionOn(set.regionId)) continue;
+      badges.push({
         setId,
         names: badgeNames,
         wholeArtUrl: wholeArtId === undefined ? null : await ctx.storage.getUrl(wholeArtId),
         finishedOn,
-      })),
-    );
+      });
+    }
     return { sets, badges };
   },
 });
@@ -208,6 +212,7 @@ export const set = query({
     }),
   ),
   handler: async (ctx, { regionId, neighbourhoodId }) => {
+    if (!isRegionOn(regionId)) return null;
     const viewer = await currentPerson(ctx);
     const found = await ctx.db
       .query("collectionSet")
@@ -230,7 +235,12 @@ export const set = query({
       for (const entry of entries) {
         const place = await ctx.db.get("place", entry.placeId);
         // A panel may show no places for a moment while a steward replaces one.
-        if (place === null || !(await canReadPlace(ctx, viewer, place))) continue;
+        if (
+          place === null ||
+          place.regionId !== found.regionId ||
+          !(await canReadPlace(ctx, viewer, place))
+        )
+          continue;
         places.push({
           placeId: place._id,
           slug: place.slug,
@@ -243,6 +253,9 @@ export const set = query({
     }
     const badge = row?.badges.find(({ setId }) => setId === found._id);
     const visitsHere = row?.visits.filter(({ setId }) => setId === found._id) ?? [];
+    const lastVisitedPlaceId = visitsHere.at(-1)?.placeId;
+    const lastVisited =
+      lastVisitedPlaceId === undefined ? null : await ctx.db.get("place", lastVisitedPlaceId);
     return {
       id: found._id,
       neighbourhoodId: found.neighbourhoodId,
@@ -254,7 +267,10 @@ export const set = query({
       finishedOn: badge?.finishedOn ?? null,
       wholeArtUrl:
         badge?.wholeArtId === undefined ? null : await ctx.storage.getUrl(badge.wholeArtId),
-      lastVisitedPlaceId: visitsHere.at(-1)?.placeId ?? null,
+      lastVisitedPlaceId:
+        lastVisited !== null && !isRegionOn(lastVisited.regionId)
+          ? null
+          : (lastVisitedPlaceId ?? null),
       panels,
     };
   },
@@ -287,7 +303,7 @@ export const forPlace = query({
       .first();
     if (entry === null) return null;
     const found = await ctx.db.get("collectionSet", entry.setId);
-    if (found === null || found.status !== "live") return null;
+    if (found === null || !isRegionOn(found.regionId) || found.status !== "live") return null;
     const row = await rowOf(ctx, viewer);
     const dyed = dyedPanels(row, found._id);
     return {
@@ -339,7 +355,7 @@ export const checkIn = mutation({
       .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
       .first();
     const found = entry && (await ctx.db.get("collectionSet", entry.setId));
-    if (!entry || !found || found.status !== "live") {
+    if (!entry || !found || !isRegionOn(found.regionId) || found.status !== "live") {
       throw appError("not_found", "this place is not in a live set");
     }
     // The account menu makes this row on sign-in. A check-in never does: a row made now would carry
@@ -535,6 +551,7 @@ export const listForSteward = query({
   ),
   handler: async (ctx, { regionId }) => {
     await requireRole(ctx, ["steward"]);
+    if (!isRegionOn(regionId)) return [];
     const sets = (
       await Promise.all(
         (["draft", "live"] as const).map((status) =>
@@ -562,7 +579,7 @@ export const listForSteward = query({
         const places = [];
         for (const entry of entries) {
           const place = await ctx.db.get("place", entry.placeId);
-          if (place === null) continue;
+          if (place === null || !isRegionOn(place.regionId)) continue;
           inSet.add(place._id);
           const pin = place.mapPin ?? (await readMapPin(ctx, place._id));
           if (pin) pinned.push({ placeId: place._id, pin });
@@ -632,7 +649,7 @@ export const swapPlace = mutation({
   handler: async (ctx, { setId, panelIndex, removePlaceId, addPlaceId }) => {
     const steward = await requireRole(ctx, ["steward"]);
     const found = await ctx.db.get("collectionSet", setId);
-    if (found === null) throw appError("not_found", "no such set");
+    if (found === null || !isRegionOn(found.regionId)) throw appError("not_found", "no such set");
     if (!Number.isInteger(panelIndex) || panelIndex < 0 || panelIndex >= found.panelCount) {
       throw appError("invalid_input", "no such panel");
     }
@@ -646,14 +663,24 @@ export const swapPlace = mutation({
     if (removePlaceId !== undefined && leaving === undefined) {
       throw appError("not_found", "that place is not on this panel");
     }
+    const removed = removePlaceId === undefined ? null : await ctx.db.get("place", removePlaceId);
+    const added = addPlaceId === undefined ? null : await ctx.db.get("place", addPlaceId);
+    if (
+      (removed !== null && !isRegionOn(removed.regionId)) ||
+      (added !== null && !isRegionOn(added.regionId))
+    )
+      throw appError("not_found", "place not found");
     const count = entries.length - (leaving ? 1 : 0) + (addPlaceId ? 1 : 0);
     if (count < 1 || count > PLACES_PER_PANEL) {
       throw appError("conflict", "a panel holds 1 to 3 places");
     }
     if (addPlaceId !== undefined) {
-      const place = await ctx.db.get("place", addPlaceId);
+      const place = added;
       if (!isUsable(place) || !place.mapPin) {
         throw appError("invalid_input", "a set uses only public places with a pin");
+      }
+      if (place.regionId !== found.regionId) {
+        throw appError("invalid_input", "a set uses only places from its own region");
       }
       const taken = await ctx.db
         .query("collectionPlace")
@@ -689,10 +716,16 @@ export const pickLine = mutation({
       .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
       .first();
     if (entry === null) throw appError("not_found", "this place is not in a set");
+    const place = await ctx.db.get("place", placeId);
+    const set = await ctx.db.get("collectionSet", entry.setId);
+    if (
+      (place !== null && !isRegionOn(place.regionId)) ||
+      (set !== null && !isRegionOn(set.regionId))
+    )
+      throw appError("not_found", "this place is not in a set");
     if (en === null) {
       await ctx.db.patch("collectionPlace", entry._id, { pickedLineEn: undefined });
     } else {
-      const place = await ctx.db.get("place", placeId);
       const story = place && isUsable(place) ? await liveStory(ctx, null, place) : null;
       if (!story?.sentences.some((sentence) => sentence.en === en)) {
         throw appError(
@@ -724,7 +757,7 @@ export const setStatus = mutation({
   handler: async (ctx, { setId, status }) => {
     const steward = await requireRole(ctx, ["steward"]);
     const found = await ctx.db.get("collectionSet", setId);
-    if (found === null) throw appError("not_found", "no such set");
+    if (found === null || !isRegionOn(found.regionId)) throw appError("not_found", "no such set");
     if (found.status === status) return null;
     if (status === "live") {
       const panels = await panelsOf(ctx, found);
@@ -745,7 +778,9 @@ export const setStatus = mutation({
         const places = await Promise.all(
           entries.map(({ placeId }) => ctx.db.get("place", placeId)),
         );
-        if (!places.some((place) => isUsable(place) && place.mapPin)) {
+        if (
+          !places.some((place) => isUsable(place) && isRegionOn(place.regionId) && place.mapPin)
+        ) {
           throw appError("conflict", `panel ${panel.index + 1} needs a public place with a pin`);
         }
       }

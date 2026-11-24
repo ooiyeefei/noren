@@ -17,7 +17,7 @@ import { internalMutation, mutation } from "./lib/gate";
 import { withMock } from "./lib/mock";
 import { limitContribution } from "./lib/rateLimit";
 import { readMapNames } from "./lib/mapCopies";
-import { isRegionLocale, regionConfig } from "./lib/region";
+import { isRegionOn, isRegionLocale, regionConfig } from "./lib/region";
 import { eraseFoundPost, excerptTranslations, hasNoCard } from "./lib/foundPosts";
 import { literals, sourceStatusValidator } from "./lib/validators";
 import { canReadPlace } from "./lib/visibility";
@@ -112,6 +112,9 @@ async function sourceView(
 async function loadSource(ctx: QueryCtx, sourceId: Id<"source">) {
   const source = await ctx.db.get("source", sourceId);
   if (source === null) throw appError("not_found", "source not found");
+  const place = await ctx.db.get("place", source.placeId);
+  if (place !== null && !isRegionOn(place.regionId))
+    throw appError("not_found", "source not found");
   return source;
 }
 

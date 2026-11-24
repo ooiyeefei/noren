@@ -28,7 +28,7 @@ import { internalMutation, mutation } from "./lib/gate";
 import { readMapNames } from "./lib/mapCopies";
 import { isPublicRealPlace, nameView } from "./lib/publicPool";
 import { consumeRateLimit, limitContribution } from "./lib/rateLimit";
-import { isRegionLocale, regionConfig } from "./lib/region";
+import { isRegionOn, isRegionLocale, regionConfig } from "./lib/region";
 import { placePhotoRules, storyPhotoViews } from "./lib/storyPhotos";
 import { earliestByPlace } from "./stampBook";
 import { postcardItem } from "./tables/postcard";
@@ -56,7 +56,7 @@ export function postcardOn(regionId: string): boolean {
 /** The switch, before anything else: off is "not found" for everyone. */
 function requireOn(): string {
   const regionId = activeRegionConfig().id;
-  if (!postcardOn(regionId)) throw appError("not_found", "Not found");
+  if (!isRegionOn(regionId) || !postcardOn(regionId)) throw appError("not_found", "Not found");
   return regionId;
 }
 
@@ -96,13 +96,15 @@ async function resolveItems(
     if (item.kind === "story") {
       story = await ctx.db.get("story", item.storyId);
       if (story === null) throw appError("not_found", "story not found");
-      if (story.authorPersonId !== person._id)
-        throw appError("forbidden", "a postcard can hold only your own stories");
       placeId = story.placeId;
     } else {
       placeId = item.placeId;
     }
     const place = await ctx.db.get("place", placeId);
+    if (place !== null && !isRegionOn(place.regionId))
+      throw appError("not_found", "place not found");
+    if (story !== null && story.authorPersonId !== person._id)
+      throw appError("forbidden", "a postcard can hold only your own stories");
     if (place === null || place.regionId !== regionId || !isPublicRealPlace(place))
       throw appError("invalid_input", "that place can't go on a postcard");
     if (story !== null && !isStoryShown(place, story))
@@ -240,10 +242,11 @@ export const mine = query({
       .take(CARDS_KEPT);
     const views = [];
     for (const card of cards) {
+      if (!isRegionOn(card.regionId)) continue;
       const places = [];
       for (const item of card.items) {
         const place = await ctx.db.get("place", item.placeId);
-        if (place === null) continue;
+        if (place === null || !isRegionOn(place.regionId)) continue;
         const story = item.kind === "story" ? await ctx.db.get("story", item.storyId) : null;
         places.push({
           slug: place.slug,
@@ -340,7 +343,8 @@ export const remove = mutation({
     requireOn();
     const person = await requirePerson(ctx);
     const card = await ctx.db.get("postcard", postcardId);
-    if (card === null) throw appError("not_found", "postcard not found");
+    if (card === null || !isRegionOn(card.regionId))
+      throw appError("not_found", "postcard not found");
     if (card.senderPersonId !== person._id)
       throw appError("forbidden", "only the sender may delete a postcard");
     await ctx.db.delete("postcard", postcardId);
@@ -383,7 +387,7 @@ export const view = query({
   returns: v.union(cardView, v.null()),
   handler: async (ctx, { code }) => {
     const regionId = activeRegionConfig().id;
-    if (!postcardOn(regionId) || !isPostcardCode(code)) return null;
+    if (!isRegionOn(regionId) || !postcardOn(regionId) || !isPostcardCode(code)) return null;
     const card = await ctx.db
       .query("postcard")
       .withIndex("by_code", (q) => q.eq("code", code))
@@ -398,7 +402,7 @@ export const view = query({
     let photoStories = 0;
     for (const item of card.items) {
       const place = await ctx.db.get("place", item.placeId);
-      if (place === null || !isPublicRealPlace(place)) continue;
+      if (place === null || !isRegionOn(place.regionId) || !isPublicRealPlace(place)) continue;
       let excerpt: { text: string; lang: string } | undefined;
       let photos: { key: string; width: number; height: number }[] = [];
       if (item.kind === "story") {

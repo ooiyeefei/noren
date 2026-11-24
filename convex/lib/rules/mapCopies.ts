@@ -1,5 +1,6 @@
 import type { Triggers } from "convex-helpers/server/triggers";
-import type { DataModel } from "../../_generated/dataModel";
+import { cellOf } from "../../../src/lib/geo/geohash";
+import type { DataModel, Doc } from "../../_generated/dataModel";
 import {
   readHasPeopleStories,
   readHasPublishedPage,
@@ -22,10 +23,12 @@ export function registerMapCopyRules(triggers: Triggers<DataModel>) {
     const pin = change.newDoc;
     const placeId = (pin ?? change.oldDoc).placeId;
     const place = await ctx.innerDb.get("place", placeId);
-    await writeMapCopies(ctx.innerDb, placeId, {
+    const copies: Pick<Doc<"place">, "mapPin" | "mapCell" | "neighbourhood"> = {
       mapPin: pin === null ? null : { lat: pin.lat, lng: pin.lng },
+      mapCell: pin === null ? undefined : cellOf(pin),
       neighbourhood: place === null ? undefined : readNeighbourhood(place.regionId, pin),
-    });
+    };
+    await writeMapCopies(ctx.innerDb, placeId, copies);
   });
 
   triggers.register("pageVersion", async (ctx, change) => {

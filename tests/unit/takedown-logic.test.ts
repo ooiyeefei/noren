@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import {
+  linkedPlaceSlug,
   pageFromQuery,
   removalHref,
   statuses,
@@ -48,4 +49,11 @@ it("status wording exists for every status in both languages", () => {
   for (const locale of ["ja", "en"] as const)
     for (const status of statuses)
       expect(takedownMessages[locale][status].length).toBeGreaterThan(0);
+});
+
+it("carries the selected fact separately from the encoded place address", () => {
+  const href = new URL(removalHref("ja", "mock café", "f1"), "https://example.org");
+  expect(href.searchParams.get("factId")).toBe("f1");
+  expect(linkedPlaceSlug(pageFromQuery(href.searchParams))).toBe("mock café");
+  expect(linkedPlaceSlug("/ja/places/%zz")).toBeUndefined();
 });

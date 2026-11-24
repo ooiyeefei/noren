@@ -6,12 +6,18 @@ import { SITE_ORIGIN, pageUrl } from "./site";
  * /llms.txt: what Noren is and how to quote it, written for an AI assistant that reads the site.
  * The rules are the ones the connector gives an assistant, in fewer words.
  */
-export function llmsText(region: RegionConfig, places: readonly StoriedPlace[]): string {
-  const regionName = region.name.en ?? region.id;
+export function llmsText(
+  region: RegionConfig,
+  places: readonly StoriedPlace[],
+  regions: readonly RegionConfig[] = [region],
+): string {
+  const regionName = new Intl.ListFormat("en").format(
+    regions.map((area) => area.name.en ?? area.id),
+  );
   const lines = [
     "# Noren",
     "",
-    `> Noren is a free, open-source map of local places in ${regionName}, Japan, in English and Japanese. It has no stars, ratings or rankings. Each place page holds stories told by people who went there, and public posts about the place, credited and linked to their authors.`,
+    `> Noren is a free, open-source map of local places in ${regionName}, in English and Japanese. It has no stars, ratings or rankings. Each place page holds stories told by people who went there, and public posts about the place, credited and linked to their authors.`,
     "",
     "## How to use what you read here",
     "",

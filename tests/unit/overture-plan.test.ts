@@ -390,3 +390,16 @@ describe("the import plan", () => {
     expect(plan(places, existing, { mapBudget: 3 }).map.withinBudget).toBe(false);
   });
 });
+
+it("uses the region's focus categories when classifying markets and mosques", () => {
+  const rows = [
+    place(801, { ...north(100), hierarchy: ["farmers_market"] }),
+    place(802, { ...north(400), hierarchy: ["place_of_worship", "mosque"] }),
+  ];
+  expect(plan(rows).add).toEqual([]);
+  expect(
+    plan(rows, [], { focusCategories: ["market", "worship"] })
+      .add.map(({ category }) => category)
+      .sort(),
+  ).toEqual(["market", "worship"]);
+});

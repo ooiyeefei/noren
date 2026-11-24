@@ -3,6 +3,13 @@ import type { RegionConfig } from "./schema";
 
 export type PlaceNameLike = { lang: string; script: Script; value: string; isPrimary: boolean };
 
+export function detectScript(value: string, region: { nameLanguages?: string[] }): Script {
+  if (/\p{Script=Han}/u.test(value)) return region.nameLanguages?.includes("zh") ? "hanzi" : "kanji";
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(value)) return "kana";
+  if (/[\u0B80-\u0BFF]/u.test(value)) return "tamil";
+  return "latin";
+}
+
 export function pickPlaceName<T extends PlaceNameLike>(
   names: readonly T[],
   locale: string,

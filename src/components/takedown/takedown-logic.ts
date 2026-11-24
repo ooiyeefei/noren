@@ -1,3 +1,4 @@
+import type { Id } from "../../../convex/_generated/dataModel";
 import { errorText } from "@/components/layout/error-text";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { takedownMessages } from "@/lib/i18n/messages/takedown";
@@ -38,11 +39,22 @@ export function cleanPageParameter(value: string | null): string {
 }
 export const pageFromQuery = (query: { get: (key: string) => string | null }) =>
   cleanPageParameter(query.get("page"));
-export function removalHref(locale: Locale, slug: string) {
-  return `/${locale}/takedown?page=${encodeURIComponent(`/${locale}/places/${encodeURIComponent(slug)}`)}`;
+export function removalHref(locale: Locale, slug: string, factId?: string) {
+  const href = `/${locale}/takedown?page=${encodeURIComponent(`/${locale}/places/${encodeURIComponent(slug)}`)}`;
+  return factId ? href + "&factId=" + encodeURIComponent(factId) : href;
 }
-export function submitArguments(draft: FormDraft, locale: Locale) {
+export function linkedPlaceSlug(page: string): string | undefined {
+  const match = /^\/(?:en|ja)\/places\/([^/?#]+)$/.exec(page);
+  if (!match?.[1]) return;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return;
+  }
+}
+export function submitArguments(draft: FormDraft, locale: Locale, factId?: Id<"placeFact">) {
   return {
+    ...(factId ? { factId } : {}),
     pageUrl: draft.pageUrl.trim(),
     details: draft.details.trim(),
     privacyOrMinor: draft.privacyOrMinor,

@@ -6,6 +6,20 @@ import { geoUserAgent } from ".";
  */
 export type MapsSuggestion = { name?: string; lat: number; lng: number; exact?: boolean };
 
+const pinText = (pin: { lat: number; lng: number }) => `${pin.lat.toFixed(6)},${pin.lng.toFixed(6)}`;
+
+/**
+ * The one way Noren builds a Google Maps directions link between two pins. The origin is left out
+ * when it is not known, and the maps app then starts from where the person is.
+ */
+export function directionsUrl(
+  from: { lat: number; lng: number } | undefined,
+  to: { lat: number; lng: number },
+): string {
+  const origin = from ? `&origin=${pinText(from)}` : "";
+  return `https://www.google.com/maps/dir/?api=1${origin}&destination=${pinText(to)}&travelmode=driving`;
+}
+
 export function isAllowedMapsHost(input: string | URL): boolean {
   try {
     const url = new URL(input);

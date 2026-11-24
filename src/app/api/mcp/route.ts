@@ -1,3 +1,4 @@
+import { isRegionOn } from "../../../../convex/lib/region";
 import { createMcpHandler } from "mcp-handler";
 import { convexConnectorData } from "@/lib/connector/convex-data";
 import {
@@ -45,7 +46,8 @@ function hidden(response: Response): Response {
 }
 
 async function serve(request: Request): Promise<Response> {
-  if (!getActiveRegion().features.connector) {
+  const region = getActiveRegion();
+  if (!isRegionOn(region.id) || !region.features.connector) {
     return hidden(new Response("Not found", { status: 404 }));
   }
   return hidden(await handler(request));

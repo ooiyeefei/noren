@@ -1,11 +1,23 @@
 import type { TakedownStatus } from "@/components/takedown/takedown-logic";
 
+import type { Id } from "../../../convex/_generated/dataModel";
+import type { Locale } from "@/lib/i18n";
+
+export type TakedownFact = {
+  id: Id<"placeFact">;
+  wording: Record<Locale, string>;
+  value: "yes" | "no";
+  reporterName: string;
+  status: "live" | "removed" | "hidden";
+};
+
 export type TakedownRequest = {
   _id: string;
   code?: string;
   placeId?: string;
   placeSlug?: string;
   placeName?: string;
+  fact?: TakedownFact;
   details: string;
   privacyOrMinor: boolean;
   contact?: string;

@@ -168,6 +168,7 @@ describe("public mapping", () => {
     expect(props).toEqual({
       categories: config.categories,
       regionId: config.id,
+      regionName: config.name.en,
       defaultLocale: config.defaultLocale,
       nameFallback: config.nameFallback,
       center: config.defaultCenter,
@@ -187,7 +188,8 @@ describe("public mapping", () => {
     });
     expect(region.scriptOrigins).toEqual(scriptHostsFor(config.enabledSourceAdapters));
     expect(region.frameOrigins).toEqual(frameHostsFor(config.enabledSourceAdapters));
-    expect(publicRegionProps(config, "en")).toEqual(region);
+    // The region's name is the one thing that follows the reader's language here.
+    expect(publicRegionProps(config, "en")).toEqual({ ...region, regionName: config.name.en });
     expect(noticePlatforms(changed, "en")).toEqual(["YouTube"]);
   });
   it("offers the tick that lets AI read a story while either the connector or the planner is on", () => {

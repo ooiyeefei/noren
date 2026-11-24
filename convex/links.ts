@@ -3,6 +3,7 @@ import { SHARED_POSTS_LISTED } from "../src/lib/domain/constants";
 import type { Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { countsVisits, isSourceShownToEveryone } from "./lib/access";
+import { isRegionOn } from "./lib/region";
 import { requirePerson } from "./lib/auth";
 import { mutation } from "./lib/gate";
 import { readMapNames } from "./lib/mapCopies";
@@ -31,7 +32,7 @@ async function destination(ctx: QueryCtx, sourceId: string) {
   const source = await ctx.db.get("source", id);
   if (source === null) return null;
   const place = await ctx.db.get("place", source.placeId);
-  if (place === null || !countsVisits(place, source)) return null;
+  if (place === null || !isRegionOn(place.regionId) || !countsVisits(place, source)) return null;
   return source;
 }
 
@@ -130,7 +131,7 @@ export const mine = query({
     const posts = [];
     for (const source of sources) {
       const place = await ctx.db.get("place", source.placeId);
-      if (place === null) continue;
+      if (place === null || !isRegionOn(place.regionId)) continue;
       posts.push({
         sourceId: source._id,
         placeSlug: place.slug,

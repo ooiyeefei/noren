@@ -1,8 +1,10 @@
 /// <reference types="vite/client" />
 import type { ApiFromModules } from "convex/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import malaysiaWest from "../regions/malaysia-west.json";
 import nagasaki from "../regions/nagasaki.json";
 import { MAP_PLACE_LIMIT, type Script } from "../src/lib/domain/constants";
+import { cellOf } from "../src/lib/geo/geohash";
 import {
   addClaim,
   addCorrectedTranscript,
@@ -16,7 +18,7 @@ import {
   errorCode,
   newBackend,
 } from "../tests/convex/fixtures";
-import { api as generatedApi } from "./_generated/api";
+import { api as generatedApi, internal } from "./_generated/api";
 import * as region from "./lib/region";
 import { slugBase, uniqueSlug } from "./lib/slug";
 
@@ -46,7 +48,10 @@ async function setup(options: { isMock?: boolean } = {}) {
   return { ...b, creator, other, steward, owner, user, create, audits };
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 /** The region after its launch pack is complete, when real places may be public. */
 function openRegion() {
@@ -1290,5 +1295,266 @@ describe("the name goes first (FR-131)", () => {
     await addPerson(b, "unconfirmed-demo", "user", { nameConfirmed: false, isMock: true });
     await b.as("unconfirmed-steward").mutation(api.places.create, onMap);
     await b.as("unconfirmed-demo").mutation(api.places.create, input);
+  });
+});
+
+describe("places.backfillMapCell", () => {
+  it("continues through legacy copies, uncopied pins, and places without pins, and can restart", async () => {
+    vi.useFakeTimers();
+    try {
+      const b = await setup();
+      const mapCell = cellOf(pin);
+      const { withoutPin, uncopied, copies } = await b.t.run(async (ctx) => {
+        const row = {
+          regionId: "nagasaki",
+          visibility: "draft" as const,
+          isMock: false,
+          createdBy: b.creator,
+        };
+        const withoutPin = await ctx.db.insert("place", { ...row, slug: "without-pin", mapCell });
+        const uncopied = await ctx.db.insert("place", { ...row, slug: "uncopied" });
+        await ctx.db.insert("pin", {
+          ...pin,
+          placeId: uncopied,
+          placedBy: b.creator,
+          placedAt: 0,
+        });
+        const copies = [];
+        for (let i = 0; i < 200; i++) {
+          copies.push(await ctx.db.insert("place", { ...row, slug: `copy-${i}`, mapPin: pin }));
+        }
+        return { withoutPin, uncopied, copies };
+      });
+
+      for (let run = 0; run < 2; run++) {
+        expect(await b.t.mutation(internal.places.backfillMapCell, { cursor: null })).toEqual({
+          processed: 200,
+          isDone: false,
+        });
+        await b.t.finishAllScheduledFunctions(vi.runAllTimers);
+        await b.t.run(async ({ db }) => {
+          expect((await db.get("place", withoutPin))?.mapCell).toBeUndefined();
+          expect((await db.get("place", uncopied))?.mapCell).toBe(mapCell);
+          for (const id of copies) expect((await db.get("place", id))?.mapCell).toBe(mapCell);
+        });
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("places map queries", () => {
+  it("matches each precision, filters category, and deduplicates requested cells", async () => {
+    const b = await setup();
+    const options = { createdBy: b.creator, visibility: "public" as const };
+    const first = await addPlace(b, { ...options, category: "museum" });
+    const next = await addPlace(b, { ...options, category: "cafe" });
+    const far = await addPlace(b, options);
+    const cell = cellOf(pin);
+    // Separate five-character cells within a shared four-character prefix.
+    await b.as("creator").mutation(api.places.movePin, { placeId: next, lat: 32.79, lng: 129.87 });
+    await b.as("creator").mutation(api.places.movePin, { placeId: far, lat: 32.9, lng: 129.7 });
+    const inCells = (cells: string[], category?: string) =>
+      b.t.query(api.places.inCells, { cells, category });
+
+    const listed = await b.t.query(api.places.listForMap, { regionId: "nagasaki" });
+    expect(await inCells([cell, cell])).toEqual(listed.filter(({ _id }) => _id === first));
+    expect(new Set((await inCells([cell.slice(0, 4)])).map(({ _id }) => _id))).toEqual(
+      new Set([first, next]),
+    );
+    expect((await inCells([cell.slice(0, 4)], "cafe")).map(({ _id }) => _id)).toEqual([next]);
+    expect(await inCells([])).toEqual([]);
+  });
+
+  it("matches listForMap access rules and always omits hidden places", async () => {
+    const b = await setup();
+    const fixtures = { createdBy: b.creator };
+    await addPlace(b, { ...fixtures, visibility: "public" });
+    await addPlace(b, { ...fixtures, visibility: "demo_public" });
+    await addPlace(b, { ...fixtures, visibility: "pilot" });
+    await addPlace(b, fixtures);
+    const draft = await addPlace(b, fixtures);
+    const hidden = await addPlace(b, fixtures);
+    await addOwner(b, draft, b.owner, b.steward);
+    await b.run((ctx) => ctx.db.patch("place", hidden, { hiddenReason: "reported" }));
+
+    for (const caller of [b.t, b.as("user"), b.as("creator"), b.as("owner"), b.as("steward")]) {
+      const byRegion = await caller.query(api.places.listForMap, { regionId: "nagasaki" });
+      const byCell = await caller.query(api.places.inCells, { cells: [cellOf(pin)] });
+      expect(new Set(byCell)).toEqual(new Set(byRegion));
+      expect(byCell.some(({ _id }) => _id === hidden)).toBe(false);
+    }
+  });
+
+  it("rejects mixed lengths, more than 32 cells, and non-geohash characters", async () => {
+    const b = await setup();
+    for (const cells of [["wvu6", "wvu65"], Array<string>(33).fill("wvu65"), ["wvu6a"]]) {
+      expect(await errorCode(b.t.query(api.places.inCells, { cells }))).toBe("invalid_input");
+    }
+  });
+
+  it("caps the combined result and warns", async () => {
+    const b = await setup();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const mapCell = cellOf(pin);
+    await b.t.run(async (ctx) => {
+      for (let i = 0; i <= MAP_PLACE_LIMIT; i++) {
+        const isMock = i > MAP_PLACE_LIMIT / 2;
+        await ctx.db.insert("place", {
+          regionId: "nagasaki",
+          slug: `in-cells-cap-${i}`,
+          visibility: isMock ? "demo_public" : "public",
+          demoPublicBasis: isMock ? "fictional" : undefined,
+          createdBy: b.creator,
+          isMock,
+          mapCell,
+          mapPin: pin,
+          mapNames: [],
+          hasPublishedPage: false,
+        });
+      }
+    });
+    const rows = await b.t.query(api.places.inCells, { cells: [mapCell] });
+    expect(rows).toHaveLength(MAP_PLACE_LIMIT);
+    expect(rows.some(({ visibility }) => visibility === "demo_public")).toBe(true);
+    expect(warn).toHaveBeenCalledWith(
+      `listForMap: ${MAP_PLACE_LIMIT} places in nagasaki, showing ${MAP_PLACE_LIMIT}`,
+    );
+  });
+
+  it("limits places and coverage to enabled regions and uses the existing slug detail rules", async () => {
+    vi.stubEnv("REGIONS_PREVIEW", "");
+    const b = await setup();
+    const jpSlug = "jp-map-test";
+    const mySlug = "my-map-test";
+    const japan = await addPlace(b, { createdBy: b.creator, visibility: "public", slug: jpSlug });
+    const malaysia = await addPlace(b, {
+      createdBy: b.creator,
+      regionId: "malaysia-west",
+      visibility: "public",
+      slug: mySlug,
+      withPin: false,
+    });
+    const { lat, lng } = malaysiaWest.defaultCenter;
+    await b.run((ctx) =>
+      ctx.db.insert("pin", { placeId: malaysia, lat, lng, placedBy: b.creator, placedAt: 0 }),
+    );
+    const cells = [cellOf(pin), cellOf({ lat, lng })];
+    const coverage = (towns: typeof nagasaki.towns | typeof malaysiaWest.towns) =>
+      towns.map(({ id, names, center, radiusMetres }) => ({ id, names, center, radiusMetres }));
+
+    const steward = b.as("steward");
+    expect(await b.t.query(api.places.bySlug, { slug: jpSlug })).toMatchObject({ _id: japan });
+    expect(await steward.query(api.places.bySlug, { slug: mySlug })).toBeNull();
+    expect((await steward.query(api.places.inCells, { cells })).map(({ _id }) => _id)).toEqual([
+      japan,
+    ]);
+    expect(await b.t.query(api.places.coverage, {})).toEqual(coverage(nagasaki.towns));
+
+    vi.stubEnv("REGIONS_PREVIEW", "malaysia-west");
+    expect(await b.t.query(api.places.bySlug, { slug: mySlug })).toMatchObject({ _id: malaysia });
+    expect(await b.t.query(api.places.bySlug, { slug: jpSlug })).toEqual(
+      await b.t.query(api.places.getBySlug, { regionId: "nagasaki", slug: jpSlug }),
+    );
+    expect((await b.t.query(api.places.inCells, { cells })).map(({ _id }) => _id)).toEqual([
+      japan,
+      malaysia,
+    ]);
+    expect(await b.t.query(api.places.coverage, {})).toEqual([
+      ...coverage(nagasaki.towns),
+      ...coverage(malaysiaWest.towns),
+    ]);
+    await b.run((ctx) => ctx.db.patch("place", malaysia, { visibility: "draft" }));
+    expect(await b.t.query(api.places.bySlug, { slug: mySlug })).toBeNull();
+    expect(await steward.query(api.places.bySlug, { slug: mySlug })).toMatchObject({
+      _id: malaysia,
+    });
+  });
+});
+
+it("refuses a member, OSM and Overture slug already used by a disabled region", async () => {
+  const b = await setup();
+  const slug = slugBase(names);
+  await addPlace(b, {
+    createdBy: b.creator,
+    regionId: "malaysia-west",
+    slug,
+    withPin: false,
+    withNames: false,
+  });
+
+  expect(await errorCode(b.create())).toBe("conflict");
+  const candidateId = await b.run((ctx) =>
+    ctx.db.insert("seedOsmCandidate", {
+      regionId: "nagasaki",
+      osmType: "node",
+      osmId: 123456,
+      tags: { amenity: "cafe", name: "Mock Ōura Test Shop" },
+      ...pin,
+      licence: "ODbL-1.0",
+    }),
+  );
+  const confirmedNames = names.map((name) => ({ ...name, isPrimary: true }));
+  expect(
+    await errorCode(
+      b.as("steward").mutation(api.osmSeed.confirmCandidate, {
+        candidateId,
+        names: confirmedNames,
+        pin,
+        category: "cafe",
+      }),
+    ),
+  ).toBe("conflict");
+  expect(
+    await errorCode(
+      b.t.mutation(internal.overtureSeed.publishPlaces, {
+        regionId: "nagasaki",
+        stewardPersonId: b.steward,
+        release: "2026-10-21.0",
+        retrievedAt: 1,
+        places: [
+          {
+            ...pin,
+            gers: "00000000-0000-4000-8000-000000123456",
+            dataset: "meta",
+            licence: "CDLA-Permissive-2.0",
+            category: "cafe",
+            names: confirmedNames,
+          },
+        ],
+      }),
+    ),
+  ).toBe("conflict");
+  expect(await b.run((ctx) => ctx.db.query("place").take(2))).toMatchObject([
+    { regionId: "malaysia-west", slug },
+  ]);
+});
+
+it("keeps add-a-place in interface languages and accepts configured languages for existing names", async () => {
+  vi.stubEnv("REGIONS_PREVIEW", malaysiaWest.id);
+  const b = await setup();
+  const { lat, lng } = malaysiaWest.defaultCenter;
+  const malay = { lang: "ms", script: "latin" as const, value: "Kafe Ujian" };
+  for (const regionId of ["nagasaki", "malaysia-west"]) {
+    expect(
+      await errorCode(
+        b.as("creator").mutation(api.places.create, {
+          ...input,
+          regionId,
+          pin: regionId === "nagasaki" ? pin : { lat, lng },
+          names: [malay],
+        }),
+      ),
+    ).toBe("invalid_input");
+  }
+  const placeId = await addPlace(b, {
+    createdBy: b.creator,
+    regionId: "malaysia-west",
+    withPin: false,
+  });
+  await b.as("creator").mutation(api.places.updateNames, { placeId, names: [malay] });
+  expect(await b.as("creator").query(api.places.get, { placeId })).toMatchObject({
+    names: [{ ...malay, isPrimary: true }],
   });
 });
