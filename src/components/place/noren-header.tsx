@@ -6,6 +6,7 @@ import {
 } from "@/components/public/mapping";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { placePageMessages } from "@/lib/i18n/messages/place-page";
+import { townFor, type WhereRegion } from "@/lib/region/where";
 
 export function NorenHeader({
   locale,
@@ -15,12 +16,13 @@ export function NorenHeader({
   hasStory,
 }: {
   locale: Locale;
-  place: Pick<PlaceDetailLike, "names" | "isMock">;
-  region: Pick<PublicRegionProps, "defaultLocale" | "nameFallback">;
+  place: Pick<PlaceDetailLike, "names" | "isMock" | "pin">;
+  region: Pick<PublicRegionProps, "defaultLocale" | "nameFallback"> & WhereRegion;
   category?: string;
   hasStory: boolean;
 }) {
   const m = messagesFor(placePageMessages, locale);
+  const where = townFor(region, place.pin, locale);
   const heading = placeHeading(place.names, locale, region);
   const japaneseNames = place.names.filter(
     (name) => name.lang === "ja" && (name.script === "kanji" || name.script === "kana"),
@@ -92,8 +94,8 @@ export function NorenHeader({
       )}
       <p>
         {category
-          ? format(m.categoryInRegion, { category, region: m.regionName })
-          : format(m.inRegion, { region: m.regionName })}
+          ? format(m.categoryInRegion, { category, region: where })
+          : format(m.inRegion, { region: where })}
       </p>
       {(hasStory || place.isMock) && (
         <div className="flex flex-wrap items-center gap-2">

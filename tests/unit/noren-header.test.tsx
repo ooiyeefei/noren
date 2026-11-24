@@ -81,7 +81,7 @@ for (const locale of ["en", "ja"] as const) {
     expect(html).toContain("sm:[--slit-height:72px]");
     expect(html).toContain("pt-3 pb-[calc(var(--slit-height)+6px)]");
     expect(html).toContain("sm:pt-5 sm:pb-[calc(var(--slit-height)+12px)]");
-    expect(html).toContain(placePageMessages[locale].regionName);
+    expect(html).toContain(locale === "ja" ? "長崎" : "Nagasaki");
     expect(html).not.toContain("·");
   });
   it(`clamps the horizontal fallback while preserving its full accessible name (${locale})`, () => {
@@ -273,4 +273,29 @@ it("shows the English name below the cloth when a Japanese reading also exists",
   );
   expect(html).toMatch(/<p lang="en"[^>]*>Demo Cafe<\/p>/);
   expect(html.match(/<h1\b/g)).toHaveLength(1);
+});
+
+it("names a Malaysian place's own town, or the region's name outside every town", async () => {
+  const { getRegion } = await import("@/lib/region");
+  const { publicRegionProps } = await import("@/components/public/mapping");
+  for (const locale of ["en", "ja"] as const) {
+    const malaysia = publicRegionProps(getRegion("malaysia-west")!, locale);
+    const at = (pin: { lat: number; lng: number }) =>
+      render(
+        <NorenHeader
+          locale={locale}
+          place={{ ...place, pin }}
+          region={malaysia}
+          category="Cafe"
+          hasStory={false}
+        />,
+      );
+    const ipoh = at({ lat: 4.5975, lng: 101.0901 });
+    expect(ipoh).toContain(locale === "en" ? "Cafe in Ipoh" : "イポーにあるCafe");
+    expect(ipoh).not.toContain(locale === "en" ? "Nagasaki" : "長崎");
+    const away = at({ lat: 3.2, lng: 101.0 });
+    expect(away).toContain(
+      locale === "en" ? "Cafe in West Coast Malaysia" : "マレーシア西海岸にあるCafe",
+    );
+  }
 });

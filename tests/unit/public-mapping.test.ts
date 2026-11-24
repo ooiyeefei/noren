@@ -169,6 +169,8 @@ describe("public mapping", () => {
       categories: config.categories,
       regionId: config.id,
       regionName: config.name.en,
+      regionNames: config.name,
+      ...(config.towns ? { towns: config.towns } : {}),
       defaultLocale: config.defaultLocale,
       nameFallback: config.nameFallback,
       center: config.defaultCenter,

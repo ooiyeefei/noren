@@ -118,3 +118,36 @@ it("puts the heading it is given on the map page, in both languages", () => {
     ).toContain(`>${escape(publicMessages[locale].exploreTitle)}</h1>`);
   }
 });
+
+it("shows the chips of the region in view: market and place of worship in Malaysia, not in Nagasaki", () => {
+  for (const locale of ["en", "ja"] as const) {
+    const my = publicRegionProps(getRegion("malaysia-west")!, locale);
+    const nag = publicRegionProps(getRegion("nagasaki")!, locale);
+    const inMalaysia = render(
+      <HomeView locale={locale} region={nag} panel={my} model={toHomeModel([], locale, nag)} />,
+    );
+    expect(inMalaysia).toContain('data-category="market"');
+    expect(inMalaysia).toContain('data-category="worship"');
+    expect(inMalaysia).toContain(locale === "en" ? ">Market<" : ">市場<");
+    expect(inMalaysia).toContain(locale === "en" ? ">Place of worship<" : ">礼拝所<");
+    const inNagasaki = render(
+      <HomeView locale={locale} region={nag} model={toHomeModel([], locale, nag)} />,
+    );
+    expect(inNagasaki).not.toContain('data-category="market"');
+    expect(inNagasaki).toContain('data-category="cafe"');
+  }
+});
+
+it("says so when the region in view has no stories yet, and lists nothing for none", () => {
+  for (const locale of ["en", "ja"] as const) {
+    const my = publicRegionProps(getRegion("malaysia-west")!, locale);
+    const html = render(
+      <HomeView locale={locale} region={my} model={toHomeModel([], locale, my)} latest={[]} />,
+    );
+    expect(html).toContain(publicMessages[locale].noLatestStories);
+    const loading = render(
+      <HomeView locale={locale} region={my} model={toHomeModel([], locale, my)} />,
+    );
+    expect(loading).not.toContain(publicMessages[locale].noLatestStories);
+  }
+});
