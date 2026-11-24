@@ -175,9 +175,10 @@ function HomeQuery({
   const looking = regionAtCentre(view === null ? startCentre : view.center, allRegions);
   const lookingName = looking === null ? null : looking.regionName;
   useReportRegionName(lookingName);
-  // The panel (chips, latest stories, neighbourhoods) follows the region in view. Over no region, or
-  // zoomed out to towns, it stays on the home region as before. One query each, keyed by region id.
-  const panel = zoomedOut || looking === null ? region : looking;
+  // The panel (chips, latest stories, neighbourhoods) follows the region in view, as the heading does,
+  // zoomed in or out to towns. Over no region it stays on the home region. One query each, keyed by
+  // region id.
+  const panel = looking === null ? region : looking;
   const category = chipExists(panel, rawCategory) ? rawCategory : "";
   const latest = useQuery(api.stories.latest, { regionId: panel.regionId });
   const categoryKey = panel.categories?.some((entry) => entry.key === category) ? category : "";

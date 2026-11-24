@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, type ComponentProps } from "react";
 import { HomeContainer } from "@/components/public/home-container";
 import { PublicLoading } from "@/components/public/home-view";
 import { publicRegionProps } from "@/components/public/mapping";
@@ -18,17 +18,34 @@ export default async function Page({ searchParams }: PageProps<"/[lang]/map">) {
       publicRegionProps(config, locale),
     ]),
   );
-  // A place page's "Map" link opens the map at that place; a bad value is ignored.
-  const start =
-    parseMapStart(
-      (await searchParams).at,
-      Object.values(regions).map((entry) => entry.bounds),
-    ) ?? undefined;
   return (
     <main id="main" tabIndex={-1} data-full-bleed="">
       <Suspense fallback={<PublicLoading locale={locale} />}>
-        <HomeContainer locale={locale} region={region} regions={regions} start={start} />
+        <MapAtStart
+          locale={locale}
+          region={region}
+          regions={regions}
+          searchParams={searchParams}
+        />
       </Suspense>
     </main>
   );
+}
+
+/**
+ * A place page's "Map" link opens the map at that place (`?at=lat,lng`); a bad value is ignored.
+ * The query is read inside the Suspense boundary, so the page's shell is still prerendered.
+ */
+async function MapAtStart({
+  searchParams,
+  ...props
+}: Omit<ComponentProps<typeof HomeContainer>, "start"> & {
+  searchParams: PageProps<"/[lang]/map">["searchParams"];
+}) {
+  const start =
+    parseMapStart(
+      (await searchParams).at,
+      Object.values(props.regions ?? {}).map((entry) => entry.bounds),
+    ) ?? undefined;
+  return <HomeContainer {...props} start={start} />;
 }
