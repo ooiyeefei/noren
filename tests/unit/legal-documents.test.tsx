@@ -17,6 +17,7 @@ import {
   lineText,
   malayPrivacy,
   type LegalDocument,
+  type LegalLine,
   type LegalSection,
 } from "@/lib/i18n/messages/legal-documents";
 import { addStoryMessages } from "@/lib/i18n/messages/add-story";
@@ -699,16 +700,32 @@ describe("the trip agent's parts of the notice and the terms (T037, T038)", () =
       expect(malayText).not.toMatch(/\S+@\S+/);
       expect(malayText).not.toContain("[[");
       for (const name of new Set(placeholders(malayText)))
-        expect(["region", "operator", "contact"]).toContain(name);
+        expect(["region", "operator", "contact", "minimumAge", "platforms"]).toContain(name);
     });
 
-    it("has the same parts as the English notice, under the same switches", () => {
-      for (const id of ["malaysia", "facts", "trip"]) {
-        const en = section("en", "privacy", id);
-        const ms = malayPrivacy.document.sections.find((s) => s.id === id);
-        expect(ms?.when).toBe(en.when);
-        expect(ms?.items?.length).toBe(en.items?.length);
-      }
+    it("matches each English section, line, service, switch and placeholder in order", () => {
+      const tokens = (value: string) => placeholders(value).sort();
+      const lineShape = (line: LegalLine) => ({
+        when: typeof line === "string" ? undefined : line.when,
+        unless: typeof line === "string" ? undefined : line.unless,
+        placeholders: tokens(lineText(line)),
+      });
+      const shape = (doc: LegalDocument) =>
+        doc.sections.map((s) => ({
+          id: s.id,
+          when: s.when,
+          heading: tokens(s.heading),
+          paragraphs: s.paragraphs?.map(lineShape),
+          items: s.items?.map(lineShape),
+          services: s.services?.map((service) => ({
+            name: service.name,
+            country: tokens(service.country),
+            does: tokens(service.does),
+            more: service.more?.map(lineShape),
+          })),
+          closing: s.closing?.map(lineShape),
+        }));
+      expect(shape(malayPrivacy.document)).toEqual(shape(legalDocuments.en.privacy));
     });
 
     const page = async (options: { malaysia: boolean; locale?: Locale; facts?: boolean }) => {
@@ -738,12 +755,14 @@ describe("the trip agent's parts of the notice and the terms (T037, T038)", () =
         expect(shown).toContain(FICTIONAL.operatorName);
         expect(html).toContain(`href="${FICTIONAL.contact}"`);
         expect(shown).not.toMatch(/\{\w+\}/);
-        expect(ids(html)).toEqual(["malaysia"]);
+        expect(ids(html)).toEqual(ids(render(await PrivacyPage())));
       },
     );
 
     it("adds the facts part under its own switch", async () => {
-      expect(ids(await page({ malaysia: true, facts: true }))).toEqual(["malaysia", "facts"]);
+      const shown = ids(await page({ malaysia: true, facts: true }));
+      expect(shown).toContain("facts");
+      expect(shown).toEqual(ids(render(await PrivacyPage())));
     });
   });
 });

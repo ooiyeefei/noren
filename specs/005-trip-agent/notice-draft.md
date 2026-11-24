@@ -8,7 +8,7 @@ Wording updated on 24 November 2026 for the public release that enables Malaysia
 
 - **English** is the governing text if it differs from the Malay text.
 - **Japanese (日本語)** awaits a native speaker's review.
-- **Malay (Bahasa Melayu)** is machine-drafted and awaits review by a Malay speaker. The Malay page and its link use the existing unreviewed labels.
+- **Malay (Bahasa Melayu)** now has the full privacy notice in code. The translation is machine-drafted and awaits review by a Malay speaker. The Malay page and its link use the existing unreviewed labels.
 
 ---
 
