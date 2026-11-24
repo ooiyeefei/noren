@@ -124,6 +124,20 @@ it("no table or field is named like a rating, score or sentiment", () => {
   expect(bannedNames(names), "Banned table or field paths").toEqual([]);
 });
 
+it("every index name fits Convex's 64-character identifier limit", () => {
+  // The local test backend accepts a longer name; production refuses the whole deploy (24 Nov 2026).
+  const exported = JSON.parse(schema.export()) as {
+    tables: { tableName: string; indexes: { indexDescriptor: string }[] }[];
+  };
+  const tooLong = exported.tables.flatMap(({ tableName, indexes }) =>
+    indexes
+      .map(({ indexDescriptor }) => indexDescriptor)
+      .filter((name) => name.length > 64)
+      .map((name) => `${tableName}.${name}`),
+  );
+  expect(tooLong).toEqual([]);
+});
+
 it("every table is classified for the mock flag", () => {
   const classified = [...hasMockFlag, ...inheritsMockFlag, ...notPersonCreated];
   expect(classified.toSorted(), "Each schema table must be listed exactly once").toEqual(

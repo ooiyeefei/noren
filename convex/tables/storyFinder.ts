@@ -99,7 +99,7 @@ export const storyFinderTables = {
     .index("by_placeId_and_canonicalUrl", ["placeId", "canonicalUrl"])
     .index("by_status_and_checkStartedAt", ["status", "checkStartedAt"])
     .index("by_status_and_checkedAt", ["status", "checkedAt"])
-    .index("by_status_and_attachError_and_verdict_kind_and_postedAt_and_checkedAt", [
+    .index("by_status_attachError_verdictKind_postedAt_checkedAt", [
       "status",
       "attachError",
       "verdict.kind",
