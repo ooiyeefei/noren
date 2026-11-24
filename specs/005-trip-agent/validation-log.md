@@ -112,3 +112,12 @@ The map was opened in Chrome once more against the dev deployment at both sizes:
 - The category chips above the map and "Latest stories" still come from the home region when the map is looking at Malaysia. Malaysia's two extra categories (market, place of worship) have no chip.
 - The tick list of seventeen facts is long on a phone; grouping it needs a field in the region file.
 - Opening hours: the server returns none, so every stop reads "hours not known, check before you go".
+
+## Landing of 24 November 2026
+
+- **Next.js 16.4.6** (PR #131): `next` and `eslint-config-next` from 16.4.3, the November security release. Type checks, eslint, 4,697 tests and the build passed; production reports `next.version` 16.4.6 and the map opened on a phone and a desktop screen with no console error.
+- **Stage 1 to 4 code, switched off** (PR #132, T003, T042): two commits, code and documents. The documents were made neutral first: they describe Malaysia coverage and the trip agent with a sample route and test dates, and no real person's trip. Checked before landing: both type checks, eslint, 5,455 tests, the production build.
+- **Production, in order**: Convex functions deployed (new indexes `placeFact.by_sourceId`, `tripShare.by_code`, `tripShare.by_ownerPersonId`); `places.backfillMapCell` run, and every one of the 5,276 places had a map cell within a minute; then the site deployed.
+- **Looked at on production**: the map loads by cell on a phone and a desktop screen, zoomed out and zoomed in, with no console error. `/en/trip`, `/en/trip/new`, `/ja/trip` and a made-up shared link return 404. The privacy notice and terms show no Malaysian, reports or trips part, and `/en/privacy/ms` is a 404, as they should while the switches are off.
+- **The data-law position (T018, T137)**: written into the constitution (3.1.0) on the owner's instruction to work it out: Noren treats Malaysia's Personal Data Protection Act 2010, as amended in 2024, as applying to its Malaysian coverage. The notice parts, their sources and what is still open are in `notice-draft.md`.
+- **Convex usage**: the team that holds Noren is on the Free plan and over its November database I/O allowance (3.4 GB of 2 GB across its projects; Noren 2.6 GB, nearly all on 4 and 5 November). Noren's daily I/O since 9 November is 4 to 20 MB. The allowance resets on 1 December. Seeding the Malaysian towns (T040, T043) waits for that or for a plan change.

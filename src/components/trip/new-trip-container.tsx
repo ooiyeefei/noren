@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { messagesFor, localePath, type Locale } from "@/lib/i18n";
 import { tripMessages } from "@/lib/i18n/messages/trip";
+import { TRIP_CONSENT_VERSION } from "@/lib/trip/consent";
 import type { StoredParty, StoredTrip } from "@/lib/trip/storage";
 import { VoiceInput } from "@/components/voice/voice-input";
 import { api } from "../../../convex/_generated/api";
@@ -42,7 +43,7 @@ export type NewTripViewProps = {
   onStep(step: Step): void;
   onTripChange(patch: Partial<StoredTrip>): void;
   onPartyChange(patch: Partial<StoredParty>): void;
-  onPlan(): void;
+  onPlan(consentVersion: string): void;
   /** The box to say it in your own words, shown beside the questions that describe the party. */
   ownWords?: React.ReactNode;
 };
@@ -148,7 +149,7 @@ export function NewTripView(props: NewTripViewProps): React.JSX.Element {
           <RulesReadback
             locale={locale}
             party={party}
-            onConfirm={props.onPlan}
+            onConfirm={() => props.onPlan(TRIP_CONSENT_VERSION)}
             onChange={() => props.onStep("party")}
           />
         )}
@@ -259,8 +260,13 @@ export function NewTripContainer({
           noticeSeen={noticeSeen}
           onNoticeSeen={markNoticeSeen}
           canAddTraveller={nextKey(party) !== undefined}
-          interpret={(words) =>
-            interpret({ messages: [{ role: "user", text: words }], outline: [], language: locale })
+          interpret={(words, consentVersion) =>
+            interpret({
+              messages: [{ role: "user", text: words }],
+              outline: [],
+              language: locale,
+              consentVersion,
+            })
           }
           voice={(onText) => <VoiceInput locale={locale} onText={onText} />}
           onAccept={(proposal, who) => {
@@ -290,13 +296,13 @@ export function NewTripContainer({
       onStep={setStep}
       onTripChange={(patch) => save((d) => patchTrip(d, trip.id, patch))}
       onPartyChange={(patch) => save((d) => patchParty(d, party.id, patch))}
-      onPlan={() => {
+      onPlan={(consentVersion) => {
         if (trip.start === "" || trip.end === "") {
           setStep("route");
           setProblem("needs_route");
           return;
         }
-        approveFirstPlan(trip.id);
+        approveFirstPlan(trip.id, consentVersion);
         router.push(localePath(locale, `/trip/${trip.id}`));
       }}
     />

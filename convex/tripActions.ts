@@ -32,14 +32,14 @@ const { trips } = internal as unknown as FilterApi<
 type TripPlanReply = { plan: Plan; seed: string; stops: (TripStopDetails | null)[] };
 
 export const plan = action({
-  args: { request: v.any(), seed: v.optional(v.string()) },
+  args: { request: v.any(), seed: v.optional(v.string()), consentVersion: v.optional(v.string()) },
   returns: v.object({
     plan: v.any(),
     seed: v.string(),
     stops: v.array(v.union(tripStopDetails, v.null())),
   }),
-  handler: async (ctx, { request: input, seed: requestedSeed }): Promise<TripPlanReply> => {
-    await ctx.runMutation(trips.begin, { kind: "plan" });
+  handler: async (ctx, { request: input, seed: requestedSeed, consentVersion }): Promise<TripPlanReply> => {
+    await ctx.runMutation(trips.begin, { kind: "plan", consentVersion });
     const regionId = typeof input?.regionId === "string" ? input.regionId : "";
     const region = getRegionConfig(regionId);
     if (!region) throw appError("invalid_input", "invalid trip region");
@@ -128,10 +128,10 @@ export const plan = action({
 });
 
 export const interpret = action({
-  args: interpretationFields,
+  args: { ...interpretationFields, consentVersion: v.optional(v.string()) },
   returns: interpretationReply,
-  handler: async (ctx, request): Promise<TripInterpretation> => {
-    await ctx.runMutation(trips.begin, { kind: "interpret" });
+  handler: async (ctx, { consentVersion, ...request }): Promise<TripInterpretation> => {
+    await ctx.runMutation(trips.begin, { kind: "interpret", consentVersion });
     const config = aiConfig("plan", process.env);
     if (!config.ok) throw appError("conflict", "trip interpretation is unavailable");
     if (!validInterpretationRequest(request))

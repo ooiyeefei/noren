@@ -3,10 +3,12 @@
 import { useId, useState } from "react";
 import { format, messagesFor, type Locale } from "@/lib/i18n";
 import { tripMessages } from "@/lib/i18n/messages/trip";
+import { TRIP_CONSENT_VERSION } from "@/lib/trip/consent";
 import type { TripInterpretation, TripProposal } from "@/lib/trip/interpret";
 import { TRIP_QUESTIONS } from "@/lib/trip/vocabulary";
 import { matchTraveller, needsTraveller, proposalText, type Who } from "./own-words-apply";
 import { buttonClass, fieldClass, helpClass, quietButtonClass } from "./route-step";
+import { tripSendRejected } from "./plan-consent";
 
 // The box to say it in your own words (T077) and the follow-up questions (T078, the page part).
 // Everything the AI step returns is a suggestion beside the words it rests on, kept only on yes.
@@ -21,7 +23,7 @@ export type OwnWordsBoxProps = {
   noticeSeen: boolean | undefined;
   onNoticeSeen(): void;
   /** Sends the words to the AI step. A throw, or a result in the plain state, reads as "failed". */
-  interpret(words: string): Promise<TripInterpretation>;
+  interpret(words: string, consentVersion: string): Promise<TripInterpretation>;
   /** Keep one suggestion. `who` is the traveller it is for; `fresh` adds a new one. */
   onAccept(proposal: TripProposal, who: Who | undefined): void;
   /** False when the party already has as many people as a trip can hold. */
@@ -152,7 +154,7 @@ export function OwnWordsBox(props: OwnWordsBoxProps): React.JSX.Element {
   const [words, setWords] = useState("");
   const [sent, setSent] = useState("");
   const [reading, setReading] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<"failed" | "invalid_input">();
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   // A question answered yes, with a person still to choose, waits here.
@@ -164,11 +166,11 @@ export function OwnWordsBox(props: OwnWordsBoxProps): React.JSX.Element {
     const text = words.trim();
     if (text === "" || reading) return;
     setReading(true);
-    setFailed(false);
+    setFailed(undefined);
     try {
-      const reply = await props.interpret(text);
+      const reply = await props.interpret(text, TRIP_CONSENT_VERSION);
       if (reply.state === "plain") {
-        setFailed(true);
+        setFailed("failed");
         setEntries(null);
       } else {
         setSent(text);
@@ -192,8 +194,8 @@ export function OwnWordsBox(props: OwnWordsBoxProps): React.JSX.Element {
           ),
         ]);
       }
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailed(tripSendRejected(error) ? "invalid_input" : "failed");
       setEntries(null);
     } finally {
       setReading(false);
@@ -268,7 +270,7 @@ export function OwnWordsBox(props: OwnWordsBoxProps): React.JSX.Element {
       )}
       {failed && (
         <p role="alert" className="font-bold text-beni">
-          {m.ownFailed}
+          {failed === "invalid_input" ? m.tripSendRejected : m.ownFailed}
         </p>
       )}
       {entries && suggestions.length === 0 && questions.length === 0 && (

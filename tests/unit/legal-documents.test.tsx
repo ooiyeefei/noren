@@ -665,6 +665,23 @@ describe("the trip agent's parts of the notice and the terms (T037, T038)", () =
     }
   });
 
+  it("explains consent, counter cleanup and report audit retention in each notice language", () => {
+    const options = { malaysia: true, features: features({ facts: true, trip: "open" }) };
+    const en = text(view("en", "privacy", options));
+    const ja = text(view("ja", "privacy", options));
+    const ms = documentText(malayPrivacy.document);
+
+    expect(en).toContain("records the date you agreed and which wording you agreed to");
+    expect(en).toContain("deletes these counts when you delete your account");
+    expect(en).toContain("no longer names you after account deletion");
+    expect(ja).toContain("同意した日と同意文の版を記録");
+    expect(ja).toContain("回数の記録も削除します");
+    expect(ja).toContain("アカウントを削除すると名前は残りません");
+    expect(ms).toContain("tarikh anda bersetuju dan versi teks");
+    expect(ms).toContain("memadamkan kiraan ini apabila anda memadamkan akaun");
+    expect(ms).toContain("tidak lagi memaparkan nama anda selepas akaun dipadamkan");
+  });
+
   it("ships legal text without editorial markers", () => {
     expect(JSON.stringify({ legalDocuments, malayPrivacy })).not.toMatch(/\[\[|OWNER/);
   });

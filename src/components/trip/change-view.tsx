@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useId, useState } from "react";
 import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { tripMessages } from "@/lib/i18n/messages/trip";
+import { TRIP_CONSENT_VERSION } from "@/lib/trip/consent";
 import type { TripInterpretation } from "@/lib/trip/interpret";
 import type { ChangeOp, Plan } from "@/lib/trip/types";
 import { matchTraveller } from "./own-words-apply";
+import { tripSendRejected } from "./plan-consent";
 import { buttonClass, fieldClass, helpClass, quietButtonClass } from "./route-step";
 import { choiceText, reasonText } from "./unmet-banner";
 
@@ -193,7 +195,7 @@ function SuggestedChange({
   travellers: readonly ChangeTraveller[];
   names: OpNames;
   busy: boolean;
-  onApply(op: ChangeOp, saidAs: string): void;
+  onApply(op: ChangeOp, saidAs: string, consentVersion: string): void;
   onDismiss(): void;
 }) {
   const m = messagesFor(tripMessages, locale);
@@ -254,7 +256,7 @@ function SuggestedChange({
           className={buttonClass}
           aria-describedby={`${id}-apply`}
           disabled={op === undefined || busy}
-          onClick={() => op && onApply(op, words ?? sent)}
+          onClick={() => op && onApply(op, words ?? sent, TRIP_CONSENT_VERSION)}
         >
           {m.typedApply}
         </button>
@@ -274,9 +276,9 @@ export type ChangeWordsProps = {
   noticeSeen: boolean | undefined;
   onNoticeSeen(): void;
   busy: boolean;
-  /** Sends the words to the AI step. A throw, or a result in the plain state, reads as "failed". */
-  interpret(words: string): Promise<TripInterpretation>;
-  onApply(op: ChangeOp, saidAs: string): void;
+  /** Sends the words and the version agreed to at the read button. */
+  interpret(words: string, consentVersion: string): Promise<TripInterpretation>;
+  onApply(op: ChangeOp, saidAs: string, consentVersion: string): void;
   voice?(onText: (text: string) => void): React.ReactNode;
 };
 
@@ -287,7 +289,7 @@ export function ChangeWords(props: ChangeWordsProps): React.JSX.Element {
   const [words, setWords] = useState("");
   const [sent, setSent] = useState("");
   const [reading, setReading] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<"failed" | "invalid_input">();
   const [found, setFound] = useState<Suggestion[] | null>(null);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
 
@@ -295,11 +297,11 @@ export function ChangeWords(props: ChangeWordsProps): React.JSX.Element {
     const text = words.trim();
     if (text === "" || reading) return;
     setReading(true);
-    setFailed(false);
+    setFailed(undefined);
     try {
-      const reply = await props.interpret(text);
+      const reply = await props.interpret(text, TRIP_CONSENT_VERSION);
       if (reply.state === "plain") {
-        setFailed(true);
+        setFailed("failed");
         setFound(null);
       } else {
         setSent(text);
@@ -315,8 +317,8 @@ export function ChangeWords(props: ChangeWordsProps): React.JSX.Element {
           ),
         );
       }
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailed(tripSendRejected(error) ? "invalid_input" : "failed");
       setFound(null);
     } finally {
       setReading(false);
@@ -385,7 +387,7 @@ export function ChangeWords(props: ChangeWordsProps): React.JSX.Element {
       )}
       {failed && (
         <p role="alert" className="font-bold text-beni">
-          {m.typedFailed}
+          {failed === "invalid_input" ? m.tripSendRejected : m.typedFailed}
         </p>
       )}
       {found && found.length === 0 && <p role="status">{m.typedNothing}</p>}
@@ -405,8 +407,8 @@ export function ChangeWords(props: ChangeWordsProps): React.JSX.Element {
                 travellers={props.travellers}
                 names={props.names}
                 busy={props.busy}
-                onApply={(op, saidAs) => {
-                  props.onApply(op, saidAs);
+                onApply={(op, saidAs, consentVersion) => {
+                  props.onApply(op, saidAs, consentVersion);
                   setOutcomes((o) => ({ ...o, [suggestion.id]: "applied" }));
                 }}
                 onDismiss={() => setOutcomes((o) => ({ ...o, [suggestion.id]: "dismissed" }))}
@@ -434,7 +436,7 @@ export type ChangeViewProps = {
   today: number;
   busy: boolean;
   offline: boolean;
-  problem?: "failed" | "offline";
+  problem?: "failed" | "offline" | "invalid_input";
   last?: LastResult;
   onDismissLast?(): void;
   canUndo: boolean;
@@ -442,7 +444,7 @@ export type ChangeViewProps = {
   /** What was said or pressed, oldest first as the phone keeps them. */
   changes: readonly ChangeEntry[];
   names: OpNames;
-  onChange(ops: ChangeOp[], saidAs: string): void;
+  onChange(ops: ChangeOp[], saidAs: string, consentVersion: string): void;
   /** The box for typed words; a container supplies it because it talks to the server. */
   words?: React.ReactNode;
 };
@@ -465,7 +467,8 @@ export function ChangeView(props: ChangeViewProps): React.JSX.Element {
   const chosenSlot = slot || stops[0]?.slot || "";
   const planHref = localePath(locale, `/trip/${encodeURIComponent(props.tripId)}`);
   const withLikes = props.travellers.filter((t) => t.hasLikes && t.label.trim() !== "");
-  const press = (ops: ChangeOp[], saidAs: string) => () => props.onChange(ops, saidAs);
+  const press = (ops: ChangeOp[], saidAs: string) => () =>
+    props.onChange(ops, saidAs, TRIP_CONSENT_VERSION);
   return (
     <div className="space-y-8" lang={locale}>
       <p className="max-w-prose text-[17px]">{m.changeIntro}</p>
@@ -481,7 +484,9 @@ export function ChangeView(props: ChangeViewProps): React.JSX.Element {
       )}
       {props.problem && (
         <p role="alert" className="max-w-3xl font-bold text-beni">
-          {props.problem === "offline" ? m.planOfflineChange : m.planChangeFailed}
+          {props.problem === "invalid_input"
+            ? m.tripSendRejected
+            : props.problem === "offline" ? m.planOfflineChange : m.planChangeFailed}
         </p>
       )}
 

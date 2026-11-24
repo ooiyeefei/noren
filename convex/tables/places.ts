@@ -30,6 +30,8 @@ export const placeTables = {
     nameConfirmedAt: v.optional(v.number()),
     /** They have closed the welcome film, so it no longer opens by itself. No time is kept. */
     introFilmSeen: v.optional(v.boolean()),
+    /** The trip send wording the organiser agreed to and when they first accepted it. */
+    tripConsent: v.optional(v.object({ version: v.string(), at: v.number() })),
     publicProfileUrl: v.optional(v.string()),
     verifiedAt: v.optional(v.number()),
     verifiedBy: v.optional(v.id("person")),

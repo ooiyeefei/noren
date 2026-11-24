@@ -477,6 +477,23 @@ const DELETION_STEPS: readonly DeletionStep[] = [
     for (const fact of page.page) await ctx.db.delete("placeFact", fact._id);
     return page;
   },
+  // These fixed trip keys belong to this account. Other features' counters follow their own rules.
+  async (ctx, personId) => {
+    for (const prefix of [
+      "trip:plan:minute",
+      "trip:plan:day",
+      "trip:interpret:minute",
+      "trip:interpret:day",
+      "trip:share:day",
+    ]) {
+      const counter = await ctx.db
+        .query("rateLimit")
+        .withIndex("by_key", (q) => q.eq("key", `${prefix}:${personId}`))
+        .unique();
+      if (counter !== null) await ctx.db.delete("rateLimit", counter._id);
+    }
+    return { isDone: true, continueCursor: "" };
+  },
 ];
 
 async function holdsInterviewOrOwnership(ctx: QueryCtx, personId: Id<"person">): Promise<boolean> {
@@ -526,8 +543,8 @@ async function emptyPerson(ctx: MutationCtx, person: Doc<"person">): Promise<voi
  * Deletes the caller's account from Noren (FR-130). POST /api/account/delete calls this, then
  * deletes the Clerk user, which it can only do in that order because this needs the Clerk token.
  *
- * Places, pins and place names they made stay as facts about the place, and rate limit rows stay and
- * hold only an id; both now lead only to the empty row, so no name shows.
+ * Places, pins and place names they made stay as facts about the place. Rate limit rows for other
+ * features keep only an id. The retained references point to the empty row, so no name shows.
  *
  * It is safe to press again if the Clerk step fails. The token then finds no row, or a new one that a
  * page load made through `ensureCurrent`, which this empties in turn.

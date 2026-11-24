@@ -51,6 +51,7 @@ export function planStops(plan: Pick<Plan, "days">): Stop[] {
 export type PlanCall = (args: {
   request: TripRequest;
   seed: string;
+  consentVersion: string;
 }) => Promise<{ plan: unknown; seed: string }>;
 
 export type ChangeResult =
@@ -76,6 +77,7 @@ export async function requestChange(input: {
   party: StoredParty;
   settings: RegionTripSettings;
   plan: PlanCall;
+  consentVersion: string;
   ops: ChangeOp[];
   /** Slots whose place the organiser has given up (they are drawn again, not kept). */
   replaced?: readonly string[];
@@ -87,7 +89,7 @@ export async function requestChange(input: {
     keep: { stops: keepStops(trip.plan, trip.plan.done, replaced) },
     ops,
   });
-  const result = await input.plan({ request, seed: trip.seed });
+  const result = await input.plan({ request, seed: trip.seed, consentVersion: input.consentVersion });
   const plan = result.plan as Plan;
   const reasons = plan.unmet.filter((entry) => entry.what === "change");
   if ((plan.moved ?? []).length === 0 && reasons.length > 0) {
