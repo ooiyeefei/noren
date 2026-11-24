@@ -490,7 +490,8 @@ export const legalDocuments: Readonly<
             "Noren は、2024年個人データ保護改正法による改正後のマレーシアの2010年個人データ保護法が、マレーシア向けサービスに適用されるものとして従います。",
             "個人データの責任者は {operator} です。Noren はオーストラリアのシドニーにある Convex を使って、アカウントや投稿のデータを保存し、プランの依頼を処理します。任意の AI や音声機能では、国外のサービスにデータが送られることがあります。送り先と目的は、サービス一覧と「プランと旅行」をご覧ください。",
             "個人データを国外へ送るのは、同法第129条で認められる場合です。同意を根拠とするときは、別途同意を求めます。個人データの漏えいなどが起きた場合は、法律に従い、マレーシアの個人データ保護コミッショナーと影響を受けた方に必要な通知を行います。",
-            "個人データに関する依頼は {contact} までお寄せください。開示、訂正、利用の制限、同意の撤回を求められます。技術的に可能で形式に互換性がある場合は、Noren が持つご自身の個人データを指定した別の管理者に直接送るよう、電子的な書面でも依頼できます。",
+            "ご依頼は Noren のプライバシー窓口（{operator}）まで、{contact} からお寄せください。",
+            "開示、訂正、利用の制限、同意の撤回を求められます。技術的に可能で形式に互換性がある場合は、Noren が持つご自身の個人データを指定した別の管理者に直接送るよう、電子的な書面でも依頼できます。",
             "英語版とマレー語版の内容が異なる場合は、英語版が優先されます。マレーシアの法律で認められた権利は引き続き適用されます。",
           ],
         },
@@ -985,7 +986,8 @@ export const legalDocuments: Readonly<
             "Noren treats Malaysia's Personal Data Protection Act 2010, as amended by the Personal Data Protection (Amendment) Act 2024, as applying to its Malaysian coverage and follows it.",
             "{operator} is responsible for your personal data. Noren uses Convex in Sydney, Australia, to store account and contribution data and process trip requests. The optional AI and speech features can send data to services abroad. See the service list and Plans and trips for who receives it and why.",
             "Personal data is transferred abroad only on a ground allowed by section 129. When Noren relies on consent for a transfer, it asks separately. Noren will notify the Malaysian Personal Data Protection Commissioner and people affected by a breach when required by law.",
-            "Contact {contact} for privacy requests. You can ask to access or correct personal data, limit its use or withdraw consent. You can also ask in writing electronically for Noren to send personal data it holds about you directly to another controller you choose, where technically feasible and the formats are compatible.",
+            "Send requests to Noren’s Privacy contact, {operator}, at {contact}.",
+            "You can ask to access or correct personal data, limit its use or withdraw consent. You can also ask in writing electronically for Noren to send personal data it holds about you directly to another controller you choose, where technically feasible and the formats are compatible.",
             "If the English and Malay notices differ, the English text governs. Your rights under Malaysian law still apply.",
           ],
         },
@@ -1089,7 +1091,7 @@ export const legalDocuments: Readonly<
 };
 
 /**
- * The privacy notice's Malaysian parts in Malay (T038), a document of its own at /privacy/ms. Malay is
+ * The full privacy notice in Malay (T038), a document of its own at /privacy/ms. Malay is
  * not an interface language: the site stays in Japanese and English and only this page is in Malay.
  * Section 7(3) of Malaysia's Act asks for a notice in the national language and in English, if the Act
  * reaches Noren (research.md, "Verify at build time" item 5).
@@ -1098,9 +1100,7 @@ export const legalDocuments: Readonly<
  * until one has, as the Japanese did. When a Malay speaker has read it, change `unreviewed` and
  * record who read it and when.
  *
- * It holds only the three parts the draft gives in Malay (malaysia, facts, trip). The rest of the
- * notice is in the English text, and the lead says so. Each part shows under the same switch
- * as the English one.
+ * Each section and line follows the same switches as its English counterpart.
  */
 export const malayPrivacy: {
   document: LegalDocument;
@@ -1113,19 +1113,204 @@ export const malayPrivacy: {
   },
   document: {
     title: "Notis Privasi Noren (Bahasa Melayu)",
-    lead: "Halaman ini mengandungi bahagian notis privasi Noren yang berkaitan dengan Malaysia. Selebihnya ada dalam notis privasi dalam bahasa Inggeris.",
+    lead: "Ini ialah notis privasi Noren dalam bahasa Melayu. Penutur bahasa Melayu belum menyemaknya. Jika terdapat perbezaan antara versi bahasa Inggeris dengan versi bahasa Melayu, teks bahasa Inggeris terpakai.",
     sections: [
       {
-        id: "malaysia",
-        when: "malaysia",
-        heading: "Noren di Malaysia",
+        id: "responsible",
+        heading: "Pihak yang bertanggungjawab",
+        paragraphs: ["{operator} bertanggungjawab terhadap data anda. Anda boleh menghubunginya melalui {contact}."],
+      },
+      {
+        id: "keeps",
+        heading: "Maklumat yang disimpan oleh Noren",
         items: [
-          "Bahagian ini meliputi data peribadi yang diproses oleh Noren untuk liputan Malaysia di {region}, termasuk perancangan perjalanan.",
-          "Noren menganggap Akta Perlindungan Data Peribadi 2010 Malaysia, sebagaimana dipinda oleh Akta Perlindungan Data Peribadi (Pindaan) 2024, terpakai kepada liputannya di Malaysia dan mematuhinya.",
-          "{operator} bertanggungjawab terhadap data peribadi anda. Noren menggunakan Convex di Sydney, Australia, untuk menyimpan data akaun dan sumbangan serta memproses permintaan perjalanan. Ciri AI dan suara yang anda pilih boleh menghantar data kepada perkhidmatan di luar negara. Lihat senarai perkhidmatan dalam notis bahasa Inggeris dan bahagian Rancangan dan perjalanan untuk mengetahui penerima dan tujuannya.",
-          "Data peribadi dipindahkan ke luar negara hanya atas dasar yang dibenarkan oleh seksyen 129. Jika Noren bergantung pada persetujuan untuk pemindahan, Noren memintanya secara berasingan. Noren akan memaklumkan Pesuruhjaya Perlindungan Data Peribadi Malaysia dan orang yang terjejas oleh pelanggaran data apabila dikehendaki oleh undang-undang.",
-          "Hubungi {contact} bagi semua permintaan privasi. Anda boleh meminta akses kepada data peribadi anda, membetulkannya, mengehadkan penggunaannya atau menarik balik persetujuan. Anda juga boleh membuat permintaan bertulis secara elektronik supaya Noren menghantar data peribadi anda terus kepada pengawal data lain pilihan anda, jika boleh dilaksanakan secara teknikal dan format data serasi.",
-          "Jika terdapat perbezaan antara notis bahasa Inggeris dan bahasa Melayu, teks bahasa Inggeris terpakai. Hak anda di bawah undang-undang Malaysia tetap terpakai.",
+          "Clerk menyimpan maklumat log masuk anda, iaitu alamat e-mel dan kata laluan, serta masa anda menerima dokumen ini. Pangkalan data Noren hanya menyimpan ID daripada Clerk dan tidak menyimpan alamat e-mel anda.",
+          "Nama yang anda pilih dan peranan akaun anda.",
+          "Bahan yang anda kongsi, iaitu cerita, pautan berserta ayat yang anda tulis mengenainya, dan tempat yang anda tambah berserta pin masing-masing.",
+          "Rekod apabila anda menekan “Still here” dan sebarang laporan yang anda hantar tentang sesuatu tempat, termasuk catatan yang disertakan.",
+          "Koleksi anda, termasuk tempat anda menekan “I'm here”, set dan panelnya, tarikh mengikut waktu Jepun, serta lencana anda.",
+          "Sama ada anda sudah menutup video alu-aluan.",
+          "Kiraan harian untuk mengelakkan satu akaun membanjiri peta dengan hantaran. Setiap kiraan hanya menyimpan ID akaun anda dan satu angka.",
+          "Rekod tindakan penjaga Noren, seperti memadamkan cerita.",
+        ],
+      },
+      {
+        id: "location",
+        heading: "Lokasi anda",
+        paragraphs: [
+          "Apabila anda menekan “I'm here”, telefon anda membaca lokasi anda sekali dan mengira sendiri jarak ke tempat itu. Lokasi anda tidak dihantar kepada Noren. Rekod itu tidak menyimpan koordinat atau waktu anda berada di situ.",
+          "Butang yang memusatkan peta pada kedudukan anda membaca lokasi anda untuk kegunaan pelayar anda sahaja.",
+          {
+            when: "walk",
+            text: "Semasa mod berjalan kaki dibuka, telefon anda menjejaki lokasi anda dan mengira jarak pada telefon itu sendiri. Lokasi anda tidak dihantar kepada Noren (lihat “Mod berjalan kaki”).",
+          },
+          {
+            when: "planner",
+            text: "Pilihan “Nearest to me” dalam Plan my day membaca lokasi anda sekali dan mencari kawasan kejiranan terdekat pada telefon anda. Hanya maklumat tentang kawasan itu dihantar kepada Noren.",
+          },
+        ],
+      },
+      {
+        id: "who-sees",
+        heading: "Siapa yang boleh melihat maklumat anda",
+        paragraphs: [
+          "Sesiapa sahaja boleh membaca cerita dan pautan yang anda kongsi, bersama nama anda. Alamat e-mel anda tidak dipaparkan pada mana-mana halaman.",
+          "Tempat yang anda tambah dipaparkan pada peta. Nama anda tidak dipaparkan pada halaman tempat itu.",
+          "Hanya anda boleh melihat panel, cap dan lencana anda di Noren. Skrin dan fail eksport untuk penjaga Noren tidak memaparkan rekod daftar masuk individu. Anda sendiri boleh berkongsi gambar koleksi yang sudah siap.",
+          "Penjaga Noren, iaitu orang yang mengurus Noren, boleh melihat nama dan peranan pengguna serta nama pada sesuatu laporan.",
+        ],
+      },
+      {
+        id: "story-pictures",
+        heading: "Gambar cerita anda dan akaun media sosial Noren",
+        paragraphs: [
+          "Pada setiap cerita anda, anda boleh memilih “Share on Instagram”. Selagi cerita itu dipaparkan di Noren, Noren boleh menghasilkan gambar menggunakan teks cerita, nama tempat, nama paparan anda dan alamat laman web kami, serta menyediakan kapsyen. Foto anda tidak digunakan. Tiada apa-apa dihantar ke Instagram. Anda sendiri menyalin kapsyen, menyimpan gambar dan menyiarkan hantaran itu.",
+          "Jika anda menandakan “Noren and this place may share my story on Instagram, with my name” semasa menulis cerita, petugas Noren atau pemilik tempat yang telah disahkan oleh Noren boleh menggunakan gambar dan kapsyen yang sama untuk menyiarkan cerita anda (teks dan nama paparan anda) pada akaun Instagram masing-masing. Mereka menyiarkannya sendiri. Noren tidak menyiarkan hantaran secara automatik. Kotak itu kosong sehingga anda sendiri memilih untuk menandakannya. Noren merekodkan pilihan itu dan masa anda membuatnya. Anda boleh mengubah pilihan pada cerita anda pada bila-bila masa dengan memilih “Allow this” atau “Stop allowing”. Hantaran yang sudah disiarkan kekal sehingga orang yang menyiarkannya memadamkannya. Jika anda menghubungi kami melalui {contact}, kami akan memadamkan hantaran Noren dalam masa 14 hari dan meminta pemilik tempat memadamkan hantaran mereka.",
+        ],
+      },
+      {
+        id: "services",
+        heading: "Perkhidmatan yang mengendalikan data anda",
+        paragraphs: [
+          "Noren menggunakan perkhidmatan yang disenaraikan di bawah. Kebanyakannya beroperasi di luar Jepun, jadi data anda disimpan dan digunakan di negara lain. Apabila anda menandakan kotak semasa mendaftar, anda turut bersetuju dengan perkara ini.",
+        ],
+        services: [
+          {
+            name: "Clerk",
+            country: "Amerika Syarikat",
+            does: "Menyimpan maklumat log masuk anda, iaitu alamat e-mel, kata laluan dan butiran peranti yang anda gunakan untuk log masuk, termasuk alamat IP. Clerk menghantar kod log masuk melalui e-mel dan menyemak pendaftaran untuk mengesan penyalahgunaan.",
+          },
+          {
+            name: "Cloudflare",
+            country: "Amerika Syarikat",
+            does: "Mengendalikan semakan untuk mengesan bot yang mungkin dipaparkan oleh Clerk semasa pendaftaran. Cloudflare dapat melihat alamat IP dan butiran pelayar anda.",
+          },
+          {
+            name: "Convex",
+            country: "Australia (Sydney), dikendalikan oleh syarikat dari Amerika Syarikat",
+            does: "Menyediakan pangkalan data Noren. Convex menyimpan semua maklumat yang disenaraikan di atas kecuali butiran log masuk anda. Convex juga menyimpan buat sementara waktu rakaman yang anda pilih untuk dihantar bagi tujuan pengecaman suara.",
+          },
+          {
+            name: "Vercel",
+            country: "Amerika Syarikat, dengan halaman Noren diproses di Tokyo, Jepun",
+            does: "Menyampaikan halaman Noren kepada pelayar anda. Vercel dapat melihat alamat IP anda dan halaman yang anda buka serta menyimpan maklumat itu dalam lognya untuk suatu tempoh.",
+          },
+          {
+            name: "Meta Platforms",
+            country: "Amerika Syarikat",
+            does: "Menyediakan perkhidmatan AI. Jika anda bersetuju dengan pengecaman suara, Meta Platforms menerima rakaman suara anda dan menukarkannya kepada teks. Meta Platforms juga menerima rakaman temu bual. Jika tetapan Noren menggunakan perkhidmatan ini sebagai ganti Anthropic, perkhidmatan ini menerima teks yang sama.",
+            more: [
+              {
+                when: "planner",
+                text: "Jika tetapan Noren menggunakan perkhidmatan ini untuk Plan my day, perkhidmatan ini turut menerima maklumat yang dihantar oleh perancang (lihat “Plan my day dan maklumat yang diingati oleh Noren”).",
+              },
+            ],
+          },
+          {
+            name: "Modal",
+            country: "Amerika Syarikat",
+            does: "Menjalankan model AI yang pemberatnya tersedia secara terbuka. Jika tetapan Noren menggunakan Modal untuk menyemak terjemahan dan cerita yang ditulis oleh AI, Modal menerima kenyataan yang telah disahkan oleh pemilik, petikan daripada hantaran awam dan terjemahannya.",
+          },
+          {
+            name: "Anthropic",
+            country: "Amerika Syarikat",
+            does: "Menyediakan perkhidmatan AI. Anthropic menerima teks hantaran anda apabila anda meminta draf berdasarkan hantaran anda sendiri (lihat di bawah). Anthropic juga menerima transkrip temu bual dan teks hantaran awam serta menyemak terjemahan dan cerita yang ditulis oleh AI.",
+            more: [
+              {
+                when: "planner",
+                text: "Jika tetapan Noren menggunakan perkhidmatan ini untuk Plan my day, perkhidmatan ini turut menerima maklumat yang dihantar oleh perancang (lihat “Plan my day dan maklumat yang diingati oleh Noren”).",
+              },
+            ],
+          },
+          {
+            name: "OpenAI",
+            country: "Amerika Syarikat",
+            does: "Menukarkan pertuturan kepada teks. Jika tetapan Noren menggunakan OpenAI sebagai ganti Meta Platforms, OpenAI menerima rakaman temu bual dan rakaman yang ahli pilih untuk dihantar bagi tujuan pengecaman suara.",
+          },
+          {
+            name: "OpenStreetMap Foundation",
+            country: "United Kingdom",
+            does: "Menerima perkataan yang anda taip apabila mencari tempat untuk ditambah. Pelayan Noren menghantar perkataan itu tanpa sebarang maklumat yang mengenal pasti anda.",
+          },
+          {
+            name: "OpenFreeMap",
+            country: "Hungary",
+            does: "Menghantar imej peta terus kepada pelayar anda dan oleh itu dapat melihat alamat IP anda.",
+          },
+        ],
+      },
+      {
+        id: "ai",
+        heading: "AI dan kata-kata anda",
+        paragraphs: [
+          {
+            unless: "aiReading",
+            text: "Noren tidak menghantar cerita yang anda taip, nama paparan anda atau alamat e-mel anda kepada perkhidmatan AI.",
+          },
+          {
+            when: "aiReading",
+            text: "Noren tidak menghantar alamat e-mel anda kepada perkhidmatan AI. Cerita yang anda taip hanya dihantar bersama nama paparan anda jika anda membenarkannya untuk cerita itu (lihat “AI yang membaca cerita”).",
+          },
+          "Jika anda memilih “Speak your story” dan bersetuju dengan pengecaman suara, Noren memuat naik rakaman anda buat sementara waktu ke Convex di Sydney, Australia, dan menghantarnya kepada Meta Platforms di Amerika Syarikat untuk ditukarkan kepada teks. Rakam suara anda sendiri sahaja dan elakkan daripada menyebut maklumat peribadi orang lain.",
+          "Teks itu dikembalikan ke ruangan cerita untuk anda semak dan sunting. Noren tidak menyimpan transkrip pada pelayannya semasa rakaman ditukarkan kepada teks. Teks yang belum anda hantar disimpan sebagai draf dalam pelayar anda. Hanya apabila anda menekan “Share”, teks itu disimpan sebagai cerita dan dipaparkan kepada umum bersama nama anda.",
+          "Noren memadamkan salinan audionya sebaik sahaja proses pengecaman suara selesai, sama ada proses itu berjaya atau gagal. Jika anda meninggalkan halaman itu lebih awal, Noren memadamkannya dalam masa kira-kira sejam. Meta Platforms tidak menggunakan rakaman itu untuk melatih modelnya dan mungkin menyimpannya selama yang dibenarkan oleh termanya sendiri, contohnya untuk semakan keselamatan.",
+          "Jika anda menandakan bahawa sesuatu hantaran ialah hantaran anda sendiri dan meminta draf, Noren membaca tajuk dan teks pada halaman hantaran itu lalu menghantarnya bersama nama tempat kepada Anthropic di Amerika Syarikat. Draf dikembalikan kepada anda dan tiada apa-apa disimpan sehingga anda menekan “Share”. Anthropic tidak menggunakan teks ini untuk melatih modelnya.",
+          "Bagi temu bual, pemilik kedai terlebih dahulu memberikan persetujuan melalui borang berasingan yang menyatakan perkhidmatan yang mengendalikan rakaman dan transkrip.",
+        ],
+      },
+      {
+        id: "ai-reading",
+        when: "aiReading",
+        heading: "AI yang membaca cerita",
+        paragraphs: [
+          "Semasa menulis cerita, anda boleh menandakan “Let AI read this story, with my name”. Pilihan ini hanya diaktifkan jika anda menandakannya. Noren merekodkan pilihan itu dan masa anda membuatnya. Anda boleh mengubahnya pada bila-bila masa pada cerita anda dengan memilih “Allow this” atau “Stop allowing”.",
+          {
+            when: "planner",
+            text: "Jika anda menandakan kotak itu, Plan my day boleh menghantar teks cerita dan nama paparan anda kepada perkhidmatan AI yang digunakannya. AI boleh memilih petikan untuk laluan berjalan kaki ahli lain. Petikan dipaparkan sama seperti yang anda tulis, bersama nama anda.",
+          },
+          {
+            when: "connector",
+            text: "Jika anda menandakan kotak itu, pembantu AI seperti Claude atau ChatGPT yang disambungkan oleh pengguna kepada Noren boleh membaca teks cerita dan nama paparan anda melalui penyambung Noren. Syarikat yang menyediakan pembantu itu kemudiannya menyimpan maklumat yang dibaca dan menggunakannya mengikut termanya sendiri. Noren tidak dapat memadamkan maklumat yang telah dibaca oleh pembantu itu.",
+          },
+          "Jika anda menarik balik kebenaran, Noren berhenti menghantar cerita itu sejak saat tersebut. Tanpa tanda pada kotak itu, Noren tidak menghantar cerita anda kepada AI. Cerita itu tetap dipaparkan bersama nama anda pada halaman Noren.",
+        ],
+      },
+      {
+        id: "planner",
+        when: "planner",
+        heading: "Plan my day dan maklumat yang diingati oleh Noren",
+        paragraphs: [
+          "Plan my day tersedia untuk ahli yang telah log masuk. Apabila anda mengemukakan soalan, peranti anda menghantar mesej anda, beberapa mesej terakhir, tempat anda ingin bermula, perjalanan hari ini, syarat dan kegemaran yang diingati oleh Noren untuk anda, serta bahasa halaman kepada Noren.",
+          "Noren memilih tempat singgah secara rawak daripada tempat yang pernah diceritakan oleh ahli. Pilihan itu mengambil kira kegemaran anda dan mematuhi syarat yang dapat disemak. Noren kemudian menghantar mesej anda, beberapa mesej terakhir, perjalanan hari ini dan tempat yang dipilih kepada perkhidmatan AI yang digunakan oleh perancang Noren (Meta Platforms atau Anthropic, seperti yang disenaraikan di atas). AI memilih petikan cerita untuk dipaparkan di bawah setiap tempat singgah.",
+          "Pelayan Noren menggunakan syarat dan kegemaran yang anda simpan hanya untuk memilih tempat bagi jawapan itu. Noren tidak menyimpan maklumat itu atau menghantarnya kepada AI. Walau bagaimanapun, apa-apa yang anda taip atau sebut dalam mesej anda, termasuk alahan atau keperluan pemakanan, dihantar kepada AI bersama mesej itu.",
+          "Noren tidak menyimpan salinan perbualan atau jawapan. Untuk mengehadkan penggunaan, Noren mengira bilangan soalan daripada setiap akaun. Noren juga mengira berapa kali setiap tempat dipilih setiap minggu tanpa merekodkan untuk siapa tempat itu dipilih. Kiraan mingguan itu dipadamkan selepas 8 minggu.",
+          "Jika anda memilih untuk bercakap, pengecaman suara berfungsi seperti yang diterangkan dalam bahagian “AI dan kata-kata anda”.",
+          "Ciri “What Noren remembers” menyimpan syarat, kegemaran dan perjalanan hari ini dalam pelayar ini pada peranti ini. Pelayan Noren tidak menyimpannya. Alahan ialah maklumat kesihatan dan amalan pemakanan seperti makan makanan halal boleh menunjukkan kepercayaan agama. Oleh itu, undang-undang privasi Jepun boleh menganggapnya sebagai maklumat peribadi yang memerlukan perhatian khusus. Masukkannya hanya jika anda mahu. Anda boleh memadamkan mana-mana butiran atau menekan “Forget everything” pada bila-bila masa. Memadamkan data laman ini dalam pelayar anda juga memadamkan butiran itu.",
+          "Apabila Plan my day diaktifkan, membuka atau menyimpan tempat di Noren menambah maklumat tentang kegemaran anda pada peranti ini, walaupun anda belum log masuk. Kegemaran yang disimpulkan daripada tindakan anda beransur hilang dalam beberapa minggu. Perjalanan hari ini dipadamkan pada tengah malam waktu Jepun kecuali jika anda memilih untuk menyimpannya.",
+        ],
+      },
+      {
+        id: "walk",
+        when: "walk",
+        heading: "Mod berjalan kaki",
+        paragraphs: [
+          "Semasa mod berjalan kaki dibuka, telefon anda menjejaki lokasi anda untuk menunjukkan tempat yang berdekatan dan arahnya. Telefon anda sendiri mengira jarak. Lokasi anda tidak dihantar kepada Noren atau disimpan.",
+          "Telefon anda memuatkan senarai awam tempat di Noren sekali sahaja dan memuatkan omikuji hari itu apabila anda membukanya. Semua orang menerima omikuji yang sama pada hari tersebut. Kedua-dua permintaan itu tidak menyertakan lokasi anda.",
+          "Mod berjalan kaki menggunakan suara terbina dalam telefon anda untuk membaca teks dengan lantang. Apa yang dibacakan kekal pada telefon anda.",
+          "Omikuji hari ini mengandungi soalan yang dirahsiakan sehingga anda tiba di tempat tersebut. Telefon anda sendiri menyemak jarak dan membuka soalan itu. Noren tidak diberitahu tentang lokasi anda atau bahawa soalan itu telah dibuka.",
+          "Sehingga tujuh keping omikuji yang anda cabut disimpan dalam pelayar ini pada peranti ini. Pelayan Noren tidak menyimpannya. Anda boleh memadamkannya dengan memilih “Clear kept slips” atau memadamkan data laman ini dalam pelayar anda.",
+          "Semasa menulis cerita, anda boleh meninggalkan soalan untuk pengunjung seterusnya. Soalan itu dipaparkan kepada umum bersama cerita dan nama anda, serta dalam omikuji hari itu bagi tempat tersebut. Noren tidak menterjemahkannya atau menghantarnya kepada perkhidmatan AI. Anda boleh memadamkannya pada bila-bila masa.",
+        ],
+      },
+      {
+        id: "connector",
+        when: "connector",
+        heading: "Penyambung Noren untuk pembantu AI",
+        paragraphs: [
+          "Sesiapa sahaja boleh menyambungkan pembantu AI seperti Claude atau ChatGPT kepada penyambung Noren. Pembantu itu kemudian boleh mencari tempat dan koleksi di Noren, membaca halaman tempat seperti yang dilihat oleh pengunjung yang belum log masuk, serta meminta Noren memilih laluan berjalan kaki atau omikuji.",
+          "Pembantu hanya menerima teks cerita ahli dan nama penulis jika penulis menandakan “Let AI read this story, with my name”. Tanpa kebenaran itu, pembantu hanya mengetahui bilangan cerita tentang sesuatu tempat dan di mana cerita itu boleh dibaca di Noren. Catatan ahli pada pautan yang mereka kongsi tidak dihantar kepada pembantu.",
+          "Penyambung boleh digunakan tanpa log masuk, jadi Noren tidak mengetahui siapa yang bertanya dan tidak menyimpan rekod soalan. Noren menyimpan kiraan untuk mengehadkan kekerapan penyambung digunakan. Noren juga mengira berapa kali setiap tempat dipilih setiap minggu dan memadamkan kiraan mingguan itu selepas 8 minggu.",
+          "Syarikat yang menyediakan pembantu AI kemudiannya menyimpan maklumat yang dibaca oleh pembantu itu mengikut terma dan notis privasi syarikat tersebut.",
         ],
       },
       {
@@ -1152,6 +1337,112 @@ export const malayPrivacy: {
           "Masukkan hanya maklumat yang diperlukan untuk rancangan. Dapatkan persetujuan setiap orang sebelum menghantar butiran peribadi mereka. Bagi orang di bawah umur 18 tahun, dapatkan persetujuan ibu bapa, penjaga atau orang yang mempunyai tanggungjawab ibu bapa.",
           "Jika anda membuat pautan kongsi, Noren menyimpan kod pautan, ID akaun, ID perjalanan pada peranti dan rantau, serta tajuk dan jadual perjalanan yang dikongsi. Jadual itu boleh mengandungi tarikh, laluan, tempat singgah, label pin atau giliran seseorang, serta semakan di tempat singgah tanpa menyatakan siapa yang memerlukannya. Sesiapa yang mempunyai pautan boleh membacanya. Noren memadamkan rekod pautan apabila anda mematikannya atau memadamkan akaun. Pautan tidak luput secara automatik.",
           "Untuk mencegah penyalahgunaan, Noren mengira permintaan rancangan dan AI bagi setiap akaun dalam tempoh satu minit dan 24 jam, serta permintaan pautan kongsi dalam tempoh 24 jam. Setiap kiraan bermula semula pada permintaan pertama selepas tempohnya tamat. Noren memadamkan kiraan ini apabila anda memadamkan akaun.",
+        ],
+      },
+      {
+        id: "malaysia",
+        when: "malaysia",
+        heading: "Noren di Malaysia",
+        items: [
+          "Bahagian ini meliputi data peribadi yang diproses oleh Noren untuk liputan Malaysia di {region}, termasuk perancangan perjalanan.",
+          "Noren menganggap Akta Perlindungan Data Peribadi 2010 Malaysia, sebagaimana dipinda oleh Akta Perlindungan Data Peribadi (Pindaan) 2024, terpakai kepada liputannya di Malaysia dan mematuhinya.",
+          "{operator} bertanggungjawab terhadap data peribadi anda. Noren menggunakan Convex di Sydney, Australia, untuk menyimpan data akaun dan sumbangan serta memproses permintaan perjalanan. Ciri AI dan suara yang anda pilih boleh menghantar data kepada perkhidmatan di luar negara. Lihat senarai perkhidmatan dalam notis ini dan bahagian Rancangan dan perjalanan untuk mengetahui penerima dan tujuannya.",
+          "Data peribadi dipindahkan ke luar negara hanya atas dasar yang dibenarkan oleh seksyen 129. Jika Noren bergantung pada persetujuan untuk pemindahan, Noren memintanya secara berasingan. Noren akan memaklumkan Pesuruhjaya Perlindungan Data Peribadi Malaysia dan orang yang terjejas oleh pelanggaran data apabila dikehendaki oleh undang-undang.",
+          "Sila kemukakan permintaan anda kepada Pegawai hubungan privasi Noren, {operator}, melalui {contact}.",
+          "Anda boleh meminta akses kepada data peribadi anda, membetulkannya, mengehadkan penggunaannya atau menarik balik persetujuan. Anda juga boleh membuat permintaan bertulis secara elektronik supaya Noren menghantar data peribadi anda terus kepada pengawal data lain pilihan anda, jika boleh dilaksanakan secara teknikal dan format data serasi.",
+          "Jika terdapat perbezaan antara notis bahasa Inggeris dan bahasa Melayu, teks bahasa Inggeris terpakai. Hak anda di bawah undang-undang Malaysia tetap terpakai.",
+        ],
+      },
+      {
+        id: "photos",
+        when: "photos",
+        heading: "Foto yang anda tambah",
+        paragraphs: [
+          "Foto yang anda tambah pada cerita dipaparkan kepada umum bersama nama anda. Noren menyimpan foto di Amazon Web Services di Tokyo, Jepun dan menyampaikannya melalui Amazon CloudFront. Noren membuang data lokasi daripada setiap foto. Apabila anda memadamkan akaun, foto anda turut dipadamkan.",
+        ],
+      },
+      {
+        id: "browser",
+        heading: "Kandungan yang dimuatkan oleh pelayar anda",
+        paragraphs: [
+          "Noren menggunakan kuki log masuk Clerk. Noren tidak menggunakan kuki untuk pengiklanan atau untuk mengukur jumlah kunjungan. Pelayar anda juga mengingati bahawa anda telah menutup panduan peta.",
+          "Pelayar menyimpan tulisan yang sedang anda karang dan foto yang anda pilih pada peranti anda supaya kerja anda tidak hilang jika halaman dimuatkan semula. Bahan ini dipadamkan apabila anda berkongsi atau mengosongkannya, apabila anda log keluar atau selepas seminggu. Jika anda belum log masuk, bahan itu dipadamkan apabila anda menutup tab tersebut. Bahan yang disimpan dengan cara ini kekal pada peranti anda.",
+          "Pelayar anda mendapatkan imej peta terus daripada OpenFreeMap. Untuk peta yang digunakan bagi meletakkan pin, pelayar mendapatkan foto udara terus daripada Geospatial Information Authority of Japan.",
+          "Hantaran daripada platform berikut hanya dimuatkan apabila anda menekan butang untuk memuatkan hantaran tersebut: {platforms}. Platform itu kemudian mungkin menyimpan kuki dan mengetahui bahawa anda telah berkunjung.",
+          "Apabila anda menampal pautan, pelayan Noren membuka halaman itu untuk menyediakan pratonton. Laman tersebut hanya melihat pelayan Noren dan tidak melihat anda.",
+          {
+            when: "planner",
+            text: "Apabila Plan my day diaktifkan, pelayar anda turut menyimpan maklumat yang diingati oleh Noren untuk anda pada peranti anda (lihat “Plan my day dan maklumat yang diingati oleh Noren”).",
+          },
+        ],
+      },
+      {
+        id: "deletion",
+        heading: "Apabila anda memadamkan akaun",
+        paragraphs: [
+          "Anda boleh memadamkan akaun pada halaman akaun anda. Pencipta, pemilik kedai dan penjaga Noren perlu meminta penjaga Noren memadamkan akaun mereka kerana temu bual dan rekod persetujuan terikat pada peranan tersebut.",
+          "Maklumat berikut dipadamkan:",
+        ],
+        items: [
+          "rekod daftar masuk di tempat yang anda kunjungi, panel, lencana dan cap anda",
+          "cerita yang anda tulis",
+          "rekod apabila anda menekan “Still here” dan laporan yang anda hantar",
+          "catatan pengunjung yang anda tulis berserta terjemahannya",
+          "maklumat log masuk anda di Clerk",
+          "nama anda dan pautan ke maklumat log masuk anda. Yang tinggal daripada akaun anda hanyalah baris kosong bernama “Former member”, tanpa sebarang maklumat yang boleh dikaitkan dengan anda.",
+        ],
+        closing: [
+          "Pautan yang anda kongsi dikeluarkan daripada semua halaman. Rekod setiap pautan dan ayat yang anda tulis mengenainya kekal tersembunyi dalam pangkalan data.",
+          "Tempat yang anda tambah, berserta pin dan namanya, kekal sebagai fakta tentang tempat itu. Nama anda tidak dipaparkan. Rekod tindakan penjaga Noren juga kekal. Rekod itu merujuk kepada baris kosong tadi dan tidak lagi mengenal pasti anda. Kiraan harian turut kekal dan hanya menyimpan ID akaun.",
+          "Hantaran yang telah disiarkan pada akaun media sosial Noren kekal sehingga Noren memadamkannya. Jika anda menghubungi kami melalui {contact}, kami akan memadamkannya dalam masa 14 hari.",
+          {
+            when: "planner",
+            text: "Maklumat yang diingati oleh Noren kekal pada peranti anda sehingga anda menekan “Forget everything” atau memadamkan data laman ini dalam pelayar anda.",
+          },
+          "Log masuk semula tidak akan memulihkan apa-apa yang telah dipadamkan.",
+        ],
+      },
+      {
+        id: "how-long",
+        heading: "Tempoh penyimpanan maklumat",
+        paragraphs: [
+          "Akaun anda dan bahan yang anda kongsi disimpan sehingga anda atau penjaga Noren memadamkannya, atau sehingga anda memadamkan akaun.",
+          "Butiran hubungan yang anda sertakan dalam permintaan pemadaman dipadamkan apabila permintaan itu ditutup. Vercel dan Clerk masing-masing menetapkan tempoh penyimpanan log mereka.",
+          "Laporan masalah menyimpan apa yang anda tulis, halaman yang anda buka ketika itu, nama pelayar dan saiz skrin anda. Laporan itu tidak dipautkan kepada akaun anda. Jika anda menyertakan butiran hubungan, butiran itu dipadamkan apabila laporan ditutup. Salinan tanpa butiran hubungan disimpan dalam repositori GitHub persendirian yang hanya boleh dibaca oleh pasukan Noren. GitHub memaklumkan pasukan itu melalui e-mel.",
+          "Rakaman yang anda hantar untuk pengecaman suara dipadamkan seperti yang diterangkan dalam bahagian “AI dan kata-kata anda”. Hantaran pada akaun media sosial Noren kekal sehingga Noren memadamkannya.",
+        ],
+      },
+      {
+        id: "public-posts",
+        heading: "Hantaran awam yang ditemui oleh Noren",
+        paragraphs: [
+          "Noren mencari hantaran awam tentang sesuatu tempat dan menggunakan AI daripada Anthropic untuk membacanya. Halaman tempat memaparkan petikan pendek dan nama awam penulis berserta pautan ke hantaran asal. Cerita yang ditulis oleh AI berdasarkan hantaran itu dilabelkan “Stitched by Noren's AI”. Jika hantaran anda dipaparkan, anda boleh meminta supaya hantaran itu dikeluarkan melalui {contact}, walaupun anda tiada akaun.",
+          {
+            when: "connector",
+            text: "Pembantu AI yang disambungkan kepada Noren boleh membaca petikan, nama dan pautan yang sama.",
+          },
+        ],
+      },
+      {
+        id: "age",
+        heading: "Mereka yang berumur di bawah {minimumAge} tahun",
+        paragraphs: [
+          "Akaun Noren adalah untuk mereka yang berumur {minimumAge} tahun ke atas. Jika anda berpendapat bahawa sesuatu akaun dimiliki oleh seseorang yang belum mencapai umur tersebut, maklumkan kepada kami melalui {contact} dan kami akan memadamkan akaun itu.",
+        ],
+      },
+      {
+        id: "choices",
+        heading: "Pilihan anda",
+        paragraphs: [
+          "Anda sendiri boleh menukar nama, membuang cerita atau pautan dan memadamkan akaun anda. Untuk meminta salinan data anda, meminta pembetulan atau meminta Noren berhenti menggunakannya, hubungi kami melalui {contact}.",
+          "Noren tidak menjual data anda dan tidak memaparkan iklan.",
+        ],
+      },
+      {
+        id: "changes",
+        heading: "Perubahan pada notis ini",
+        paragraphs: [
+          "Jika notis ini berubah, tarikh versi di bahagian atas turut berubah. Mana-mana perkhidmatan baharu akan disenaraikan di sini sebelum perkhidmatan itu mengendalikan data anda.",
         ],
       },
     ],
