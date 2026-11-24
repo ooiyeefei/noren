@@ -20,7 +20,7 @@ import {
 } from "../tests/convex/fixtures";
 import { api as generatedApi, internal } from "./_generated/api";
 import * as region from "./lib/region";
-import { slugBase, uniqueSlug } from "./lib/slug";
+import { SLUG_ATTEMPTS, slugBase, uniqueSlug } from "./lib/slug";
 
 // Keep the new module typed while the orchestrator owns post-wave codegen.
 const api = generatedApi as typeof generatedApi &
@@ -1067,7 +1067,7 @@ describe("place slugs", () => {
     expect(slugBase([values("latin", "a".repeat(100))])).toHaveLength(60);
   });
 
-  it("uses the first free suffix in the region and conflicts after 50", async () => {
+  it("uses the first suffix free in every region", async () => {
     const b = await setup();
     await b.run(async (ctx) => {
       for (let i = 1; i <= 50; i++)
@@ -1079,8 +1079,10 @@ describe("place slugs", () => {
           isMock: false,
         });
     });
-    expect(await errorCode(b.run((ctx) => uniqueSlug(ctx, "nagasaki", "mock")))).toBe("conflict");
-    expect(await b.run((ctx) => uniqueSlug(ctx, "another-region", "mock"))).toBe("mock");
+    expect(await b.run((ctx) => uniqueSlug(ctx, "nagasaki", "mock"))).toBe("mock-51");
+    // Another region may not reuse a Nagasaki slug: the URL holds only the slug.
+    expect(await b.run((ctx) => uniqueSlug(ctx, "malaysia-west", "mock"))).toBe("mock-51");
+    expect(await b.run((ctx) => uniqueSlug(ctx, "malaysia-west", "kopi"))).toBe("kopi");
     await b.run(async (ctx) => {
       const third = await ctx.db
         .query("place")
@@ -1089,6 +1091,22 @@ describe("place slugs", () => {
       await ctx.db.delete("place", third!._id);
     });
     expect(await b.run((ctx) => uniqueSlug(ctx, "nagasaki", "mock"))).toBe("mock-3");
+    expect(await b.run((ctx) => uniqueSlug(ctx, "malaysia-west", "mock"))).toBe("mock-3");
+  });
+
+  it(`conflicts once all ${SLUG_ATTEMPTS} numbered slugs are taken across the regions`, async () => {
+    const b = await setup();
+    await b.run(async (ctx) => {
+      for (let i = 1; i <= SLUG_ATTEMPTS; i++)
+        await ctx.db.insert("place", {
+          regionId: i % 2 === 0 ? "malaysia-west" : "nagasaki",
+          slug: i === 1 ? "mock" : `mock-${i}`,
+          createdBy: b.creator,
+          visibility: "draft",
+          isMock: false,
+        });
+    });
+    expect(await errorCode(b.run((ctx) => uniqueSlug(ctx, "nagasaki", "mock")))).toBe("conflict");
   });
 });
 
@@ -1473,7 +1491,7 @@ describe("places map queries", () => {
   });
 });
 
-it("refuses a member, OSM and Overture slug already used by a disabled region", async () => {
+it("gives member, OSM and Overture places a slug no other region uses, even a disabled one", async () => {
   const b = await setup();
   const slug = slugBase(names);
   await addPlace(b, {
@@ -1484,7 +1502,7 @@ it("refuses a member, OSM and Overture slug already used by a disabled region", 
     withNames: false,
   });
 
-  expect(await errorCode(b.create())).toBe("conflict");
+  await b.create();
   const candidateId = await b.run((ctx) =>
     ctx.db.insert("seedOsmCandidate", {
       regionId: "nagasaki",
@@ -1496,39 +1514,36 @@ it("refuses a member, OSM and Overture slug already used by a disabled region", 
     }),
   );
   const confirmedNames = names.map((name) => ({ ...name, isPrimary: true }));
-  expect(
-    await errorCode(
-      b.as("steward").mutation(api.osmSeed.confirmCandidate, {
-        candidateId,
-        names: confirmedNames,
-        pin,
+  await b.as("steward").mutation(api.osmSeed.confirmCandidate, {
+    candidateId,
+    names: confirmedNames,
+    pin,
+    category: "cafe",
+  });
+  await b.t.mutation(internal.overtureSeed.publishPlaces, {
+    regionId: "nagasaki",
+    stewardPersonId: b.steward,
+    release: "2026-10-21.0",
+    retrievedAt: 1,
+    places: [
+      {
+        ...pin,
+        gers: "00000000-0000-4000-8000-000000123456",
+        dataset: "meta",
+        licence: "CDLA-Permissive-2.0",
         category: "cafe",
-      }),
-    ),
-  ).toBe("conflict");
-  expect(
-    await errorCode(
-      b.t.mutation(internal.overtureSeed.publishPlaces, {
-        regionId: "nagasaki",
-        stewardPersonId: b.steward,
-        release: "2026-10-21.0",
-        retrievedAt: 1,
-        places: [
-          {
-            ...pin,
-            gers: "00000000-0000-4000-8000-000000123456",
-            dataset: "meta",
-            licence: "CDLA-Permissive-2.0",
-            category: "cafe",
-            names: confirmedNames,
-          },
-        ],
-      }),
-    ),
-  ).toBe("conflict");
-  expect(await b.run((ctx) => ctx.db.query("place").take(2))).toMatchObject([
-    { regionId: "malaysia-west", slug },
+        names: confirmedNames,
+      },
+    ],
+  });
+  const places = await b.run((ctx) => ctx.db.query("place").take(10));
+  const slugs = places.map((place) => place.slug);
+  expect(new Set(slugs).size).toBe(slugs.length);
+  // The Malaysian place keeps its slug; every Nagasaki place took a numbered one.
+  expect(places.filter((place) => place.slug === slug)).toMatchObject([
+    { regionId: "malaysia-west" },
   ]);
+  expect(places.filter((place) => place.regionId === "nagasaki").length).toBeGreaterThanOrEqual(2);
 });
 
 it("keeps add-a-place in interface languages and accepts configured languages for existing names", async () => {
