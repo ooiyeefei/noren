@@ -159,8 +159,8 @@
     "planner": true,
     "walk": true,
     "postcard": false,
-    "trip": "off",
-    "facts": false
+    "trip": "open",
+    "facts": true
   },
   "photos": {
     "enabled": true,
@@ -184,7 +184,7 @@
     "launchPackComplete": false,
     "accountsOpen": true,
     "searchOpen": true,
-    "documentsVersion": "2026-11-15"
+    "documentsVersion": "2026-11-24"
   },
   "towns": [
     {

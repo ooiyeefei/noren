@@ -570,7 +570,7 @@ describe("the trip agent's parts of the notice and the terms (T037, T038)", () =
     expect(values({ trip: "open" }).trip).toBe("on");
   });
 
-  it("is off in the shipped region files", async () => {
+  it("is on in the shipped region files: Malaysia, practical facts and the trip agent", async () => {
     const { enabledRegionConfigs, activeRegionConfig } =
       await vi.importActual<typeof import("@/lib/region/registry")>("@/lib/region/registry");
     const values = documentValues(
@@ -580,7 +580,7 @@ describe("the trip agent's parts of the notice and the terms (T037, T038)", () =
       "en",
       enabledRegionConfigs({ REGION_ID: "nagasaki" }).map((region) => region.id),
     )!;
-    expect(values).toMatchObject({ malaysia: "off", facts: "off", trip: "off" });
+    expect(values).toMatchObject({ malaysia: "on", facts: "on", trip: "on" });
   });
 
   // The hashes of the rendered terms and notice, taken from the commit before the three switches

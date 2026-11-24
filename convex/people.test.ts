@@ -123,7 +123,7 @@ describe("people.current", () => {
     expect(await as("ghost").query(api.people.current, {})).toBeNull();
   });
 
-  it("gives a signed-in person their name and role and nothing that identifies them", async () => {
+  it("gives a signed-in person their name and role, the open trip switch, and nothing that identifies them", async () => {
     const { as, signUp } = backend();
     await signUp("aiko", { name: "Aiko Tanaka", email: "aiko@example.invalid" });
     expect(await as("aiko").query(api.people.current, {})).toEqual({
@@ -133,8 +133,18 @@ describe("people.current", () => {
       nameConfirmed: false,
       joinedAt: expect.any(Number),
       filmSeen: false,
-      trip: false,
+      trip: true,
     });
+  });
+  it("current reports the trip door shut again when the trip switch is off", async () => {
+    const off = vi.spyOn(region, "tripSwitch").mockReturnValue("off");
+    try {
+      const { as, signUp } = backend();
+      await signUp("aiko", { name: "Aiko Tanaka", email: "aiko@example.invalid" });
+      expect(await as("aiko").query(api.people.current, {})).toMatchObject({ trip: false });
+    } finally {
+      off.mockRestore();
+    }
   });
   it("current reports a mock person as mock", async () => {
     const { t, as, signUp } = backend();
@@ -147,7 +157,7 @@ describe("people.current", () => {
       nameConfirmed: true,
       joinedAt: expect.any(Number),
       filmSeen: false,
-      trip: false,
+      trip: true,
     });
   });
 

@@ -4,6 +4,7 @@ import { SharedView, driveMapsUrl, type SharedTrip } from "@/components/trip/sha
 import { requireSharedTripDoor } from "@/lib/convex/trip-gate";
 import { SUPPORTED_LOCALES } from "@/lib/i18n";
 import { tripSharedMessages } from "@/lib/i18n/messages/trip-shared";
+import * as regionModule from "@/lib/region";
 import { getRegionConfig } from "@/lib/region/registry";
 
 vi.mock("server-only", () => ({}));
@@ -152,8 +153,23 @@ describe("the shared trip view", () => {
 });
 
 describe("the shared page's door", () => {
-  it("answers 404 while the switch is off, as it is in this region file", () => {
+  const tripOff = () => {
+    const real = regionModule.getActiveRegion();
+    vi.spyOn(regionModule, "getActiveRegion").mockReturnValue({
+      ...real,
+      features: { ...real.features, trip: "off" },
+    });
+  };
+
+  it("lets the page be read while the switch is open, as it is in this region file", () => {
+    expect(regionModule.getActiveRegion().features.trip).toBe("open");
+    expect(() => requireSharedTripDoor()).not.toThrow();
+  });
+
+  it("answers 404 while the switch is off", () => {
+    tripOff();
     expect(() => requireSharedTripDoor()).toThrow("NEXT_NOT_FOUND");
+    vi.restoreAllMocks();
   });
 
   it("is noindex with a same-origin referrer", async () => {

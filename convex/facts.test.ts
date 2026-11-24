@@ -2,6 +2,7 @@
 import type { ApiFromModules } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addPerson, addPlace, addSource, errorCode, newBackend } from "../tests/convex/fixtures";
+import { switchRegionsOff } from "../tests/fixtures/region-off";
 import { api as generatedApi } from "./_generated/api";
 
 vi.mock("./lib/region", async (original) => ({
@@ -28,6 +29,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 async function setup() {
@@ -88,6 +90,8 @@ describe("practical facts", () => {
     await b.as("steward").mutation(api.facts.report, { ...args, placeId: draftId });
     expect(await member.query(api.facts.forPlace, { placeId: draftId })).toEqual([]);
     await member.mutation(api.facts.report, args);
+    // Malaysia ships on; switch it off here to prove an off region's facts stay hidden.
+    switchRegionsOff(regionId);
     vi.stubEnv("REGIONS_PREVIEW", "");
     expect(await member.query(api.facts.forPlace, { placeId })).toEqual([]);
     expect(await errorCode(member.mutation(api.facts.report, args))).toBe("not_found");

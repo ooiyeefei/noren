@@ -254,7 +254,7 @@ describe("region policy", () => {
     expect(region.legal.launchPackComplete).toBe(false);
   });
 
-  it("ships the connector, the planner and walk mode switched on, with the notice that names them", () => {
+  it("ships the connector, the planner, walk mode, the trip agent and practical facts switched on", () => {
     const { features } = loadRegions().get("nagasaki")!;
     expect(features).toEqual({
       connector: true,
@@ -262,15 +262,15 @@ describe("region policy", () => {
       walk: true,
       thread: false,
       postcard: false,
-      trip: "off",
-      facts: false,
+      trip: "open",
+      facts: true,
     });
   });
 
-  it("ships with accounts open and the documents version that names the connector, planner and walk mode", () => {
+  it("ships with accounts open and the documents version 2026-11-24 that names the trip agent and practical facts", () => {
     const { legal } = loadRegions().get("nagasaki")!;
     expect(legal.accountsOpen).toBe(true);
-    expect(legal.documentsVersion).toBe("2026-11-15");
+    expect(legal.documentsVersion).toBe("2026-11-24");
   });
 
   it("opening accounts ends invite-only and changes no other launch rule", () => {
