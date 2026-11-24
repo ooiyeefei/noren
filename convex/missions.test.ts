@@ -182,16 +182,24 @@ it("the backfill works through more places than one page holds", async () => {
     const first = await b.t.mutation(internal.missions.backfillNeighbourhoods, { cursor: null });
     expect(first).toEqual({ processed: 200, isDone: false });
     await b.t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(await b.t.mutation(internal.missions.backfillProgress, { cursor: null })).toEqual({
+      processed: 200,
+      isDone: false,
+    });
+    await b.t.finishAllScheduledFunctions(vi.runAllTimers);
     const all = await b.t.query(api.missions.forRegion, { regionId: "nagasaki", now: NOW });
     expect(all.find(({ id }) => id === "shinchi")?.left).toBe(450);
+    expect(await b.t.run((ctx) => ctx.db.query("neighbourhoodProgress").take(10))).toHaveLength(9);
   } finally {
     vi.useRealTimers();
   }
 });
 
 it("reads stay bounded when a neighbourhood outgrows the limit", async () => {
-  // Nine neighbourhoods' ranges plus at most 1,000 rows from the one that has them all.
-  const b = newBackend(modules, { transactionLimits: { documentsRead: 1000, databaseQueries: 9 } });
+  // One summary range and nine fallback ranges, with at most 1,000 full place rows.
+  const b = newBackend(modules, {
+    transactionLimits: { documentsRead: 1000, databaseQueries: 10 },
+  });
   const steward = await addPerson(b, "mission-steward", "steward");
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   await b.t.run(async (ctx) => {
@@ -208,4 +216,52 @@ it("reads stay bounded when a neighbourhood outgrows the limit", async () => {
   const all = await b.t.query(api.missions.forRegion, { regionId: "nagasaki", now: NOW });
   expect(all.find(({ id }) => id === "shinchi")?.left).toBe(1000);
   expect(warn).toHaveBeenCalledOnce();
+});
+
+it("serves backfilled counts from one range and follows expiry, pin moves and removal", async () => {
+  vi.useFakeTimers();
+  try {
+    const b = newBackend(modules, { transactionLimits: { documentsRead: 1000 } });
+    const steward = await addPerson(b, "progress-steward", "steward");
+    const placeId = await placeAt(b, steward, SHINCHI);
+    await b.run((ctx) => ctx.db.patch("place", placeId, { confirmedAt: NOW - STALE_AFTER_MS }));
+    const { isDone } = await b.t.mutation(internal.missions.backfillProgress, { cursor: null });
+    expect(isDone).toBe(true);
+    await b.t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const totals = (now: number) =>
+      b.t.run((ctx) =>
+        ctx.runQuery(
+          api.missions.forRegion,
+          { regionId: "nagasaki", now },
+          { transactionLimits: { databaseQueries: 1 } },
+        ),
+      );
+    expect((await totals(NOW)).find(({ id }) => id === "shinchi")).toMatchObject({
+      checked: 1,
+      left: 0,
+    });
+    expect((await totals(NOW + 1)).find(({ id }) => id === "shinchi")).toMatchObject({
+      checked: 0,
+      left: 1,
+    });
+
+    await b.run(async (ctx) => {
+      const pin = await ctx.db
+        .query("pin")
+        .withIndex("by_placeId", (q) => q.eq("placeId", placeId))
+        .unique();
+      await ctx.db.patch("pin", pin!._id, DEJIMA);
+    });
+    const moved = await totals(NOW);
+    expect(moved.find(({ id }) => id === "shinchi")).toMatchObject({ checked: 0, left: 0 });
+    expect(moved.find(({ id }) => id === "dejima")).toMatchObject({ checked: 1, left: 0 });
+    await b.run((ctx) => ctx.db.delete("place", placeId));
+    expect((await totals(NOW)).find(({ id }) => id === "dejima")).toMatchObject({
+      checked: 0,
+      left: 0,
+    });
+  } finally {
+    vi.useRealTimers();
+  }
 });

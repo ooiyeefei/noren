@@ -1,38 +1,36 @@
 import { v } from "convex/values";
 import { checkState } from "../src/lib/domain/check-state";
+import { getRegionConfig } from "../src/lib/region/registry";
 import type { Doc } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { query, type QueryCtx } from "./_generated/server";
 import { isPubliclyReadablePlace } from "./lib/access";
 import { internalMutation } from "./lib/gate";
-import { readMapNames, readMapPin, readNeighbourhood, writeMapCopies } from "./lib/mapCopies";
+import {
+  MISSION_PLACE_LIMIT,
+  missionPlaces,
+  missionProgress,
+  readMapNames,
+  readMapPin,
+  readNeighbourhood,
+  writeMapCopies,
+} from "./lib/mapCopies";
 import { isRegionOn, regionConfig } from "./lib/region";
 import { scriptValidator } from "./lib/validators";
 import { distanceMetres } from "../src/lib/overture/dedupe";
 
-// Progress belongs to a neighbourhood. These count places a person has checked, read from each
-// place's own row, and never look at who checked one, so no number here can become a person's score
-// or a comparison between people (FR-015, principle I).
-
-/**
- * Public places read per neighbourhood. The busiest holds about 300 today and a place row is about
- * 450 bytes, so forRegion, the largest read, stays under 8,000 documents and 4 MB at this cap.
- */
-const PLACE_LIMIT = 1000;
+// Progress belongs to a neighbourhood and never looks at who checked a place (FR-015, principle I).
 const NEARBY_LIMIT = 3;
 
 const names = v.record(v.string(), v.string());
 const progress = { checked: v.number(), left: v.number() };
 
 async function publicPlacesIn(ctx: QueryCtx, regionId: string, neighbourhoodId: string) {
-  const places = await ctx.db
-    .query("place")
-    .withIndex("by_regionId_and_neighbourhood_and_visibility", (q) =>
-      q.eq("regionId", regionId).eq("neighbourhood", neighbourhoodId).eq("visibility", "public"),
-    )
-    .take(PLACE_LIMIT);
-  if (places.length >= PLACE_LIMIT) {
-    console.warn(`missions: ${neighbourhoodId} in ${regionId} has over ${PLACE_LIMIT} places`);
+  const places = await missionPlaces(ctx, regionId, neighbourhoodId).take(MISSION_PLACE_LIMIT);
+  if (places.length >= MISSION_PLACE_LIMIT) {
+    console.warn(
+      `missions: ${neighbourhoodId} in ${regionId} has over ${MISSION_PLACE_LIMIT} places`,
+    );
   }
   return places.filter(isPubliclyReadablePlace);
 }
@@ -126,17 +124,82 @@ export const forRegion = query({
   ),
   handler: async (ctx, { regionId, now }) => {
     if (!isRegionOn(regionId)) return [];
+    const neighbourhoods = regionConfig(regionId).neighbourhoods ?? [];
+    if (neighbourhoods.length === 0) return [];
+    const counts = new Map(
+      (
+        await ctx.db
+          .query("neighbourhoodProgress")
+          .withIndex("by_regionId_and_neighbourhood", (q) => q.eq("regionId", regionId))
+          .take(neighbourhoods.length)
+      ).map((row) => [row.neighbourhood, row]),
+    );
     const views = [];
-    for (const neighbourhood of regionConfig(regionId).neighbourhoods ?? []) {
+    for (const neighbourhood of neighbourhoods) {
+      const row = counts.get(neighbourhood.id);
+      let totals;
+      if (row !== undefined && row.total <= MISSION_PLACE_LIMIT) {
+        const checked = row.confirmedAt.filter((at) => checkState(at, now) === "confirmed").length;
+        totals = { checked, left: row.total - checked };
+      } else {
+        totals = count(await publicPlacesIn(ctx, regionId, neighbourhood.id), now);
+      }
       views.push({
         id: neighbourhood.id,
         names: neighbourhood.names,
         center: neighbourhood.center,
         radiusMetres: neighbourhood.radiusMetres,
-        ...count(await publicPlacesIn(ctx, regionId, neighbourhood.id), now),
+        ...totals,
       });
     }
     return views;
+  },
+});
+
+/** Backfills progress by paging places and scheduling each neighbourhood as a bounded transaction. */
+export const backfillProgress = internalMutation({
+  args: { cursor: v.union(v.string(), v.null()) },
+  returns: v.object({ processed: v.number(), isDone: v.boolean() }),
+  handler: async (ctx, { cursor }) => {
+    const page = await ctx.db.query("place").paginate({ numItems: 200, cursor });
+    const regions = new Set(page.page.map(({ regionId }) => regionId));
+    for (const regionId of regions) {
+      for (const { id: neighbourhood } of getRegionConfig(regionId)?.neighbourhoods ?? []) {
+        if ((await missionProgress(ctx, regionId, neighbourhood)) === null) {
+          await ctx.scheduler.runAfter(0, internal.missions.seedProgress, {
+            regionId,
+            neighbourhood,
+          });
+        }
+      }
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.missions.backfillProgress, {
+        cursor: page.continueCursor,
+      });
+    }
+    return { processed: page.page.length, isDone: page.isDone };
+  },
+});
+
+export const seedProgress = internalMutation({
+  args: { regionId: v.string(), neighbourhood: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { regionId, neighbourhood }) => {
+    const existing = await missionProgress(ctx, regionId, neighbourhood);
+    if (existing !== null) return null;
+    const places = await missionPlaces(ctx, regionId, neighbourhood).take(MISSION_PLACE_LIMIT + 1);
+    const overflow = places.length > MISSION_PLACE_LIMIT;
+    const real = places.filter(isPubliclyReadablePlace);
+    await ctx.db.insert("neighbourhoodProgress", {
+      regionId,
+      neighbourhood,
+      total: overflow ? places.length : real.length,
+      confirmedAt: overflow
+        ? []
+        : real.flatMap(({ confirmedAt }) => (confirmedAt === undefined ? [] : [confirmedAt])),
+    });
+    return null;
   },
 });
 

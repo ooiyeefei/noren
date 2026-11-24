@@ -63,6 +63,8 @@ export function registerStoryFinderRules(triggers: Triggers<DataModel>) {
           q.eq("placeId", candidate.placeId).eq("canonicalUrl", candidate.canonicalUrl),
         )
         .take(2),
+    (before, after) =>
+      before.placeId === after.placeId && before.canonicalUrl === after.canonicalUrl,
   );
 
   // Counts per status and platform for the steward's overview, in the same transaction as the row.
@@ -72,6 +74,21 @@ export function registerStoryFinderRules(triggers: Triggers<DataModel>) {
     if (before?.status === after?.status && before?.platform === after?.platform) return;
     if (before) await bump(ctx.innerDb, before.status, before.platform, -1);
     if (after) await bump(ctx.innerDb, after.status, after.platform, 1);
+  });
+
+  triggers.register("mentionCandidate", async (ctx, { oldDoc, newDoc }) => {
+    const before = oldDoc?.status === "attached" ? oldDoc : null;
+    const after = newDoc?.status === "attached" ? newDoc : null;
+    if (
+      before?.attachedAt === after?.attachedAt &&
+      before?.placeId === after?.placeId &&
+      before?.platform === after?.platform &&
+      Boolean(before?.text) === Boolean(after?.text) &&
+      before?.verdict?.kind === after?.verdict?.kind
+    )
+      return;
+    const snapshot = await ctx.innerDb.query("storyReadiness").first();
+    if (snapshot !== null) await ctx.innerDb.delete("storyReadiness", snapshot._id);
   });
 
   triggers.register("mentionCandidate", async (ctx, change) => {

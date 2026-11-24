@@ -11,6 +11,7 @@ import {
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { runOmikuji, runOmikujiToday } from "./connector";
+import * as pool from "./lib/publicPool";
 import * as region from "./lib/region";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -432,6 +433,25 @@ describe("omikujiToday: every neighbourhood's slip at once", () => {
     expect(shinchi.ok && shinchi.place.slug).toBe(
       viaApi.slips.find((s) => s.neighbourhoodId === "shinchi")?.place.slug,
     );
+  });
+
+  it("reuses today's pool across calls, but rebuilds after a takedown and tomorrow", async () => {
+    const { b, creator } = await world();
+    const id = await place(b, creator, { slug: "taken-down" });
+    const build = vi.spyOn(pool, "publicDrawPool");
+    const first = await today(b);
+    expect(first.slips.length).toBeGreaterThan(0);
+    expect(await today(b, NOON + 1000)).toEqual(first);
+    expect(build).toHaveBeenCalledOnce();
+
+    await b.run((ctx) =>
+      ctx.db.patch("place", id, { visibility: "draft", hiddenReason: "reported" }),
+    );
+    expect((await today(b, NOON + 2000)).slips).toEqual([]);
+    expect(build).toHaveBeenCalledTimes(2);
+    expect((await today(b, NOON + 86_400_000)).day).toBe("2026-11-11");
+    expect(build).toHaveBeenCalledTimes(3);
+    expect(await b.t.run((ctx) => ctx.db.query("omikujiPool").take(2))).toHaveLength(1);
   });
 
   it("gives the phone the pin, never an id, and lets it work out the rest", async () => {

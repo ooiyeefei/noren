@@ -125,6 +125,14 @@ export const placeTables = {
       "visibility",
     ]),
 
+  /** Public mission totals and their confirmation times, so the caller's freshness cutoff is exact. */
+  neighbourhoodProgress: defineTable({
+    regionId: v.string(),
+    neighbourhood: v.string(),
+    total: v.number(),
+    confirmedAt: v.array(v.number()),
+  }).index("by_regionId_and_neighbourhood", ["regionId", "neighbourhood"]),
+
   /**
    * One person saying a place is still there, or reporting what is wrong with it (FR-030). A report
    * changes nothing in public until a steward records an outcome: the place stays, or it is hidden.

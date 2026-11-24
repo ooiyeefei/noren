@@ -99,6 +99,13 @@ export const storyFinderTables = {
     .index("by_placeId_and_canonicalUrl", ["placeId", "canonicalUrl"])
     .index("by_status_and_checkStartedAt", ["status", "checkStartedAt"])
     .index("by_status_and_checkedAt", ["status", "checkedAt"])
+    .index("by_status_and_attachError_and_verdict_kind_and_postedAt_and_checkedAt", [
+      "status",
+      "attachError",
+      "verdict.kind",
+      "postedAt",
+      "checkedAt",
+    ])
     .index("by_status_and_attachedAt", ["status", "attachedAt"])
     .index("by_collectionId_and_authorKey_and_status", ["collectionId", "authorKey", "status"])
     .index("by_sourceId", ["sourceId"]),
@@ -109,6 +116,11 @@ export const storyFinderTables = {
     platform: mentionPlatformValidator,
     count: v.number(),
   }).index("by_status_and_platform", ["status", "platform"]),
+
+  /** The nightly story job's ranked attachment window, cleared when a contributing post changes. */
+  storyReadiness: defineTable({
+    ranked: v.array(v.object({ placeId: v.id("place"), posts: v.number() })),
+  }),
 
   /**
    * The quote of every found post that is shown or was hidden, kept small so the copy check can read

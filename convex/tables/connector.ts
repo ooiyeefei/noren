@@ -2,6 +2,21 @@ import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export const connectorTables = {
+  /** Only the fields needed to draw a slip. The display data and questions are read live. */
+  omikujiPool: defineTable({
+    regionId: v.string(),
+    day: v.string(),
+    settings: v.string(),
+    places: v.array(
+      v.object({
+        id: v.id("place"),
+        pin: v.object({ lat: v.number(), lng: v.number() }),
+        hasStory: v.boolean(),
+        neighbourhoodId: v.optional(v.string()),
+      }),
+    ),
+  }).index("by_regionId_and_day", ["regionId", "day"]),
+
   /**
    * How many times each place was suggested in a week, so quieter places get their turn in the next
    * draw (src/lib/draw/weights.ts). Nothing else: no person, no device, no address, no question

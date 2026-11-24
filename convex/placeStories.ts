@@ -55,14 +55,9 @@ async function batchSteward(ctx: QueryCtx, personId: Id<"person">) {
   return person;
 }
 
-/**
- * Places on the map with no story yet, enough checked posts and at least one the check called a story,
- * those with the most stories first. A place with only tips has nothing for the agent to retell.
- */
-async function readyPlaces(
+async function rankStoryPlaces(
   ctx: QueryCtx,
   platforms: readonly MentionPlatform[],
-  limit: number,
   minPosts = MIN_POSTS,
 ) {
   const counts = new Map<Id<"place">, { posts: number; stories: number }>();
@@ -78,11 +73,20 @@ async function readyPlaces(
     if (row.verdict?.kind === "story") count.stories += 1;
     counts.set(row.placeId, count);
   }
-  const ranked = [...counts]
+  return [...counts]
     .filter(([, count]) => count.stories > 0 && count.posts >= minPosts)
-    .sort(([, a], [, b]) => b.stories - a.stories || b.posts - a.posts);
+    .sort(([, a], [, b]) => b.stories - a.stories || b.posts - a.posts)
+    .map(([placeId, { posts }]) => ({ placeId, posts }));
+}
+
+/** Ranked places still on the map that have no story yet. */
+async function readyPlaces(
+  ctx: QueryCtx,
+  ranked: readonly { placeId: Id<"place">; posts: number }[],
+  limit: number,
+) {
   const ready: { place: Doc<"place">; posts: number }[] = [];
-  for (const [placeId, { posts }] of ranked) {
+  for (const { placeId, posts } of ranked) {
     if (ready.length >= limit) break;
     const place = await ctx.db.get("place", placeId);
     if (place === null || !isPubliclyReadablePlace(place) || place.hiddenReason !== undefined)
@@ -212,7 +216,7 @@ export const enqueue = internalMutation({
           .filter((place) => place !== null && isPubliclyReadablePlace(place))
           .slice(0, limit)
           .map((place) => ({ place: place! }))
-      : await readyPlaces(ctx, reading, limit, minPosts);
+      : await readyPlaces(ctx, await rankStoryPlaces(ctx, reading, minPosts), limit);
     return await startBatch(
       ctx,
       steward,
@@ -238,7 +242,11 @@ export const writeReadyStories = internalMutation({
       .take(50);
     const steward = stewards.find(({ isMock }) => !isMock);
     if (steward === undefined) return { started: 0 };
-    const ready = await readyPlaces(ctx, DEFAULT_PLATFORMS, NIGHTLY_LIMIT);
+    const snapshot = await ctx.db.query("storyReadiness").first();
+    const ranked = snapshot?.ranked ?? (await rankStoryPlaces(ctx, DEFAULT_PLATFORMS));
+    if (snapshot === null) await ctx.db.insert("storyReadiness", { ranked });
+    // Existing work can still be ready after a failed run or a night that filled its batch.
+    const ready = await readyPlaces(ctx, ranked, NIGHTLY_LIMIT);
     if (ready.length === 0) return { started: 0 };
     return await startBatch(
       ctx,
@@ -388,13 +396,17 @@ export const addStep = internalMutation({
   },
 });
 
+function canStopRun(status: Doc<"placeStoryRun">["status"], whileWaking: boolean) {
+  return status === "queued" || status === "waiting" || (!whileWaking && status === "running");
+}
+
 /** The second reader is asleep: comes back to this run later, and the same wake serves every run. */
 export const waitForChecker = internalMutation({
-  args: { runId: v.id("placeStoryRun"), error: v.string() },
+  args: { runId: v.id("placeStoryRun"), error: v.string(), whileWaking: v.optional(v.boolean()) },
   returns: v.null(),
-  handler: async (ctx, { runId, error }) => {
+  handler: async (ctx, { runId, error, whileWaking = false }) => {
     const run = await ctx.db.get("placeStoryRun", runId);
-    if (run === null) return null;
+    if (run === null || !canStopRun(run.status, whileWaking)) return null;
     if (run.wakeAttempts >= MAX_WAKE_ATTEMPTS) {
       await ctx.db.patch("placeStoryRun", runId, {
         status: "failed",
@@ -415,9 +427,11 @@ export const waitForChecker = internalMutation({
 });
 
 export const failRun = internalMutation({
-  args: { runId: v.id("placeStoryRun"), error: v.string() },
+  args: { runId: v.id("placeStoryRun"), error: v.string(), whileWaking: v.optional(v.boolean()) },
   returns: v.null(),
-  handler: async (ctx, { runId, error }) => {
+  handler: async (ctx, { runId, error, whileWaking = false }) => {
+    const run = await ctx.db.get("placeStoryRun", runId);
+    if (run === null || !canStopRun(run.status, whileWaking)) return null;
     await ctx.db.patch("placeStoryRun", runId, {
       status: "failed",
       error,
@@ -556,10 +570,12 @@ export const stewardPanel = query({
   }),
   handler: async (ctx) => {
     await requireRole(ctx, ["steward"]);
+    const snapshot = await ctx.db.query("storyReadiness").first();
+    const ranked = snapshot?.ranked ?? (await rankStoryPlaces(ctx, DEFAULT_PLATFORMS));
     const named = async (place: Doc<"place">) =>
       place.mapNames ?? (await readMapNames(ctx, place._id));
     const ready = await Promise.all(
-      (await readyPlaces(ctx, DEFAULT_PLATFORMS, 5)).map(async ({ place, posts }) => ({
+      (await readyPlaces(ctx, ranked, 5)).map(async ({ place, posts }) => ({
         placeId: place._id,
         placeSlug: place.slug,
         placeNames: await named(place),
