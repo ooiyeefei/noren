@@ -147,7 +147,7 @@ async function world(regionId = "nagasaki") {
 }
 
 /** A bare candidate row, only for seeding shown quotes. */
-function stub(w: Awaited<ReturnType<typeof world>>, slug: string) {
+function stub(w: Pick<Awaited<ReturnType<typeof world>>, "placeId" | "steward">, slug: string) {
   return {
     placeId: w.placeId,
     regionId: "nagasaki",
@@ -166,6 +166,63 @@ function stub(w: Awaited<ReturnType<typeof world>>, slug: string) {
     reason: "unrelated" as const,
   };
 }
+
+it("only looks up candidate uniqueness when its place or canonical URL changes", async () => {
+  // The gate reads the old and new documents even when uniqueness needs no index lookup.
+  const b = newBackend(modules, { transactionLimits: { databaseQueries: 2 } });
+  const [id, duplicateUrl] = await b.t.run(async (ctx) => {
+    const steward = await ctx.db.insert("person", {
+      tokenIdentifier: "fixture",
+      clerkUserId: "fixture",
+      displayName: "Fixture",
+      role: "steward",
+      isMock: false,
+    });
+    const placeId = await ctx.db.insert("place", {
+      regionId: "nagasaki",
+      slug: "fixture",
+      createdBy: steward,
+      visibility: "draft",
+      isMock: false,
+    });
+    const candidate = {
+      ...stub({ placeId, steward }, "first"),
+      text: "x".repeat(8000),
+    };
+    const duplicateUrl = "https://seed.example.com/second";
+    await ctx.db.insert("mentionCandidate", { ...candidate, canonicalUrl: duplicateUrl });
+    return [await ctx.db.insert("mentionCandidate", candidate), duplicateUrl] as const;
+  });
+  await b.run((ctx) => ctx.db.patch("mentionCandidate", id, { checkedAt: 1 }));
+  await expect(
+    b.run((ctx) => ctx.db.patch("mentionCandidate", id, { canonicalUrl: duplicateUrl })),
+  ).rejects.toThrow(/Too many index ranges/);
+  expect((await b.t.run((ctx) => ctx.db.get("mentionCandidate", id)))?.checkedAt).toBe(1);
+});
+
+it("finds an unattached post even after more than 500 accepted posts with errors", async () => {
+  const w = await world();
+  await w.b.t.run(async (ctx) => {
+    for (let i = 0; i < 510; i++) {
+      await ctx.db.insert("mentionCandidate", {
+        ...stub(w, `stuck-${i}`),
+        status: "accepted",
+        attachError: "place_full",
+      });
+    }
+  });
+  await w.ingest([w.candidate(posts.reddit, { text: `${MARKER} ${EN_QUOTE}` })]);
+  const ready = await w.b.t.run((ctx) => ctx.db.query("mentionCandidate").order("desc").first());
+  expect(await w.record(ready!._id, { evidence: "Test Shop", quote: EN_QUOTE }, false)).toEqual({
+    status: "accepted",
+  });
+  expect(
+    await w.b.t.mutation(internal.storyFinder.attachAcceptedBatch, {
+      stewardPersonId: w.steward,
+      limit: 1,
+    }),
+  ).toEqual({ attached: 1, considered: 1 });
+});
 
 describe("placesToSearch", () => {
   it("lists real public places in places-to-visit categories, never mock places", async () => {

@@ -25,32 +25,41 @@ export const writeStory = internalAction({
     if (!write.ok || !check.ok) {
       const error = !write.ok ? write.reason : check.ok ? "no model is set" : check.reason;
       console.error(`story agent stopped: ${error}`);
-      await ctx.runMutation(internal.placeStories.failRun, { runId, error });
+      await ctx.runMutation(internal.placeStories.failRun, { runId, error, whileWaking: true });
       return null;
     }
     const checker = createStoryChecker({
       model: createLanguageModel(check.config),
       reportMode: reportMode(check.config),
     });
+    const stop = async (error: unknown, whileWaking = false) => {
+      const failure = describeCheckFailure(error);
+      console.error(`story agent run ${runId} stopped: ${failure}`);
+      if (classifyCheckError(error) === "retry")
+        await ctx.runMutation(internal.placeStories.waitForChecker, {
+          runId,
+          error: failure,
+          whileWaking,
+        });
+      else
+        await ctx.runMutation(internal.placeStories.failRun, {
+          runId,
+          error: failure,
+          whileWaking,
+        });
+    };
+    try {
+      await checker.wake();
+    } catch (error) {
+      await stop(error, true);
+      return null;
+    }
     const started = await ctx.runMutation(internal.placeStories.beginRun, {
       runId,
       writer: process.env.AI_MODEL_WRITE_STORY?.trim() ?? write.config.modelId,
       checker: process.env.AI_MODEL_CHECK_STORY?.trim() ?? check.config.modelId,
     });
     if (started === null) return null;
-    const stop = async (error: unknown) => {
-      const failure = describeCheckFailure(error);
-      console.error(`story agent run ${runId} stopped: ${failure}`);
-      if (classifyCheckError(error) === "retry")
-        await ctx.runMutation(internal.placeStories.waitForChecker, { runId, error: failure });
-      else await ctx.runMutation(internal.placeStories.failRun, { runId, error: failure });
-    };
-    try {
-      await checker.wake();
-    } catch (error) {
-      await stop(error);
-      return null;
-    }
     try {
       const sentences = await runStoryAgent(started, {
         writer: createStoryWriter({

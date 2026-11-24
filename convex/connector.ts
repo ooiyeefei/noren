@@ -31,7 +31,14 @@ import { isPublicSafeClaim, publicStoriesAllowed } from "./lib/access";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { consumeRateLimit } from "./lib/rateLimit";
-import { nameView, publicPool, type Pin, type PoolPlace } from "./lib/publicPool";
+import {
+  nameView,
+  publicDrawPool,
+  publicPool,
+  toPoolPlace,
+  type Pin,
+  type PoolPlace,
+} from "./lib/publicPool";
 import { isRegionOn, regionConfig, regionPolicy } from "./lib/region";
 import {
   openQuestionFor,
@@ -480,7 +487,31 @@ export async function runOmikujiToday(
   const region = regionConfig(args.regionId);
   await limitDraws(ctx, now);
   const day = localDay(now, region.collection.utcOffsetHours);
-  const pool = await publicPool(ctx, args.regionId);
+  const settings = JSON.stringify([
+    regionPolicy(args.regionId).realBusinessesDraftOnly,
+    region.neighbourhoods?.map(({ id, center, radiusMetres }) => [id, center, radiusMetres]),
+  ]);
+  const stored = await ctx.db
+    .query("omikujiPool")
+    .withIndex("by_regionId_and_day", (q) => q.eq("regionId", args.regionId))
+    .unique();
+  let pool = stored?.places;
+  if (stored?.day !== day || stored.settings !== settings || pool === undefined) {
+    pool = await publicDrawPool(ctx, region);
+    const entry = { regionId: args.regionId, day, settings, places: pool };
+    if (stored === null) await ctx.db.insert("omikujiPool", entry);
+    else await ctx.db.replace("omikujiPool", stored._id, entry);
+  }
+  // The pool only fixes the choices. Display fields and questions follow the live public rows.
+  const displayPlaces = new Map<Id<"place">, PoolPlace | null>();
+  const displayPlace = async (id: Id<"place">) => {
+    const cached = displayPlaces.get(id);
+    if (cached !== undefined) return cached;
+    const row = await ctx.db.get("place", id);
+    const place = row?.regionId === args.regionId ? await toPoolPlace(ctx, region, row) : null;
+    displayPlaces.set(id, place);
+    return place;
+  };
   const thread = threadOn(region.features);
   const slips: TodaysSlips["slips"] = [];
   // The same place may be the slip of two neighbourhoods, or a door of several threads; its stories
@@ -516,7 +547,7 @@ export async function runOmikujiToday(
           addedAt: story._creationTime,
           toPlaceId: story.nextQuestionFor as string,
         }));
-      const next = chooseNextStop({
+      const next = chooseNextStop<Doc<"omikujiPool">["places"][number]>({
         from,
         pool,
         inThread,
@@ -524,8 +555,10 @@ export async function runOmikujiToday(
         seed: threadSeed(slipSeed, stop),
       });
       if (next === undefined) return undefined;
-      const place = { ...picked(next.place), pin: next.place.pin };
-      const question = await questionOf(next.place);
+      const nextPlace = await displayPlace(next.place.id);
+      if (nextPlace === null) return undefined;
+      const place = { ...picked(nextPlace), pin: nextPlace.pin };
+      const question = await questionOf(nextPlace);
       if (next.via === "carried") {
         const story = (await storiesAt(from.id)).find(({ _id }) => _id === next.storyId)!;
         const author = await ctx.db.get("person", story.authorPersonId);
@@ -539,20 +572,22 @@ export async function runOmikujiToday(
           question,
         });
       } else stops.push({ via: "draw", place, question });
-      inThread.push(next.place.id);
-      from = next.place;
+      inThread.push(nextPlace.id);
+      from = nextPlace;
     }
     return stops;
   };
   for (const neighbourhoodId of [...(region.neighbourhoods ?? []).map(({ id }) => id), undefined]) {
     const slipSeed = omikujiSeed(args.regionId, day, neighbourhoodId);
-    const chosen = chooseOmikuji(
+    const draw = chooseOmikuji(
       pool.filter(
         (place) => neighbourhoodId === undefined || place.neighbourhoodId === neighbourhoodId,
       ),
       slipSeed,
     );
-    if (chosen === undefined) continue;
+    if (draw === undefined) continue;
+    const chosen = await displayPlace(draw.id);
+    if (chosen === null) continue;
     const question = region.features.walk ? await questionOf(chosen) : undefined;
     const further = thread ? await threadAfter(chosen, slipSeed) : undefined;
     slips.push({

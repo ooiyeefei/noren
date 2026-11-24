@@ -747,25 +747,60 @@ async function attachAccepted(
   ctx: MutationCtx,
   steward: Doc<"person">,
   limit: number,
-  regionIsAvailable: (regionId: string) => boolean = () => true,
+  regionIsAvailable?: (regionId: string) => boolean,
 ) {
-  // Posts stuck on a full place or an author's limit are passed over, so they cannot hold the
-  // batch up; at most `limit` are tried.
-  const accepted = (
-    await ctx.db
+  const max = Math.max(0, Math.min(100, Math.floor(limit)));
+  if (max === 0) return { attached: 0, considered: 0 };
+  const untried = async (kind: "story" | "tip", remaining: number) => {
+    const rows = await ctx.db
       .query("mentionCandidate")
-      .withIndex("by_status_and_checkedAt", (q) => q.eq("status", "accepted"))
-      .take(500)
-  ).sort(attachOrder);
+      .withIndex("by_status_and_attachError_and_verdict_kind_and_postedAt_and_checkedAt", (q) =>
+        q.eq("status", "accepted").eq("attachError", undefined).eq("verdict.kind", kind),
+      )
+      .order("desc")
+      .take(remaining);
+    if (rows.length < remaining) return rows.reverse().sort(attachOrder);
+    // Preserve the original check order when posts share a date, including when a group crosses
+    // the batch boundary. Otherwise a later copy could claim an earlier post's place.
+    const { postedAt } = rows[rows.length - 1]!;
+    const before = rows.filter((row) => row.postedAt !== postedAt);
+    const tied = await ctx.db
+      .query("mentionCandidate")
+      .withIndex("by_status_and_attachError_and_verdict_kind_and_postedAt_and_checkedAt", (q) =>
+        q
+          .eq("status", "accepted")
+          .eq("attachError", undefined)
+          .eq("verdict.kind", kind)
+          .eq("postedAt", postedAt),
+      )
+      .take(remaining - before.length);
+    return [...before.reverse(), ...tied].sort(attachOrder);
+  };
+  let accepted;
+  if (regionIsAvailable === undefined) {
+    // The checker accepts stories and tips. Try stories first, newest posts first in each group.
+    const stories = await untried("story", max);
+    accepted =
+      stories.length === max
+        ? stories
+        : [...stories, ...(await untried("tip", max - stories.length))];
+  } else {
+    // The interactive steward command also retries recoverable failures in enabled regions.
+    accepted = (
+      await ctx.db
+        .query("mentionCandidate")
+        .withIndex("by_status_and_checkedAt", (q) => q.eq("status", "accepted"))
+        .take(500)
+    ).sort(attachOrder);
+  }
   const places: Id<"place">[] = [];
   let attached = 0;
   let considered = 0;
-  const max = Math.max(0, Math.min(100, Math.floor(limit)));
   // The region's shown quotes are read once for the whole batch.
   const shownCache = new Map<string, ShownQuotes>();
   for (const candidate of accepted) {
     if (considered >= max) break;
-    if (!regionIsAvailable(candidate.regionId)) continue;
+    if (regionIsAvailable && !regionIsAvailable(candidate.regionId)) continue;
     if (candidate.attachError !== undefined && STUCK.has(candidate.attachError)) continue;
     considered++;
     const result = await attachCandidate(ctx, candidate, steward, Date.now(), shownCache);

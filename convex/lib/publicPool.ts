@@ -31,6 +31,19 @@ export type PoolPlace = {
   neighbourhoodId: string | undefined;
 };
 
+type DrawPlace = Pick<PoolPlace, "id" | "pin" | "hasStory"> & { neighbourhoodId?: string };
+
+/** The bounded pool needed to choose a slip, without reading display names for every place. */
+export async function publicDrawPool(ctx: QueryCtx, region: RegionConfig): Promise<DrawPlace[]> {
+  const places = await readablePlaces(ctx, null, { regionId: region.id, limit: MAP_PLACE_LIMIT });
+  const pool: DrawPlace[] = [];
+  for (const place of places) {
+    const fields = await drawFields(ctx, region, place);
+    if (fields !== null) pool.push(fields);
+  }
+  return pool;
+}
+
 /**
  * The places a signed-out visitor can see on the map, which are the only places a draw (or walk
  * mode) may offer. Demo (fictional) places are left out: a suggestion is for a real walk. A place a
@@ -67,20 +80,34 @@ export async function toPoolPlace(
   region: RegionConfig,
   place: Doc<"place">,
 ): Promise<PoolPlace | null> {
-  if (!isPublicRealPlace(place)) return null;
-  const pin = await pinOf(ctx, place);
-  if (pin === null) return null;
+  const fields = await drawFields(ctx, region, place);
+  if (fields === null) return null;
   return {
-    id: place._id,
+    ...fields,
+    neighbourhoodId: fields.neighbourhoodId,
     slug: place.slug,
     category: place.category,
     names: place.mapNames ?? (await readMapNames(ctx, place._id)),
-    pin,
     confirmedAt: place.confirmedAt,
+  };
+}
+
+async function drawFields(
+  ctx: QueryCtx,
+  region: RegionConfig,
+  place: Doc<"place">,
+): Promise<DrawPlace | null> {
+  if (!isPublicRealPlace(place)) return null;
+  const pin = await pinOf(ctx, place);
+  if (pin === null) return null;
+  const neighbourhoodId = neighbourhoodAt(region, pin)?.id;
+  return {
+    id: place._id,
+    pin,
     hasStory:
       (publicStoriesAllowed(place) &&
         (place.hasPublishedPage ?? (await readHasPublishedPage(ctx, place._id)))) ||
       place.hasPeopleStories === true,
-    neighbourhoodId: neighbourhoodAt(region, pin)?.id,
+    ...(neighbourhoodId === undefined ? {} : { neighbourhoodId }),
   };
 }

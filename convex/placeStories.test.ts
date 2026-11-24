@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addPerson, addPlace, errorCode, newBackend } from "../tests/convex/fixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import * as storyChecker from "../src/lib/story-agent/check";
 
 const modules = import.meta.glob("./**/*.ts");
 // Every post here is made up.
@@ -14,10 +15,12 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
-async function setup() {
-  const b = newBackend(modules);
+async function setup(options?: Parameters<typeof newBackend>[1]) {
+  const b = newBackend(modules, options);
   const steward = await addPerson(b, "synthetic-steward", "steward");
   const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
   const post = async (
@@ -243,6 +246,31 @@ describe("placeStories.saveStory and forPlace", () => {
 });
 
 describe("placeStories runs", () => {
+  it("waits for the checker without beginning a run or loading its posts", async () => {
+    const b = await setup();
+    await b.post("web");
+    const runId = await b.startRun();
+    vi.stubEnv("AI_MODEL_WRITE_STORY", "anthropic:synthetic");
+    vi.stubEnv("AI_MODEL_CHECK_STORY", "anthropic:synthetic");
+    vi.stubEnv("ANTHROPIC_API_KEY", "synthetic");
+    const wake = vi.fn().mockRejectedValue(new TypeError("checker asleep"));
+    vi.spyOn(storyChecker, "createStoryChecker").mockReturnValue({ wake, check: vi.fn() });
+
+    await b.t.action(internal.placeStoryActions.writeStory, { runId });
+    expect(wake).toHaveBeenCalledOnce();
+    const run = await b.run_((ctx) => ctx.db.get("placeStoryRun", runId));
+    expect(run).toMatchObject({ status: "waiting", wakeAttempts: 1 });
+    expect(run?.writer).toBeUndefined();
+    expect(run?.checker).toBeUndefined();
+
+    await b.begin(runId);
+    await b.t.action(internal.placeStoryActions.writeStory, { runId });
+    expect(await b.run_((ctx) => ctx.db.get("placeStoryRun", runId))).toMatchObject({
+      status: "running",
+      wakeAttempts: 1,
+    });
+  });
+
   it("comes back later while the second reader sleeps, then stops after enough tries", async () => {
     const b = await setup();
     await b.post("google_reviews");
@@ -291,7 +319,12 @@ describe("placeStories runs", () => {
   it("never repeats words about someone's health in a run's log", async () => {
     const b = await setup();
     const runId = await b.startRun();
-    const step = (words: string) => ({ at: 1, kind: "citation_rejected" as const, words, detail: "x" });
+    const step = (words: string) => ({
+      at: 1,
+      kind: "citation_rejected" as const,
+      words,
+      detail: "x",
+    });
     await b.t.mutation(internal.placeStories.addStep, { runId, step: step("店主は入院中です") });
     await b.run_((ctx) =>
       ctx.db.patch("placeStoryRun", runId, {
@@ -334,6 +367,29 @@ describe("placeStories runs", () => {
     expect(await night()).toEqual({ started: 1 });
     const runs = await b.run_((ctx) => ctx.db.query("placeStoryRun").collect());
     expect(runs).toMatchObject([{ requestedBy: b.steward, status: "queued" }]);
+  });
+
+  it("reuses an unchanged attachment window for the cron and the steward panel", async () => {
+    const b = await setup({ transactionLimits: { documentsRead: 30 } });
+    const night = () => b.t.mutation(internal.placeStories.writeReadyStories, {});
+    expect(await night()).toEqual({ started: 0 });
+
+    // An unchanged readiness window needs only the steward and snapshot, with no candidate range.
+    const result = await b.t.run((ctx) =>
+      ctx.runMutation(
+        internal.placeStories.writeReadyStories,
+        {},
+        { transactionLimits: { databaseQueries: 2 } },
+      ),
+    );
+    expect(result).toEqual({ started: 0 });
+    expect(await b.as("synthetic-steward").query(api.placeStories.stewardPanel, {})).toMatchObject({
+      ready: [],
+    });
+
+    await b.post("web", { n: 1 });
+    await b.post("web", { n: 2 });
+    expect(await night()).toEqual({ started: 1 });
   });
 
   it("does not write a place again the night after it found nothing to tell", async () => {

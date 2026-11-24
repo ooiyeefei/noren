@@ -23,9 +23,11 @@ export function mustBeUnique<T extends TableNames>(
   rule: string,
   description: string,
   matching: (ctx: MutationCtx, doc: Doc<T>) => Promise<Doc<T>[]>,
+  sameKey?: (before: Doc<T>, after: Doc<T>) => boolean,
 ) {
   triggers.register(table, async (ctx, change) => {
     if (change.newDoc === null) return;
+    if (change.oldDoc !== null && sameKey?.(change.oldDoc, change.newDoc)) return;
     const matches = await matching(ctx, change.newDoc);
     if (matches.some((match) => match._id !== change.id)) {
       throw violation(rule, `${table} already has a row with the same ${description}`);

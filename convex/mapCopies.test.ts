@@ -11,9 +11,27 @@ import {
   type Backend,
 } from "../tests/convex/fixtures";
 import * as region from "./lib/region";
+import * as mapCopies from "./lib/mapCopies";
 
 const modules = import.meta.glob("./**/*.ts");
 afterEach(() => vi.restoreAllMocks());
+
+it("a metadata-only source check skips the stories read, while a takedown refreshes it", async () => {
+  const b = newBackend(modules);
+  const steward = await addPerson(b, "source-check", "steward");
+  const placeId = await addPlace(b, { createdBy: steward, visibility: "public" });
+  const sourceId = await addSource(b, { placeId, addedBy: steward, demoConsentBy: steward });
+  const read = vi.spyOn(mapCopies, "readHasPeopleStories");
+
+  await b.t.mutation(internal.sources.recordCheck, { sourceId, result: "live" });
+  expect(read).not.toHaveBeenCalled();
+  const place = () => b.t.run((ctx) => ctx.db.get("place", placeId));
+  expect((await place())?.hasPeopleStories).toBe(true);
+
+  await b.t.mutation(internal.sources.recordCheck, { sourceId, result: "gone" });
+  expect(read).toHaveBeenCalledOnce();
+  expect((await place())?.hasPeopleStories).toBe(false);
+});
 
 async function copies(b: Backend, placeId: Id<"place">) {
   const place = await b.t.run((ctx) => ctx.db.get("place", placeId));

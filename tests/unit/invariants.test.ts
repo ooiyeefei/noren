@@ -88,6 +88,10 @@ const inheritsMockFlag = [
 ];
 const notPersonCreated = [
   "seedOsmCandidate",
+  // Projections the server keeps from real public places and collected posts, to read less.
+  "neighbourhoodProgress",
+  "omikujiPool",
+  "storyReadiness",
   // Made by an admin and looked after by stewards, for real places only.
   "collectionSet",
   "collectionPanel",

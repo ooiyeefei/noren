@@ -2,7 +2,120 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { neighbourhoodAt } from "../../src/lib/region/neighbourhoods";
 import { getRegionConfig } from "../../src/lib/region/registry";
-import { isSharedPublicly, isStoryShown } from "./access";
+import { isPubliclyReadablePlace, isSharedPublicly, isStoryShown } from "./access";
+
+export const MISSION_PLACE_LIMIT = 1000;
+
+export function missionPlaces(ctx: Pick<QueryCtx, "db">, regionId: string, neighbourhood: string) {
+  return ctx.db
+    .query("place")
+    .withIndex("by_regionId_and_neighbourhood_and_visibility", (q) =>
+      q.eq("regionId", regionId).eq("neighbourhood", neighbourhood).eq("visibility", "public"),
+    );
+}
+
+export function missionProgress(
+  ctx: Pick<QueryCtx, "db">,
+  regionId: string,
+  neighbourhood: string,
+) {
+  return ctx.db
+    .query("neighbourhoodProgress")
+    .withIndex("by_regionId_and_neighbourhood", (q) =>
+      q.eq("regionId", regionId).eq("neighbourhood", neighbourhood),
+    )
+    .unique();
+}
+
+const missionPlace = (place: Doc<"place"> | null) =>
+  place?.visibility === "public" &&
+  isPubliclyReadablePlace(place) &&
+  place.neighbourhood !== undefined
+    ? {
+        regionId: place.regionId,
+        neighbourhood: place.neighbourhood,
+        confirmedAt: place.confirmedAt,
+      }
+    : null;
+
+const sameMission = (a: ReturnType<typeof missionPlace>, b: ReturnType<typeof missionPlace>) =>
+  a?.regionId === b?.regionId && a?.neighbourhood === b?.neighbourhood;
+
+async function updateMissionProgress(
+  ctx: Pick<MutationCtx, "db">,
+  before: Doc<"place"> | null,
+  after: Doc<"place"> | null,
+) {
+  const was = missionPlace(before);
+  const now = missionPlace(after);
+  if (sameMission(was, now) && was?.confirmedAt === now?.confirmedAt) return;
+
+  const update = async (key: NonNullable<typeof was>, remove: boolean, add: boolean) => {
+    const row = await missionProgress(ctx, key.regionId, key.neighbourhood);
+    // Missing rows use the original read until backfill. Big neighbourhoods keep its capped order.
+    if (row === null || row.total > MISSION_PLACE_LIMIT) return;
+    const total = row.total + Number(add) - Number(remove);
+    const confirmedAt = [...row.confirmedAt];
+    if (remove && was?.confirmedAt !== undefined) {
+      const index = confirmedAt.indexOf(was.confirmedAt);
+      if (index >= 0) confirmedAt.splice(index, 1);
+    }
+    if (add && now?.confirmedAt !== undefined) confirmedAt.push(now.confirmedAt);
+    await ctx.db.patch("neighbourhoodProgress", row._id, {
+      total,
+      confirmedAt: total > MISSION_PLACE_LIMIT ? [] : confirmedAt,
+    });
+  };
+  if (was !== null) await update(was, true, sameMission(was, now));
+  if (now !== null && !sameMission(was, now)) await update(now, false, true);
+}
+
+function drawPlace(place: Doc<"place"> | null) {
+  if (
+    place?.visibility !== "public" ||
+    !isPubliclyReadablePlace(place) ||
+    place.hiddenReason !== undefined
+  )
+    return null;
+  return place;
+}
+
+/** Only changes to membership or draw weights invalidate the day's pool. */
+async function invalidateOmikujiPool(
+  ctx: Pick<MutationCtx, "db">,
+  before: Doc<"place"> | null,
+  after: Doc<"place"> | null,
+) {
+  const was = drawPlace(before);
+  const now = drawPlace(after);
+  if (
+    was?.regionId === now?.regionId &&
+    was?.mapPin?.lat === now?.mapPin?.lat &&
+    was?.mapPin?.lng === now?.mapPin?.lng &&
+    (was?.mapPin === null) === (now?.mapPin === null) &&
+    was?.hasPublishedPage === now?.hasPublishedPage &&
+    was?.hasPeopleStories === now?.hasPeopleStories
+  )
+    return;
+  const regions = new Set([was?.regionId, now?.regionId]);
+  for (const regionId of regions) {
+    if (regionId === undefined) continue;
+    const pool = await ctx.db
+      .query("omikujiPool")
+      .withIndex("by_regionId_and_day", (q) => q.eq("regionId", regionId))
+      .unique();
+    if (pool !== null) await ctx.db.delete("omikujiPool", pool._id);
+  }
+}
+
+export async function syncPlaceCopies(
+  db: MutationCtx["db"],
+  before: Doc<"place"> | null,
+  after: Doc<"place"> | null,
+) {
+  await updateMissionProgress({ db }, before, after);
+  await invalidateOmikujiPool({ db }, before, after);
+}
 
 export type MapCopies = Required<
   Pick<Doc<"place">, "mapNames" | "mapPin" | "hasPublishedPage" | "hasPeopleStories">
@@ -67,6 +180,7 @@ export async function writeMapCopies(
   db: MutationCtx["db"],
   placeId: Id<"place">,
   copies: Partial<MapCopies>,
+  syncRawPlace = false,
 ): Promise<void> {
   const place = await db.get("place", placeId);
   if (place === null) return;
@@ -75,7 +189,9 @@ export async function writeMapCopies(
       ([key, value]) => JSON.stringify(place[key as keyof MapCopies]) !== JSON.stringify(value),
     ),
   );
-  if (Object.keys(changed).length > 0) await db.patch("place", placeId, changed);
+  if (Object.keys(changed).length === 0) return;
+  await db.patch("place", placeId, changed);
+  if (syncRawPlace) await syncPlaceCopies(db, place, { ...place, ...copies });
 }
 
 /** Through the gated `ctx.db`, so a backfill stops loudly at a row that breaks a place rule. */
