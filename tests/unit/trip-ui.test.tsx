@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { OwnWordsBox, type OwnWordsBoxProps } from "@/components/trip/own-words-box";
 import { applyProposal, matchTraveller, proposalText } from "@/components/trip/own-words-apply";
 import { PlaceCheck } from "@/components/place/place-check";
-import { approveFirstPlan, takeFirstPlanApproval } from "@/components/trip/plan-consent";
+import { TRIP_CONSENT_VERSION } from "@/lib/trip/consent";
+import { approveFirstPlan, takeFirstPlanApproval, tripSendRejected } from "@/components/trip/plan-consent";
 import { keepStops } from "@/components/trip/plan-container";
 import { PlanView, type PlanViewProps } from "@/components/trip/plan-view";
 import type { StopInfo, StopLookup } from "@/components/trip/stop-card";
@@ -193,19 +194,25 @@ const memoryDevice = () => {
 
 describe("the questions", () => {
   it("authorizes only the trip whose plan button was pressed, once", () => {
-    expect(takeFirstPlanApproval("trip-one")).toBe(false);
-    approveFirstPlan("trip-one");
-    expect(takeFirstPlanApproval("trip-two")).toBe(false);
-    expect(takeFirstPlanApproval("trip-one")).toBe(true);
-    expect(takeFirstPlanApproval("trip-one")).toBe(false);
+    expect(takeFirstPlanApproval("trip-one")).toBeUndefined();
+    approveFirstPlan("trip-one", TRIP_CONSENT_VERSION);
+    expect(takeFirstPlanApproval("trip-two")).toBeUndefined();
+    expect(takeFirstPlanApproval("trip-one")).toBe(TRIP_CONSENT_VERSION);
+    expect(takeFirstPlanApproval("trip-one")).toBeUndefined();
+  });
+
+  it("handles a send rejection by code when the server message is redacted", () => {
+    expect(tripSendRejected({ data: { code: "invalid_input" } })).toBe(true);
+    expect(tripSendRejected({ data: { code: "rate_limited" } })).toBe(false);
+    expect(tripSendRejected(new Error("current trip consent is required"))).toBe(false);
   });
 
   it("requires a fresh click after the plan approval expires", () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1000);
     try {
-      approveFirstPlan("trip-one");
+      approveFirstPlan("trip-one", TRIP_CONSENT_VERSION);
       now.mockReturnValue(61_000);
-      expect(takeFirstPlanApproval("trip-one")).toBe(false);
+      expect(takeFirstPlanApproval("trip-one")).toBeUndefined();
     } finally {
       now.mockRestore();
     }
@@ -1309,17 +1316,20 @@ describe("making a change on the phone", () => {
 
   it("refuses without touching the plan, and applies with the plan before kept so Undo restores it exactly", async () => {
     const trip = stored();
+    const plan = vi.fn(async () => ({
+      seed: "seed-1",
+      plan: { ...fullPlan, unmet: [{ what: "change", detail: "change_no_replacement", choices: ["keep_plan"] }] },
+    }));
     const refusal = await requestChange({
       trip,
       party,
       settings,
       ops: [{ op: "quieter" }],
-      plan: async () => ({
-        seed: "seed-1",
-        plan: { ...fullPlan, unmet: [{ what: "change", detail: "change_no_replacement", choices: ["keep_plan"] }] },
-      }),
+      consentVersion: TRIP_CONSENT_VERSION,
+      plan,
     });
     expect(refusal.kind).toBe("refused");
+    expect(plan).toHaveBeenCalledWith(expect.objectContaining({ consentVersion: TRIP_CONSENT_VERSION }));
 
     const moved = [{ slot: "d1.open1", was: "a", now: "z", why: "drawn_quieter" }];
     const next: Plan = {
@@ -1330,7 +1340,7 @@ describe("making a change on the phone", () => {
         items: d.items.map((i) => (i.kind === "stop" && i.slot === "d1.open1" ? { ...i, place: place("z") } : i)),
       })),
     };
-    const result = await requestChange({ trip, party, settings, ops: [{ op: "quieter" }], plan: async () => ({ seed: "seed-1", plan: next }) });
+    const result = await requestChange({ trip, party, settings, consentVersion: TRIP_CONSENT_VERSION, ops: [{ op: "quieter" }], plan: async () => ({ seed: "seed-1", plan: next }) });
     if (result.kind !== "applied") throw new Error("expected applied");
     const data = commitChange({ version: 1, parties: [party], trips: [trip] }, "tr1", result, { saidAs: "Quieter", ops: [{ op: "quieter" }] });
     const changed = data.trips[0]!;

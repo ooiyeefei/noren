@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { TRIP_CONSENT_VERSION } from "../src/lib/trip/consent";
 import { anyApi, type ApiFromModules } from "convex/server";
 import { afterEach, expect, it, vi } from "vitest";
 import * as modelFactory from "../src/lib/ai/claim-extractor";
@@ -183,7 +184,13 @@ it("keeps a planned, interpreted and shared party out of the public surfaces and
       Promise.all(
         (Object.keys(schema.tables) as (keyof typeof schema.tables)[])
           .filter((table) => table !== "rateLimit" && table !== "tripShare")
-          .map((table) => ctx.db.query(table).take(100)),
+          .map(async (table) => {
+            if (table !== "person") return ctx.db.query(table).take(100);
+            return (await ctx.db.query("person").take(100)).map((person) => ({
+              ...person,
+              tripConsent: undefined,
+            }));
+          }),
       ),
     );
   const otherDraw = () => otherCaller.mutation(api.connector.omikujiToday, { regionId: home.id });
@@ -201,11 +208,13 @@ it("keeps a planned, interpreted and shared party out of the public surfaces and
 
   const { plan, seed } = await caller.action(functions.tripActions.plan, {
     request: buildTripRequest(trip, party, tripRegion),
+    consentVersion: TRIP_CONSENT_VERSION,
     seed: "private-plan-seed",
   });
   expect(seed).toBe("private-plan-seed");
   expect(
     await caller.action(functions.tripActions.interpret, {
+      consentVersion: TRIP_CONSENT_VERSION,
       messages: [{ role: "user", text: "My mum needs no stairs. private-chat-person" }],
       outline: [],
       language: "en",
@@ -240,6 +249,10 @@ it("keeps a planned, interpreted and shared party out of the public surfaces and
   }
   expect(await exposure()).toEqual(previousExposure);
   expect(await ordinaryRows()).toEqual(previousRows);
+  expect(await b.run(async (ctx) => (await ctx.db.get("person", organiser))?.tripConsent)).toEqual({
+    version: TRIP_CONSENT_VERSION,
+    at: expect.any(Number),
+  });
   expect(await otherDraw()).toEqual(previousDraw);
 
   const [row] = await b.run((ctx) => ctx.db.query("tripShare").take(2));

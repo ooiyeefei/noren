@@ -666,6 +666,7 @@ describe("people.deleteMine", () => {
           publicProfileUrl: "https://example.com/aiko",
           verifiedAt: 1,
           verifiedBy: steward,
+          tripConsent: { version: "2026-11-24", at: 2 },
         }),
       );
 
@@ -973,7 +974,30 @@ describe("people.deleteMine", () => {
     });
   });
 
-  it("leaves rate limit rows in place, and they hold an id only", async () => {
+  it("deletes all five trip counters only for the departing account", async () => {
+    const { b, leaving, member, other } = await world();
+    const prefixes = [
+      "trip:plan:minute",
+      "trip:plan:day",
+      "trip:interpret:minute",
+      "trip:interpret:day",
+      "trip:share:day",
+    ];
+    const otherKeys = prefixes.map((prefix) => `${prefix}:${other}`);
+    await b.run(async (ctx) => {
+      for (const key of [...prefixes.map((prefix) => `${prefix}:${member}`), ...otherKeys]) {
+        await ctx.db.insert("rateLimit", { key, windowStart: 1, count: 1 });
+      }
+    });
+
+    await leaving.mutation(api.people.deleteMine, {});
+    await finish(b);
+
+    const limits = await b.run((ctx) => ctx.db.query("rateLimit").take(11));
+    expect(limits.map(({ key }) => key).sort()).toEqual(otherKeys.sort());
+  });
+
+  it("keeps rate limit rows for other features", async () => {
     const { b, leaving, member, placeId } = await world();
     await leaving.mutation(api.stories.add, { placeId, body: "A fictional story.", lang: "en" });
 

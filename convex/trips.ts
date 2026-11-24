@@ -4,6 +4,7 @@ import { isoWeekKey, previousWeekKey } from "../src/lib/draw";
 import { MAP_PLACE_LIMIT } from "../src/lib/domain/constants";
 import { cellsAround } from "../src/lib/geo/geohash";
 import { distanceMetres } from "../src/lib/overture/dedupe";
+import { TRIP_CONSENT_VERSION } from "../src/lib/trip/consent";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, query, type QueryCtx } from "./_generated/server";
 import { isPublicSafeClaim, publicStoriesAllowed } from "./lib/access";
@@ -34,10 +35,16 @@ export async function requireTrip(ctx: QueryCtx): Promise<Doc<"person">> {
 }
 
 export const begin = internalMutation({
-  args: { kind: v.union(v.literal("plan"), v.literal("interpret")) },
+  args: {
+    kind: v.union(v.literal("plan"), v.literal("interpret")),
+    consentVersion: v.optional(v.string()),
+  },
   returns: v.null(),
-  handler: async (ctx, { kind }) => {
+  handler: async (ctx, { kind, consentVersion }) => {
     const person = await requireTrip(ctx);
+    if (consentVersion !== TRIP_CONSENT_VERSION) {
+      throw appError("invalid_input", "current trip consent is required");
+    }
     if (kind === "interpret" && !aiConfig("plan", process.env).ok) {
       throw appError("conflict", "trip interpretation is unavailable");
     }
@@ -54,6 +61,9 @@ export const begin = internalMutation({
         now,
       });
       if (!result.ok) throw appError("rate_limited", "too many trip requests just now");
+    }
+    if (person.tripConsent?.version !== consentVersion) {
+      await ctx.db.patch("person", person._id, { tripConsent: { version: consentVersion, at: now } });
     }
     return null;
   },

@@ -7,6 +7,7 @@ import { isoWeekKey, previousWeekKey } from "../src/lib/draw/time";
 import { cellOf } from "../src/lib/geo/geohash";
 import { getRegionConfig } from "../src/lib/region/registry";
 import * as engine from "../src/lib/trip";
+import { TRIP_CONSENT_VERSION } from "../src/lib/trip/consent";
 import { fillGuesses } from "../src/lib/trip/request";
 import type { Plan, TripRequest } from "../src/lib/trip/types";
 import {
@@ -17,6 +18,7 @@ import {
   newBackend,
   type Backend,
 } from "../tests/convex/fixtures";
+import type { Doc } from "./_generated/dataModel";
 import * as region from "./lib/region";
 import schema from "./schema";
 
@@ -86,6 +88,49 @@ afterEach(() => {
 });
 
 describe("trip access and planning", () => {
+  it("requires current consent for planning and interpretation and keeps the first acceptance time", async () => {
+    const b = await setup();
+    vi.stubEnv("REGIONS_PREVIEW", tripRegion.id);
+    const model = mockTripModel();
+    const caller = b.as("member");
+    const version = TRIP_CONSENT_VERSION;
+    const consent = () => b.t.run(async (ctx) => {
+      const person = await ctx.db.get("person", b.member);
+      return person?.tripConsent ?? null;
+    });
+
+    const { messages, outline, language } = interpretation;
+    for (const consentVersion of [undefined, "older-wording"]) {
+      const args = consentVersion === undefined ? {} : { consentVersion };
+      await expect(caller.action(actions.plan, { request: request(), ...args })).rejects.toMatchObject(
+        refusal("invalid_input"),
+      );
+      await expect(caller.action(actions.interpret, { messages, outline, language, ...args })).rejects.toMatchObject(
+        refusal("invalid_input"),
+      );
+    }
+    expect(await consent()).toBeNull();
+    expect(model).not.toHaveBeenCalled();
+    expect(await b.t.run((ctx) => ctx.db.query("rateLimit").take(10))).toEqual([]);
+
+    await caller.action(actions.plan, { request: request(), consentVersion: version });
+    const first = await consent();
+    expect(first).toEqual({ version, at: expect.any(Number) });
+
+    // Advance past the saved timestamp so an accidental rewrite would be visible.
+    await vi.waitUntil(() => Date.now() > first!.at, { interval: 1 });
+    await caller.action(actions.interpret, { ...interpretation, consentVersion: version });
+    expect(await consent()).toEqual(first);
+
+    await b.t.run((ctx) => ctx.db.patch("person", b.member, {
+      tripConsent: { version: "older-wording", at: first!.at },
+    }));
+    await caller.action(actions.interpret, { ...interpretation, consentVersion: version });
+    const updated = await consent();
+    expect(updated?.version).toBe(version);
+    expect(updated?.at).toBeGreaterThan(first!.at);
+  });
+
   it.each(["off", "trial"] as const)(
     "hides %s trips from everyone outside the trial",
     async (mode) => {
@@ -93,7 +138,7 @@ describe("trip access and planning", () => {
       const refused = [b.t, b.as("ghost"), b.as("member")];
       if (mode === "off") refused.push(b.as("trial"));
       for (const caller of refused) {
-        await expect(caller.action(actions.plan, { request: null })).rejects.toMatchObject(
+        await expect(caller.action(actions.plan, { consentVersion: TRIP_CONSENT_VERSION, request: null })).rejects.toMatchObject(
           refusal("not_found"),
         );
       }
@@ -101,7 +146,7 @@ describe("trip access and planning", () => {
       if (mode === "trial") {
         vi.stubEnv("REGIONS_PREVIEW", tripRegion.id);
         await expect(
-          b.as("trial").action(actions.plan, { request: request() }),
+          b.as("trial").action(actions.plan, { consentVersion: TRIP_CONSENT_VERSION, request: request() }),
         ).resolves.toMatchObject({ seed: expect.any(String) });
       }
     },
@@ -109,7 +154,7 @@ describe("trip access and planning", () => {
 
   it("requires account sign-in when open", async () => {
     const b = await setup();
-    await expect(b.t.action(actions.plan, { request: request() })).rejects.toMatchObject(
+    await expect(b.t.action(actions.plan, { consentVersion: TRIP_CONSENT_VERSION, request: request() })).rejects.toMatchObject(
       refusal("unauthenticated"),
     );
   });
@@ -134,7 +179,7 @@ describe("trip access and planning", () => {
       { ...input, party: { ...input.party, label: "Private party label" } },
     ];
     for (const invalid of bad) {
-      await expect(b.as("member").action(actions.plan, { request: invalid })).rejects.toMatchObject(
+      await expect(b.as("member").action(actions.plan, { consentVersion: TRIP_CONSENT_VERSION, request: invalid })).rejects.toMatchObject(
         {
           data: {
             code: "invalid_input",
@@ -145,7 +190,7 @@ describe("trip access and planning", () => {
     }
   });
 
-  it("loads the engine anchors and returns current public stop details, writing only counters", async () => {
+  it("loads the engine anchors and returns current public stop details, writing only counters and consent", async () => {
     const b = await setup();
     vi.stubEnv("REGIONS_PREVIEW", tripRegion.id);
     const placeId = await addPlace(b, {
@@ -198,7 +243,7 @@ describe("trip access and planning", () => {
     });
     const result = await b
       .as("member")
-      .action(actions.plan, { request: request(), seed: "repeatable" });
+      .action(actions.plan, { consentVersion: TRIP_CONSENT_VERSION, request: request(), seed: "repeatable" });
     expect(result.seed).toBe("repeatable");
     expect(result.stops).toMatchObject([
       {
@@ -210,7 +255,15 @@ describe("trip access and planning", () => {
     ]);
     const after = await tableRows(b);
     expect(after.rateLimit).toHaveLength(2);
-    expect({ ...after, rateLimit: [] }).toEqual(before);
+    expect({
+      ...before,
+      rateLimit: after.rateLimit,
+      person: (before.person as Doc<"person">[]).map((person) =>
+        person._id === b.member
+          ? { ...person, tripConsent: { version: TRIP_CONSENT_VERSION, at: expect.any(Number) } }
+          : person,
+      ),
+    }).toEqual(after);
 
     await b.t.run((ctx) => ctx.db.patch("place", placeId, { visibility: "draft" }));
     await expect(
@@ -231,7 +284,7 @@ describe("trip access and planning", () => {
         windowStart: Date.now(),
       }),
     );
-    const input = { request: request() };
+    const input = { request: request(), consentVersion: TRIP_CONSENT_VERSION };
     await b.as("member").action(actions.plan, input);
     const counters = await b.t.run((ctx) => ctx.db.query("rateLimit").take(10));
     expect(counters).toContainEqual(
@@ -240,7 +293,7 @@ describe("trip access and planning", () => {
         count: limit,
       }),
     );
-    const change = { request: { ...input.request, ops: [{ op: "lighten", day: 1 }] } };
+    const change = { ...input, request: { ...input.request, ops: [{ op: "lighten", day: 1 }] } };
     await expect(b.as("member").action(actions.plan, change)).rejects.toMatchObject(
       refusal("rate_limited"),
     );
@@ -538,6 +591,7 @@ describe("trips.candidates", () => {
     });
     const plan = () =>
       b.as("member").action(actions.plan, {
+        consentVersion: TRIP_CONSENT_VERSION,
         request: request(),
         seed: "step-free-report",
       });
@@ -596,7 +650,7 @@ describe("trips.candidates", () => {
     });
     const result = await b
       .as("member")
-      .action(actions.plan, { request: request(), seed: "public" });
+      .action(actions.plan, { consentVersion: TRIP_CONSENT_VERSION, request: request(), seed: "public" });
     expect(result.plan.days.map(({ index }) => index)).toEqual([1]);
     expect(plannedStops(result.plan).map(({ place }) => place)).toEqual([
       { placeId: publicPlace, slug: "public-ipoh" },
@@ -612,7 +666,7 @@ describe("trips.candidates", () => {
       await addCandidate(b, b.member, { pin, slug: `ipoh-${index}`, story: true });
     }
     const plan = (input: TripRequest) =>
-      b.as("member").action(actions.plan, { request: input, seed: "one-redraw" });
+      b.as("member").action(actions.plan, { consentVersion: TRIP_CONSENT_VERSION, request: input, seed: "one-redraw" });
     const before = plannedStops((await plan(request())).plan);
     const target = before.find(({ slot }) => slot === "d1.open1")!;
     expect(target).toBeDefined();
@@ -654,7 +708,7 @@ describe("trips.candidates", () => {
     expect(engine.anchorsFor(input, tripRegion).map(({ near }) => near)).not.toContainEqual(
       taiping,
     );
-    const result = await b.as("member").action(actions.plan, { request: moved, seed: "new-night" });
+    const result = await b.as("member").action(actions.plan, { consentVersion: TRIP_CONSENT_VERSION, request: moved, seed: "new-night" });
     expect(result.plan.days[0]?.night).toBe("taiping");
     expect(plannedStops(result.plan).map(({ place }) => place)).toContainEqual(
       expect.objectContaining({ placeId: newStop }),
@@ -778,7 +832,7 @@ describe("trips.candidates", () => {
     expect(detailReads).toBeGreaterThanOrEqual(ids.length);
     expect(detailRanges).toBeGreaterThan(4096);
     const start = performance.now();
-    const result = await b.as("member").action(actions.plan, { request: input, seed: "dense" });
+    const result = await b.as("member").action(actions.plan, { consentVersion: TRIP_CONSENT_VERSION, request: input, seed: "dense" });
     const elapsed = performance.now() - start;
     expect(result.plan.days).toHaveLength(7);
     expect(result.stops.length).toBeGreaterThan(0);
@@ -792,6 +846,7 @@ describe("trips.candidates", () => {
 });
 
 const interpretation = {
+  consentVersion: TRIP_CONSENT_VERSION,
   messages: [{ role: "user" as const, text: "My mum needs no stairs" }],
   outline: [],
   language: "en" as const,
@@ -871,7 +926,7 @@ describe("trip interpretation", () => {
     expect(model).not.toHaveBeenCalled();
   });
 
-  it("returns vetted model output and stores only the two counters", async () => {
+  it("returns vetted model output and stores only counters and consent", async () => {
     const b = await setup();
     const model = mockTripModel();
     const before = await tableRows(b);
@@ -884,7 +939,15 @@ describe("trip interpretation", () => {
     expect(model).toHaveBeenCalledOnce();
     const after = await tableRows(b);
     expect(after.rateLimit).toHaveLength(2);
-    expect({ ...after, rateLimit: [] }).toEqual(before);
+    expect({
+      ...before,
+      rateLimit: after.rateLimit,
+      person: (before.person as Doc<"person">[]).map((person) =>
+        person._id === b.member
+          ? { ...person, tripConsent: { version: TRIP_CONSENT_VERSION, at: expect.any(Number) } }
+          : person,
+      ),
+    }).toEqual(after);
   });
 
   it("falls back to the buttons when the configured model fails", async () => {

@@ -11,6 +11,7 @@ import { travellerLabels } from "@/lib/trip/snapshot";
 import type { ChangeOp, Plan, RegionTripSettings, Stop } from "@/lib/trip/types";
 import { api } from "../../../convex/_generated/api";
 import { commitChange, dayForToday, planStops, requestChange } from "./apply-change";
+import { tripSendRejected } from "./plan-consent";
 import {
   ChangeView,
   ChangeWords,
@@ -76,7 +77,7 @@ export function ChangeContainer({
   const trip = data.trips.find((t) => t.id === id);
   const party = trip && data.parties.find((p) => p.id === trip.partyId);
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<"failed" | "offline">();
+  const [problem, setProblem] = useState<"failed" | "offline" | "invalid_input">();
   const [last, setLast] = useState<RawLast>();
   const settings = region as unknown as RegionTripSettings;
 
@@ -169,7 +170,7 @@ export function ChangeContainer({
   };
   const today = new Date().toLocaleDateString("en-CA");
 
-  async function apply(ops: ChangeOp[], saidAs: string) {
+  async function apply(ops: ChangeOp[], saidAs: string, consentVersion: string) {
     if (!trip || !party || !trip.plan) return;
     if (!online) {
       setProblem("offline");
@@ -183,6 +184,7 @@ export function ChangeContainer({
         party,
         settings,
         plan,
+        consentVersion,
         ops,
         replaced: ops.flatMap((op) => (op.op === "redraw" || op.op === "skip" ? [op.slot] : [])),
       });
@@ -193,8 +195,8 @@ export function ChangeContainer({
         update((d) => commitChange(d, trip.id, result, { saidAs, ops }));
         setLast({ kind: "applied", saidAs, moved: result.plan.moved ?? [], unmet: result.unmet });
       }
-    } catch {
-      setProblem("failed");
+    } catch (error) {
+      setProblem(tripSendRejected(error) ? "invalid_input" : "failed");
     } finally {
       setBusy(false);
     }
@@ -258,7 +260,7 @@ export function ChangeContainer({
       }}
       changes={entries}
       names={names}
-      onChange={(ops, saidAs) => void apply(ops, saidAs)}
+      onChange={(ops, saidAs, consentVersion) => void apply(ops, saidAs, consentVersion)}
       words={
         <ChangeWords
           locale={locale}
@@ -267,10 +269,15 @@ export function ChangeContainer({
           noticeSeen={noticeSeen}
           onNoticeSeen={markNoticeSeen}
           busy={busy || !online}
-          interpret={(words) =>
-            interpret({ messages: [{ role: "user", text: words }], outline, language: locale })
+          interpret={(words, consentVersion) =>
+            interpret({
+              messages: [{ role: "user", text: words }],
+              outline,
+              language: locale,
+              consentVersion,
+            })
           }
-          onApply={(op, saidAs) => void apply([op], saidAs)}
+          onApply={(op, saidAs, consentVersion) => void apply([op], saidAs, consentVersion)}
           voice={(onText) => <VoiceInput locale={locale} onText={onText} />}
         />
       }

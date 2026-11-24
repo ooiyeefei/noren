@@ -13,6 +13,7 @@ import { readLocation } from "@/lib/collection/location";
 import { format, localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { factMessages } from "@/lib/i18n/messages/facts";
 import { tripMessages } from "@/lib/i18n/messages/trip";
+import { TRIP_CONSENT_VERSION } from "@/lib/trip/consent";
 import { getRegionConfig } from "@/lib/region/registry";
 import { type StoredParty, type StoredTrip } from "@/lib/trip/storage";
 import { buildTripRequest, travellerLabels } from "@/lib/trip/snapshot";
@@ -28,7 +29,7 @@ import {
   recordDone,
   requestChange,
 } from "./apply-change";
-import { PlanConsentButton, takeFirstPlanApproval } from "./plan-consent";
+import { PlanConsentButton, takeFirstPlanApproval, tripSendRejected } from "./plan-consent";
 import { PlanView, type PlaceChoice, type StoredPlan } from "./plan-view";
 import { ShareControls } from "./share-controls";
 import { roadTowns } from "./route-step";
@@ -228,12 +229,13 @@ export function PlanContainer({
     isAuthenticated && ids.length > 0 ? { placeIds: ids } : "skip",
   );
 
-  async function makePlan(next: StoredTrip, from: StoredParty, fresh: boolean) {
+  async function makePlan(next: StoredTrip, from: StoredParty, fresh: boolean, consentVersion: string) {
     setBusy(true);
     setPlanError(null);
     try {
       const result = await plan({
         request: buildTripRequest(next, from, settings),
+        consentVersion,
         ...(fresh ? {} : next.seed ? { seed: next.seed } : {}),
       });
       update((d) => ({
@@ -258,7 +260,8 @@ export function PlanContainer({
   useEffect(() => {
     if (!trip || !party || trip.plan || isLoading || !isAuthenticated || !online) return;
     const send = window.setTimeout(() => {
-      if (takeFirstPlanApproval(trip.id)) void makePlan(trip, party, false);
+      const consentVersion = takeFirstPlanApproval(trip.id);
+      if (consentVersion !== undefined) void makePlan(trip, party, false, consentVersion);
     }, 0);
     return () => window.clearTimeout(send);
     // makePlan reads the latest trip and party through the arguments given here.
@@ -307,7 +310,11 @@ export function PlanContainer({
             <p role="alert" className="font-bold text-beni">
               {m.planFailed}
             </p>
-            <ErrorMessage error={planError} locale={locale} />
+            {tripSendRejected(planError) ? (
+              <p>{m.tripSendRejected}</p>
+            ) : (
+              <ErrorMessage error={planError} locale={locale} />
+            )}
           </>
         ) : busy || !online ? (
           <p role="status">{!online ? m.planOffline : m.planMaking}</p>
@@ -317,7 +324,7 @@ export function PlanContainer({
             locale={locale}
             label={planError ? m.planRetry : m.planNow}
             disabled={!online || isLoading || !isAuthenticated}
-            onClick={() => void makePlan(trip, party, false)}
+            onClick={(consentVersion) => void makePlan(trip, party, false, consentVersion)}
           />
         )}
         {back}
@@ -338,6 +345,7 @@ export function PlanContainer({
     }
     setBusy(true);
     setProblem(undefined);
+    setPlanError(null);
     setRefused(undefined);
     try {
       const result = await requestChange({
@@ -345,14 +353,16 @@ export function PlanContainer({
         party,
         settings,
         plan,
+        consentVersion: TRIP_CONSENT_VERSION,
         ops,
         replaced: replaced.map((r) => r.slot),
       });
       // A refused change leaves the plan on screen, and on the phone, exactly as it was.
       if (result.kind === "refused") setRefused(result.unmet);
       else update((d) => commitChange(d, trip.id, result, { saidAs, ops }, newPins.current));
-    } catch {
-      setProblem("failed");
+    } catch (error) {
+      if (tripSendRejected(error)) setPlanError(error);
+      else setProblem("failed");
     } finally {
       setBusy(false);
     }
@@ -374,7 +384,7 @@ export function PlanContainer({
     return placeId ? stopInfoFor(placeId) : { state: "spot" };
   };
 
-  return (
+  const planView = (
     <PlaceListLoader regionId={regionId} on={wantPlaces}>
       {(places) => (
         <PlanView
@@ -444,7 +454,7 @@ export function PlanContainer({
           }
           onAddDay={
             trip.days < 7 && online
-              ? () => void makePlan({ ...trip, ...withDays(trip, trip.days + 1) }, party, true)
+              ? () => void makePlan({ ...trip, ...withDays(trip, trip.days + 1) }, party, true, TRIP_CONSENT_VERSION)
               : undefined
           }
           onAddPin={(pin) => {
@@ -463,9 +473,18 @@ export function PlanContainer({
             newPins.current.set(full.id, pin.label);
             void change([{ op: "add_pin", pin: full }], m.pinSave);
           }}
-          onReplan={done.length === 0 ? () => void makePlan(trip, party, true) : undefined}
+          onReplan={done.length === 0 ? () => void makePlan(trip, party, true, TRIP_CONSENT_VERSION) : undefined}
         />
       )}
     </PlaceListLoader>
+  );
+
+  return (
+    <>
+      {tripSendRejected(planError) && (
+        <p role="alert" className="font-bold text-beni">{m.tripSendRejected}</p>
+      )}
+      {planView}
+    </>
   );
 }

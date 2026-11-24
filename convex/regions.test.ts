@@ -17,6 +17,7 @@ import {
   newBackend,
 } from "../tests/convex/fixtures";
 import { emptySubmit, scriptedModel } from "../tests/fixtures/planner";
+import { TRIP_CONSENT_VERSION } from "../src/lib/trip/consent";
 import * as region from "./lib/region";
 import { api as generatedApi, internal } from "./_generated/api";
 
@@ -531,6 +532,7 @@ it("gates public trip stops and shared trip codes and checks all stops before sh
   const tripRegion = region.regionConfig(malaysiaRegion);
   const plan = () =>
     steward.action(api.tripActions.plan, {
+      consentVersion: TRIP_CONSENT_VERSION,
       request: {
         ...malaysiaArgs,
         start: "ipoh",

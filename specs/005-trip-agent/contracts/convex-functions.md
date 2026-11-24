@@ -38,7 +38,9 @@ Hides a report or a fact taken from a post. Writes an audit entry. A takedown wi
 
 Every function below answers "not found" when the switch is `"off"`, and when it is `"trial"` and the caller's `person.trials` does not hold `"trip"`. The one exception is `tripShare.read`, which anyone with the code may call whenever the switch is not `"off"`. The order of checks is the planner's (`convex/planner.ts`): the switch, then sign-in, then the trial, then the limits, so a stranger learns nothing.
 
-### `trips.plan({ request })` action
+### `trips.plan({ request, consentVersion })` action
+
+`consentVersion` is `TRIP_CONSENT_VERSION` from `src/lib/trip/consent.ts`, sent when the organiser presses a button whose text says what is sent and where. `trips.begin` refuses a plan or interpret call without the current version (`invalid_input`) and records `person.tripConsent = { version, at }` the first time a version is accepted; account deletion clears it (constitution 3.1.0, Malaysian sensitive data).
 
 `request` is the engine's `TripRequest` ([engine.md](./engine.md)) without `World`. The action validates sizes, loads the region's settings, reads the candidates for each town on the route through the internal query `trips.candidates`, runs the engine with a random seed (or the seed given), and returns the `Plan` and the seed with each stop's public details: names, category, pin, whether it is confirmed, and up to two quotes with their sources (members' stories first, then found posts, as on the place page). It calls no model. It writes nothing but its rate-limit counters: a trip's draw does not add to the exposure counts that tilt other people's draws, so a party's plan changes nothing anyone else is shown (FR-334). It reads those counts, so quiet places still get their turn.
 
@@ -52,7 +54,7 @@ The present public details of the stops of a plan kept on the device, at most 84
 
 True when the caller can open trips. The account menu shows "Plan a trip" from it.
 
-### `trips.interpret({ messages, outline, language })` action
+### `trips.interpret({ messages, outline, language, consentVersion })` action
 
 Turns the organiser's words into suggestions. `messages` is at most 8 turns of 700 characters, as for the planner. `outline` is the plan as day, slot, place name and kind, or empty before a plan exists. Returns:
 
