@@ -754,7 +754,7 @@ async function attachAccepted(
   const untried = async (kind: "story" | "tip", remaining: number) => {
     const rows = await ctx.db
       .query("mentionCandidate")
-      .withIndex("by_status_and_attachError_and_verdict_kind_and_postedAt_and_checkedAt", (q) =>
+      .withIndex("by_status_attachError_verdictKind_postedAt_checkedAt", (q) =>
         q.eq("status", "accepted").eq("attachError", undefined).eq("verdict.kind", kind),
       )
       .order("desc")
@@ -766,7 +766,7 @@ async function attachAccepted(
     const before = rows.filter((row) => row.postedAt !== postedAt);
     const tied = await ctx.db
       .query("mentionCandidate")
-      .withIndex("by_status_and_attachError_and_verdict_kind_and_postedAt_and_checkedAt", (q) =>
+      .withIndex("by_status_attachError_verdictKind_postedAt_checkedAt", (q) =>
         q
           .eq("status", "accepted")
           .eq("attachError", undefined)
