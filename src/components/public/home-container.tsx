@@ -20,6 +20,7 @@ import {
   exploreItems,
   fitForFilter,
   fitForNeighbourhood,
+  STORIES_FILTER,
   guideIsVisible,
   type MapFit,
   type MapView,
@@ -35,10 +36,21 @@ import {
   regionAtCentre,
   townMarkers,
 } from "@/components/map/map-helpers";
+import type { MapStart } from "@/lib/region/start";
 import { useReportRegionName } from "@/components/layout/region-name";
 import { HomeView, PublicLoading, exploreHeading } from "./home-view";
 import { toHomeModel, type PlaceSummaryLike, type PublicRegionProps } from "./mapping";
 import { useToday } from "./use-today";
+
+/** A chip the panel offers: all, with stories, demo, or one of the panel region's categories. */
+function chipExists(panel: PublicRegionProps, key: string): boolean {
+  return (
+    key === "" ||
+    key === STORIES_FILTER ||
+    key === "demo" ||
+    Boolean(panel.categories?.some((entry) => entry.key === key))
+  );
+}
 
 /**
  * The same object for as long as the value is deeply equal. Convex may hand back an equal query
@@ -89,6 +101,8 @@ export function HomeContainer(props: {
   regions?: Readonly<Record<string, PublicRegionProps>>;
   /** What the search box holds when the page opens. */
   initialSearch?: string;
+  /** Where the map opens, from the address (`?at=`); the home region's centre when absent. */
+  start?: MapStart;
 }) {
   return (
     <PublicQueryBoundary locale={props.locale} insideMain>
@@ -102,13 +116,15 @@ function HomeQuery({
   region,
   regions,
   initialSearch = "",
+  start,
 }: {
   locale: Locale;
   region: PublicRegionProps;
   regions?: Readonly<Record<string, PublicRegionProps>>;
   initialSearch?: string;
+  start?: MapStart;
 }) {
-  const [category, setCategory] = useState("");
+  const [rawCategory, setCategory] = useState("");
   const [search, setSearch] = useState(initialSearch);
   const [view, setView] = useState<MapView | null>(null);
   const [fitTo, setFitTo] = useState<MapFit | null>(null);
@@ -128,7 +144,9 @@ function HomeQuery({
   );
   // The map loads what is in view: the cells of the view, asked for after each move. Places already
   // loaded stay while the next answer arrives (mergeLoaded), so dragging never empties the map.
-  const opening = useMemo(() => openingBounds(region.center), [region.center]);
+  const startCentre = start ?? region.center;
+  const opening = useMemo(() => openingBounds(startCentre), [startCentre]);
+  const mapRegion = useMemo(() => ({ ...region, center: startCentre }), [region, startCentre]);
   const bounds = view ?? opening;
   const cells = useMemo(() => (bounds ? cellsForView(bounds) : null), [bounds]);
   const searching = normaliseSearch(search) !== "";
@@ -151,7 +169,18 @@ function HomeQuery({
   );
   const searched = useStable(useQueries(searchQueries));
   const zoomedOut = view !== null && cells === null && !searching;
-  const categoryKey = region.categories?.some((entry) => entry.key === category) ? category : "";
+  const allRegions = useMemo(() => regions ?? { [region.regionId]: region }, [regions, region]);
+  // The heading and the header follow the map: the region its centre is inside, or no place name.
+  // Until the map reports a view it is looking where it opened.
+  const looking = regionAtCentre(view === null ? startCentre : view.center, allRegions);
+  const lookingName = looking === null ? null : looking.regionName;
+  useReportRegionName(lookingName);
+  // The panel (chips, latest stories, neighbourhoods) follows the region in view. Over no region, or
+  // zoomed out to towns, it stays on the home region as before. One query each, keyed by region id.
+  const panel = zoomedOut || looking === null ? region : looking;
+  const category = chipExists(panel, rawCategory) ? rawCategory : "";
+  const latest = useQuery(api.stories.latest, { regionId: panel.regionId });
+  const categoryKey = panel.categories?.some((entry) => entry.key === category) ? category : "";
   const answer = useStable(
     useQuery(
       api.places.inCells,
@@ -180,17 +209,10 @@ function HomeQuery({
     () => (zoomedOut && coverage ? townMarkers(coverage, locale, region.defaultLocale) : []),
     [zoomedOut, coverage, locale, region.defaultLocale],
   );
-  // The heading and the header follow the map: the region its centre is inside, or no place name.
-  // Until the map reports a view it is looking at the home region.
-  const looking =
-    view === null ? region : regionAtCentre(view.center, regions ?? { [region.regionId]: region });
-  const lookingName = looking === null ? null : looking.regionName;
-  useReportRegionName(lookingName);
-  const latest = useQuery(api.stories.latest, { regionId: region.regionId });
   const today = useToday();
   const neighbourhoods = useQuery(
     api.missions.forRegion,
-    today === null ? "skip" : { regionId: region.regionId, now: today },
+    today === null ? "skip" : { regionId: panel.regionId, now: today },
   );
   const all = useMemo(
     () => toHomeModel(places ?? [], locale, region, regions),
@@ -239,7 +261,8 @@ function HomeQuery({
   return (
     <HomeView
       locale={locale}
-      region={region}
+      region={mapRegion}
+      panel={panel}
       model={model}
       category={category}
       onCategoryChange={(next) => {

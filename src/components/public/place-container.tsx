@@ -25,6 +25,7 @@ import {
 } from "./place-view";
 import { useShownAs } from "@/components/place/use-shown-as";
 import { useToday } from "./use-today";
+import { useReportRegionName } from "@/components/layout/region-name";
 import { placeHeading, type PublicRegionProps } from "./mapping";
 import { readPlaceTab, type PlaceTabState } from "@/lib/place/tabs";
 import { parseAnswers, starterText } from "@/lib/slip/question";
@@ -130,6 +131,8 @@ function PlaceQuery({
   // attribution, what is on) from the place's own region, not from the one the server started in.
   const place = useQuery(api.places.bySlug, { slug });
   const region = (place && regions?.[place.regionId]) ?? home;
+  // The header beside the logo names the place's own region, once the place is known.
+  useReportRegionName(place ? region.regionName : undefined);
   const args = place ? { placeId: place._id } : "skip";
   const sources = useQuery(api.sources.listForPlace, args);
   const stories = useQuery(api.stories.listForPlace, args);

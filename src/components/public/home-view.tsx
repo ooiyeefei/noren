@@ -54,6 +54,7 @@ export function PublicLoading({ locale }: { locale: Locale }) {
 export function HomeView({
   locale,
   region,
+  panel = region,
   model,
   category = "",
   search = "",
@@ -85,6 +86,11 @@ export function HomeView({
 }: {
   locale: Locale;
   region: PublicRegionProps;
+  /**
+   * The region whose categories the chips show and whose stories are listed: the one the map is
+   * inside. The map itself stays on `region`. Defaults to `region`.
+   */
+  panel?: PublicRegionProps;
   model: ReturnType<typeof toHomeModel>;
   category?: string;
   search?: string;
@@ -126,7 +132,7 @@ export function HomeView({
   const sheet = guideVisible && requestedSheet === "peek" ? "half" : requestedSheet;
   const pointerStart = useRef<number | null>(null);
   const dragged = useRef(false);
-  const categories = categoryOptions(region, locale);
+  const categories = categoryOptions(panel, locale);
   const chips = [
     { key: "", label: m.all },
     { key: STORIES_FILTER, label: m.storiesChip },
@@ -280,7 +286,15 @@ export function HomeView({
               </div>
             )}
             {!searching && latest && latest.length > 0 && (
-              <LatestStories locale={locale} region={region} entries={latest} />
+              <LatestStories locale={locale} region={panel} entries={latest} />
+            )}
+            {!searching && latest && latest.length === 0 && (
+              <section aria-labelledby="latest-stories" className="pb-3">
+                <h2 id="latest-stories" className="px-4 pb-2 text-[15px] font-bold">
+                  {m.latestStories}
+                </h2>
+                <p className="px-4 text-[13px]">{m.noLatestStories}</p>
+              </section>
             )}
             {!searching && neighbourhoods && (
               <NeighbourhoodList

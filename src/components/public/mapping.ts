@@ -22,6 +22,9 @@ export type PublicRegionProps = {
   regionId: string;
   /** The region's name in the reader's language (its default language when it has none). */
   regionName?: string;
+  /** The region's name in each language it has one, and its towns: a place page says which it is in. */
+  regionNames?: RegionConfig["name"];
+  towns?: RegionConfig["towns"];
   defaultLocale: string;
   nameFallback: RegionConfig["nameFallback"];
   center: { lat: number; lng: number; zoom: number };
@@ -160,6 +163,8 @@ export function publicRegionProps(region: RegionConfig, locale: Locale): PublicR
   return {
     regionId: region.id,
     regionName: region.name[locale] ?? region.name[region.defaultLocale] ?? region.id,
+    regionNames: region.name,
+    ...(region.towns ? { towns: region.towns } : {}),
     categories: region.categories,
     defaultLocale: region.defaultLocale,
     nameFallback: region.nameFallback,

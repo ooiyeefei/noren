@@ -29,6 +29,7 @@ export const publicMessages = defineMessages({
     noStoriesYet:
       "まだ誰も話を共有していません。行ったことのある場所を開いて、最初の話を共有してください。",
     latestStories: "新しい話",
+    noLatestStories: "このあたりには、まだ共有された話がありません。",
     writtenBy: "書いた人：{name}",
     postSharedBy: "{platform}の投稿を共有：{name}",
     linkSharedBy: "リンクを共有：{name}",
@@ -117,6 +118,7 @@ export const publicMessages = defineMessages({
     noStoriesYet:
       "No one has shared a story yet. Open a place you have been to and share the first one.",
     latestStories: "Latest stories",
+    noLatestStories: "No one has shared a story in this area yet.",
     writtenBy: "By {name}",
     postSharedBy: "{platform} post shared by {name}",
     linkSharedBy: "Link shared by {name}",

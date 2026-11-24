@@ -1,6 +1,8 @@
 import { removalHref } from "@/components/takedown/takedown-logic";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { ChevronLeft } from "lucide-react";
+import { townFor } from "@/lib/region/where";
+import { mapAt } from "@/lib/region/start";
 import { NorenHeader } from "@/components/place/noren-header";
 import { PlaceActions } from "@/components/place/place-actions";
 import type { AddStoryActions } from "@/components/place/add-story";
@@ -145,6 +147,7 @@ export function PlaceView({
       </>
     );
   const heading = placeHeading(place.names, locale, region);
+  const where = townFor(region, place.pin, locale);
   const stampHere = (from: NonNullable<PressedFrom>) =>
     stamp && (
       <PlaceStamp
@@ -321,9 +324,9 @@ export function PlaceView({
           {place.category
             ? format(ui.categoryInRegion, {
                 category: labelForCategory(region, place.category, locale),
-                region: ui.regionName,
+                region: where,
               })
-            : format(ui.inRegion, { region: ui.regionName })}
+            : format(ui.inRegion, { region: where })}
         </p>
         <p>
           {place.dataSources.length > 0 && <>{checkText.fromOpenData} </>}
@@ -383,7 +386,7 @@ export function PlaceView({
       >
         <a
           className="inline-flex min-h-11 items-center gap-1 text-ai underline"
-          href={localePath(locale, "/map")}
+          href={localePath(locale, mapAt(place.pin))}
         >
           <ChevronLeft aria-hidden="true" className="size-5" />
           {ui.backToMap}

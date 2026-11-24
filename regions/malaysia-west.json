@@ -59,7 +59,7 @@
     {
       "key": "cafe",
       "labels": {
-        "ja": "カフェ・喫茶店",
+        "ja": "カフェ",
         "en": "Café"
       },
       "labelsReviewedBy": null,
@@ -68,8 +68,8 @@
     {
       "key": "bar",
       "labels": {
-        "ja": "バー・居酒屋",
-        "en": "Bar or izakaya"
+        "ja": "バー",
+        "en": "Bar"
       },
       "labelsReviewedBy": null,
       "focus": true
@@ -104,7 +104,7 @@
     {
       "key": "stay",
       "labels": {
-        "ja": "宿・ホテル・旅館",
+        "ja": "宿・ホテル",
         "en": "Place to stay"
       },
       "labelsReviewedBy": null,
@@ -113,8 +113,8 @@
     {
       "key": "bath",
       "labels": {
-        "ja": "銭湯・温泉",
-        "en": "Public bath or hot spring"
+        "ja": "温泉",
+        "en": "Hot spring"
       },
       "labelsReviewedBy": null,
       "focus": true
