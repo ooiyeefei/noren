@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { query } from "./_generated/server";
 import { checkablePlace, isOpenListing } from "./lib/access";
+import { isRegionOn } from "./lib/region";
 import { writeAudit } from "./lib/audit";
 import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
@@ -114,6 +115,7 @@ export const listOpenReports = query({
   returns: v.array(reportView),
   handler: async (ctx, { regionId }) => {
     await requireRole(ctx, ["steward"]);
+    if (!isRegionOn(regionId)) return [];
     const reports = await ctx.db
       .query("placeCheck")
       .withIndex("by_regionId_and_verdict_and_reviewedAt", (q) =>
@@ -124,7 +126,7 @@ export const listOpenReports = query({
     for (const check of reports) {
       const place = await ctx.db.get("place", check.placeId);
       const reporter = await ctx.db.get("person", check.personId);
-      if (place === null || check.problem === undefined) continue;
+      if (place === null || !isRegionOn(place.regionId) || check.problem === undefined) continue;
       views.push({
         _id: check._id,
         placeId: place._id,
@@ -148,9 +150,12 @@ export const resolveReport = mutation({
   handler: async (ctx, { checkId, outcome }) => {
     const steward = await requireRole(ctx, ["steward"]);
     const check = await ctx.db.get("placeCheck", checkId);
-    if (check === null || check.verdict !== "something_wrong") {
+    if (check === null || !isRegionOn(check.regionId) || check.verdict !== "something_wrong") {
       throw appError("not_found", "report not found");
     }
+    const place = await ctx.db.get("place", check.placeId);
+    if (place !== null && !isRegionOn(place.regionId))
+      throw appError("not_found", "report not found");
     if (check.reviewedAt !== undefined)
       throw appError("conflict", "this report was already decided");
     await ctx.db.patch("placeCheck", checkId, {
@@ -158,7 +163,6 @@ export const resolveReport = mutation({
       reviewedAt: Date.now(),
       outcome,
     });
-    const place = await ctx.db.get("place", check.placeId);
     if (outcome === "hidden" && place !== null && place.visibility !== "draft") {
       await ctx.db.patch("place", place._id, {
         visibility: "draft",

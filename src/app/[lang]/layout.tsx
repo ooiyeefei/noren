@@ -4,6 +4,7 @@ import { BIZ_UDPGothic, Geist_Mono, Shippori_Mincho_B1 } from "next/font/google"
 import { DraftsProvider } from "@/components/drafts/drafts";
 import { DocumentLinksProvider } from "@/components/layout/document-links";
 import { FeatureLinksProvider } from "@/components/layout/features";
+import { RegionNameProvider } from "@/components/layout/region-name";
 import { SiteHeader } from "@/components/layout/site-header";
 import { documentsPublished } from "@/components/legal/documents";
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider";
@@ -82,12 +83,14 @@ export default async function RootLayout({ children }: LayoutProps<"/[lang]">) {
                   walk={region.features.walk}
                   postcard={region.features.postcard}
                 >
-                  <SiteHeader
-                    locale={locale}
-                    regionName={region.name[locale] ?? region.id}
-                    locales={region.locales}
-                  />
-                  {children}
+                  <RegionNameProvider>
+                    <SiteHeader
+                      locale={locale}
+                      regionName={region.name[locale] ?? region.id}
+                      locales={region.locales}
+                    />
+                    {children}
+                  </RegionNameProvider>
                 </FeatureLinksProvider>
               </DocumentLinksProvider>
             </DraftsProvider>

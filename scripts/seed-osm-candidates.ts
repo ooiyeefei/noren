@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { geoUserAgent } from "../src/lib/geo";
 import { categoryForTags } from "../src/lib/osm/categories";
-import { buildQuery, parseOverpass } from "../src/lib/osm/overpass";
+import { buildQuery, importBoxes, insideImportBox, parseOverpass } from "../src/lib/osm/overpass";
 import { namesFromTags } from "../src/lib/osm/tags";
 import { getRegionConfig } from "../src/lib/region/registry";
 import { createCliRunner, type ConvexRunner } from "./lib/convex-run";
@@ -73,76 +73,93 @@ export async function runSeed(
     );
   }
   try {
-    const query = buildQuery({ bbox: region.bbox, timeoutSeconds: 120 });
-    const cachePath = resolve(
-      directory,
-      overpassCacheKey({
-        region: region.id,
-        date: new Date(now).toISOString().slice(0, 10),
-        endpoint: flags.endpoint,
-        query,
-      }),
-    );
-    let json: unknown;
-    if (!flags.refresh) {
-      try {
-        json = JSON.parse(await readFile(cachePath, "utf8"));
-        options.log("Using today's cached Overpass response");
-      } catch (error) {
-        if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT"))
-          throw new Error("Cannot read daily OSM cache; inspect it before retrying", {
-            cause: error,
-          });
+    const seen = new Set<string>();
+    for (const { id, bbox } of importBoxes(region)) {
+      const query = buildQuery({ bbox, timeoutSeconds: 120 });
+      const cachePath = resolve(
+        directory,
+        overpassCacheKey({
+          region: region.id,
+          date: new Date(now).toISOString().slice(0, 10),
+          endpoint: flags.endpoint,
+          query,
+        }),
+      );
+      let json: unknown;
+      if (!flags.refresh) {
+        try {
+          json = JSON.parse(await readFile(cachePath, "utf8"));
+          options.log("Using today's cached Overpass response");
+        } catch (error) {
+          if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT"))
+            throw new Error("Cannot read daily OSM cache; inspect it before retrying", {
+              cause: error,
+            });
+        }
       }
-    }
-    if (json === undefined) {
-      json = await fetchOverpass({
-        query,
-        endpoint: flags.endpoint,
-        userAgent,
-        fetch: options.fetch,
-        sleep: options.sleep,
+      if (json === undefined) {
+        json = await fetchOverpass({
+          query,
+          endpoint: flags.endpoint,
+          userAgent,
+          fetch: options.fetch,
+          sleep: options.sleep,
+        });
+        const temporary = `${cachePath}.partial`;
+        const file = await open(temporary, "w");
+        try {
+          await file.writeFile(JSON.stringify(json));
+        } finally {
+          await file.close();
+        }
+        await rename(temporary, cachePath);
+      }
+      const retrievedAt = (await stat(cachePath)).mtimeMs;
+      const stats = { skipped: 0 };
+      const candidates = parseOverpass(json, stats, region.nameLanguages ?? region.locales).filter(
+        (candidate) => {
+          if (id !== region.id && !insideImportBox(candidate, bbox)) return false;
+          const key = `${candidate.osmType}/${candidate.osmId}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        },
+      );
+      const counts: Record<string, number> = {};
+      const focusCategories = region.categories?.filter((category) => category.focus) ?? [];
+      const focusCounts = Object.fromEntries(
+        focusCategories.map((category) => [category.key, { local: 0, chain: 0 }]),
+      );
+      const focusKeys = focusCategories.map((category) => category.key);
+      for (const candidate of candidates) {
+        const category = categoryForTags(candidate.tags, focusKeys);
+        counts[category] = (counts[category] ?? 0) + 1;
+        const split = focusCounts[category];
+        if (split) split[candidate.isChain ? "chain" : "local"]++;
+      }
+      options.log({
+        area: id,
+        candidates: candidates.length,
+        skipped: stats.skipped,
+        categories: counts,
+        focusCategories: focusCounts,
+        firstFiveNames: candidates
+          .slice(0, 5)
+          .map((candidate) =>
+            namesFromTags(candidate.tags, region.nameLanguages ?? region.locales),
+          ),
       });
-      const temporary = `${cachePath}.partial`;
-      const file = await open(temporary, "w");
-      try {
-        await file.writeFile(JSON.stringify(json));
-      } finally {
-        await file.close();
+      if (!flags.dryRun) {
+        const run = options.run ?? createCliRunner({ prod: flags.prod, cwd: options.cwd });
+        for (let i = 0; i < candidates.length; i += 100)
+          options.log(
+            await run("osmSeed:importCandidates", {
+              regionId: region.id,
+              retrievedAt,
+              candidates: candidates.slice(i, i + 100),
+            }),
+          );
       }
-      await rename(temporary, cachePath);
-    }
-    const retrievedAt = (await stat(cachePath)).mtimeMs;
-    const stats = { skipped: 0 };
-    const candidates = parseOverpass(json, stats);
-    const counts: Record<string, number> = {};
-    const focusCategories = region.categories?.filter((category) => category.focus) ?? [];
-    const focusCounts = Object.fromEntries(
-      focusCategories.map((category) => [category.key, { local: 0, chain: 0 }]),
-    );
-    for (const candidate of candidates) {
-      const category = categoryForTags(candidate.tags);
-      counts[category] = (counts[category] ?? 0) + 1;
-      const split = focusCounts[category];
-      if (split) split[candidate.isChain ? "chain" : "local"]++;
-    }
-    options.log({
-      candidates: candidates.length,
-      skipped: stats.skipped,
-      categories: counts,
-      focusCategories: focusCounts,
-      firstFiveNames: candidates.slice(0, 5).map((candidate) => namesFromTags(candidate.tags)),
-    });
-    if (!flags.dryRun) {
-      const run = options.run ?? createCliRunner({ prod: flags.prod, cwd: options.cwd });
-      for (let i = 0; i < candidates.length; i += 100)
-        options.log(
-          await run("osmSeed:importCandidates", {
-            regionId: region.id,
-            retrievedAt,
-            candidates: candidates.slice(i, i + 100),
-          }),
-        );
     }
     options.log(
       "© OpenStreetMap contributors — ODbL-1.0 — https://www.openstreetmap.org/copyright",

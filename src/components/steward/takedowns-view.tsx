@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { PageContainer } from "@/components/layout/page-container";
 import { UnreviewedBadge } from "@/components/badges";
 import { Button } from "@/components/ui/button";
@@ -11,10 +14,56 @@ import {
   characterCount,
   displayDate,
   statuses,
+  takedownError,
+  validateText,
   type TakedownStatus,
 } from "@/components/takedown/takedown-logic";
-import { ageFlags, type TakedownRequest, type Windows } from "./takedowns-logic";
+import { ageFlags, type TakedownFact, type TakedownRequest, type Windows } from "./takedowns-logic";
 import { StewardNav } from "./steward-home-view";
+
+function HideFactButton({
+  factId,
+  reason,
+  locale,
+}: {
+  factId: TakedownFact["id"];
+  reason: string;
+  locale: Locale;
+}) {
+  const m = messagesFor(takedownsMessages, locale);
+  const hide = useMutation(api.facts.hide);
+  const [pending, setPending] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [error, setError] = useState<string>();
+  return (
+    <>
+      <Button
+        className="min-h-11 h-auto w-full rounded-[10px] px-5 py-2 whitespace-normal sm:w-auto"
+        type="button"
+        variant="outline"
+        disabled={pending || hidden}
+        onClick={async () => {
+          const invalid = validateText(reason, locale);
+          setError(invalid ?? undefined);
+          if (invalid) return;
+          setPending(true);
+          try {
+            await hide({ factId, reason: reason.trim() });
+            setHidden(true);
+          } catch (error) {
+            setError(takedownError(error, locale));
+          } finally {
+            setPending(false);
+          }
+        }}
+      >
+        {m.hideFact}
+      </Button>
+      {error && <p role="alert">{error}</p>}
+      {hidden && <p role="status">{m.hiddenFact}</p>}
+    </>
+  );
+}
 
 export type TakedownsProps = {
   locale: Locale;
@@ -66,6 +115,7 @@ export function TakedownsView(p: TakedownsProps) {
             const age = ageFlags(row, p.now, p.windows);
             const placeId = row.placeId ?? row.hiddenPlaceId;
             const hidden = !!row.hiddenPlaceId;
+            const fact = row.fact;
             return (
               <article
                 data-steward-card="request"
@@ -89,7 +139,22 @@ export function TakedownsView(p: TakedownsProps) {
                 ) : (
                   <p>{m.unmatched}</p>
                 )}
-                <p>{hidden ? t.hiddenYes : t.hiddenNo}</p>
+                {fact && (
+                  <>
+                    <p>
+                      {format(m.factWording, {
+                        wording: fact.wording[p.locale],
+                        value: m[fact.value],
+                      })}
+                    </p>
+                    {fact.reporterName && (
+                      <p>{format(m.factReporter, { name: fact.reporterName })}</p>
+                    )}
+                    {fact.status === "hidden" && <p>{m.hiddenFact}</p>}
+                    {fact.status === "removed" && <p>{m.removedFact}</p>}
+                  </>
+                )}
+                {!fact && <p>{hidden ? t.hiddenYes : t.hiddenNo}</p>}
                 {hidden && <p>{m.republish}</p>}
                 <h3>{m.details}</h3>
                 <p className="whitespace-pre-wrap break-words">{row.details}</p>
@@ -155,8 +220,16 @@ export function TakedownsView(p: TakedownsProps) {
                           disabled={row.status === "decided"}
                           type="submit"
                         >
-                          {m.decide}
+                          {fact?.status === "live" ? m.decideAndHide : m.decide}
                         </Button>
+                        {fact?.status === "live" && (
+                          <HideFactButton
+                            key={fact.id}
+                            factId={fact.id}
+                            reason={p.drafts[row._id] ?? ""}
+                            locale={p.locale}
+                          />
+                        )}
                         <Button
                           className="min-h-11 h-auto w-full rounded-[10px] px-5 py-2 whitespace-normal sm:w-auto"
                           type="button"

@@ -13,10 +13,11 @@ import {
 } from "../src/lib/planner";
 import { actionConnectorData } from "../src/lib/planner/action-data";
 import { RequestError } from "../src/lib/planner/request";
+import { activeRegionConfig } from "../src/lib/region/registry";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 import { appError } from "./lib/errors";
-import { regionConfig } from "./lib/region";
+import { isRegionOn, regionConfig } from "./lib/region";
 
 /** Claude's thinking counts toward its output limit, so it gets room for the answer as well. */
 const CLAUDE_MAX_OUTPUT_TOKENS = 8000;
@@ -34,6 +35,7 @@ export const ask = action({
   returns: replyValidator,
   handler: async (ctx, args): Promise<PlannerReply> => {
     // The switch, sign-in, AI settings and limits, in that order (convex/planner.ts).
+    if (!isRegionOn(activeRegionConfig().id)) throw appError("not_found", "Not found");
     const { regionId }: { regionId: string } = await ctx.runMutation(internal.planner.begin, {});
     const config = aiConfig("plan", process.env);
     if (!config.ok) throw appError("conflict", config.reason);

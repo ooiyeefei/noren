@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { getActiveRegion } from "@/lib/region";
+import { enabledRegionConfigs, homeRegionConfig } from "@/lib/region/registry";
 import { storiedPlaces } from "@/lib/seo/listing";
 import { PUBLIC_PAGES, searchOpen, sitemapXml } from "@/lib/seo/site";
 
@@ -7,11 +7,12 @@ import { PUBLIC_PAGES, searchOpen, sitemapXml } from "@/lib/seo/site";
 // per language. A 404 until the region's launch pack is complete, like the rest of the hiding.
 export async function GET(): Promise<Response> {
   await connection();
-  const region = getActiveRegion();
+  const region = homeRegionConfig();
+  const regions = enabledRegionConfigs();
   if (!searchOpen(region)) return new Response("Not found", { status: 404 });
   let places: { slug: string }[] = [];
   try {
-    places = await storiedPlaces(region);
+    places = await storiedPlaces(regions);
   } catch (error) {
     const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     console.warn(`sitemap: places not read (${reason || "no message"})`);

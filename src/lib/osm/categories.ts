@@ -9,6 +9,8 @@ export type OsmCategory =
   | "gallery"
   | "museum"
   | "attraction"
+  | "market"
+  | "worship"
   | "other";
 
 // First matching OSM tag row wins. Cuisine precedes amenity so an izakaya restaurant is a bar, a
@@ -111,7 +113,10 @@ export function isForVisitors(tags: Record<string, string>, isChain: boolean): b
   return tags.shop ? listed("shop", VISIT_SHOP_TYPES) : listed("craft", VISIT_CRAFT_TYPES);
 }
 
-export function categoryForTags(tags: Record<string, string>): OsmCategory {
+export function categoryForTags(
+  tags: Record<string, string>,
+  focusCategories: readonly string[] = [],
+): OsmCategory {
   for (const row of CATEGORY_ROWS) {
     const value = tags[row.key]?.trim();
     if (
@@ -120,5 +125,8 @@ export function categoryForTags(tags: Record<string, string>): OsmCategory {
     )
       return row.category;
   }
+  // Regions can include public markets and places of worship in their own right.
+  if (tags.amenity === "marketplace" && focusCategories.includes("market")) return "market";
+  if (tags.amenity === "place_of_worship" && focusCategories.includes("worship")) return "worship";
   return "other";
 }

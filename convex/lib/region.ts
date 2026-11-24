@@ -1,4 +1,8 @@
-import { getRegionConfig } from "../../src/lib/region/registry";
+import {
+  enabledRegionConfigs,
+  getRegionConfig,
+  homeRegionConfig,
+} from "../../src/lib/region/registry";
 import {
   deriveRegionPolicy,
   type RegionConfig,
@@ -10,6 +14,26 @@ export function regionConfig(regionId: string): RegionConfig {
   const region = getRegionConfig(regionId);
   if (!region) throw appError("invalid_input", `Unknown region "${regionId}"`);
   return region;
+}
+
+export function homeRegion(): RegionConfig {
+  return homeRegionConfig();
+}
+
+export function enabledRegionIds(): string[] {
+  return enabledRegionConfigs().map(({ id }) => id);
+}
+
+export function isRegionOn(regionId: string): boolean {
+  return enabledRegionIds().includes(regionId);
+}
+
+export function tripSwitch(): RegionConfig["features"]["trip"] {
+  return homeRegion().features.trip;
+}
+
+export function factsOn(): boolean {
+  return homeRegion().features.facts;
 }
 
 export function regionPolicy(regionId: string): RegionPolicy {
@@ -39,4 +63,8 @@ export function isCautionKey(region: RegionConfig, key: string): boolean {
 
 export function isCategoryKey(region: RegionConfig, key: string): boolean {
   return region.categories?.some((category) => category.key === key) ?? false;
+}
+
+export function isFactKey(region: RegionConfig, key: string): boolean {
+  return region.factVocabulary?.some((fact) => fact.key === key) ?? false;
 }

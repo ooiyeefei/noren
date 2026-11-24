@@ -9,6 +9,9 @@ import { StoryFeed, type StoryFeedActions } from "@/components/place/story-feed"
 import { PlaceCheck, type PlaceCheckActions } from "@/components/place/place-check";
 import { PlaceStory, type PlaceStoryLike } from "@/components/place/place-story";
 import { PlaceStamp } from "@/components/place/place-stamp";
+import { FactList, type FactLike, type FactVocabularyItem } from "@/components/facts/fact-list";
+import { FactTickList, type FactTickActions } from "@/components/facts/fact-tick-list";
+import { factMessages } from "@/lib/i18n/messages/facts";
 import { PlaceTabs, StoryComposer } from "@/components/place/place-tabs";
 import { checkDate } from "@/components/place/check-state";
 import type { PlaceTab } from "@/lib/place/tabs";
@@ -56,6 +59,21 @@ export type PlaceCollection = {
   actions: CheckInActions;
 };
 
+/**
+ * "What people found here". Passed only while `features.facts` is on and the region has a fact
+ * list; without it the page has no such section.
+ */
+export type PlaceFacts = {
+  vocabulary: readonly FactVocabularyItem[];
+  maxAgeDays?: number;
+  /** Undefined while loading. */
+  facts: readonly FactLike[] | undefined;
+  /** Set only for a steward. */
+  hide?: (factId: string, reason: string) => Promise<unknown>;
+  /** Set where a member can answer; a signed-out reader is pointed to sign in. */
+  tick?: FactTickActions;
+};
+
 export function PlaceView({
   locale,
   region,
@@ -70,6 +88,7 @@ export function PlaceView({
   mission,
   collection,
   stamp,
+  facts,
   initialTab = "stories",
   initialWrite = false,
 }: {
@@ -92,6 +111,8 @@ export function PlaceView({
   collection?: PlaceCollection;
   /** The viewer's stamp for this place, and what they just did to earn it, if anything. */
   stamp?: { stampedAt: number; pressedFrom: PressedFrom } | null;
+  /** What members found here, when the region has that on. */
+  facts?: PlaceFacts;
   /** The tab the address asked for, so the first paint is the right one (contract C1). */
   initialTab?: PlaceTab;
   /** The address asked for the written form (`&write=1`). */
@@ -140,6 +161,40 @@ export function PlaceView({
     sources === undefined || stories === undefined
       ? undefined
       : toStoryFeed(sources, stories, place.canEdit);
+  const factText = messagesFor(factMessages, locale);
+  const factsSection = facts && facts.vocabulary.length > 0 && (
+    <section
+      className="space-y-4 border-t border-line pt-6 first:border-t-0 first:pt-0"
+      aria-labelledby="facts-heading"
+    >
+      <h2 id="facts-heading" className="font-sans text-[22px] font-bold">
+        {factText.heading}
+      </h2>
+      <p>{factText.intro}</p>
+      {facts.facts === undefined ? (
+        <p role="status">{m.loading}</p>
+      ) : (
+        <FactList
+          locale={locale}
+          vocabulary={facts.vocabulary}
+          facts={facts.facts}
+          maxAgeDays={facts.maxAgeDays}
+          placeSlug={place.slug}
+          hide={facts.hide}
+        />
+      )}
+      {facts.tick && !place.isMock && (
+        <details className="rounded-[10px] border border-line">
+          <summary className="flex min-h-11 cursor-pointer items-center px-4 py-2 font-bold">
+            {factText.tellUs}
+          </summary>
+          <div className="px-4 pb-4">
+            <FactTickList locale={locale} vocabulary={facts.vocabulary} actions={facts.tick} />
+          </div>
+        </details>
+      )}
+    </section>
+  );
   const storiesPanel = (
     <>
       {/* The story composed from the owner's interview, when there is one (FR-012). */}
@@ -163,6 +218,7 @@ export function PlaceView({
           />
         </div>
       )}
+      {factsSection}
       {/* The fictional demo place takes no stories about it, so it shows the section only for its own. */}
       {(feed === undefined || feed.length > 0 || !place.isMock) && (
         <section

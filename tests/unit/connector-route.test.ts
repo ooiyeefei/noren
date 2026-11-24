@@ -14,7 +14,7 @@ vi.mock("@/lib/region", async (importOriginal) => {
     ...original,
     getActiveRegion: () => {
       const region = original.getRegion("nagasaki")!;
-      return { ...region, features: { connector: active.connector } };
+      return { ...region, features: { ...region.features, connector: active.connector } };
     },
   };
 });
@@ -58,6 +58,8 @@ describe("the region's switch", () => {
       walk: true,
       thread: false,
       postcard: false,
+      trip: "off",
+      facts: false,
     });
   });
 

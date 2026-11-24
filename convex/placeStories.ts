@@ -2,6 +2,7 @@ import { v, type Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation } from "./lib/gate";
+import { isRegionOn } from "./lib/region";
 import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { isPubliclyReadablePlace } from "./lib/access";
 import { writeAudit } from "./lib/audit";
@@ -144,7 +145,8 @@ export const request = mutation({
     const steward = await requireRole(ctx, ["steward"]);
     if (steward.isMock) throw appError("forbidden", "a demo account may not run the story agent");
     const place = await ctx.db.get("place", placeId);
-    if (place === null) throw appError("not_found", "place not found");
+    if (place === null || !isRegionOn(place.regionId))
+      throw appError("not_found", "place not found");
     if (!isPubliclyReadablePlace(place)) throw appError("conflict", "the place is not on the map");
     const runId = await startRun(ctx, placeId, steward._id, DEFAULT_PLATFORMS, 0);
     await writeAudit(ctx, {
@@ -567,7 +569,7 @@ export const stewardPanel = query({
     const runs = [];
     for (const run of await ctx.db.query("placeStoryRun").order("desc").take(6)) {
       const place = await ctx.db.get("place", run.placeId);
-      if (place === null) continue;
+      if (place === null || !isRegionOn(place.regionId)) continue;
       runs.push({
         runId: run._id,
         placeId: run.placeId,

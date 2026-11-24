@@ -7,7 +7,7 @@
 // "match %".
 //
 // What the odds may use:
-//   - what the traveller told us they like (a gentle tilt, never a filter),
+//   - what the traveller told us they like or a must-have known to be met,
 //   - how often the place was suggested in the last 7 days (quiet places get their turn),
 //   - for a wild card or an omikuji only: whether anybody has written a story about the place yet.
 //
@@ -22,6 +22,9 @@
  * can still be drawn: interests tilt the odds and never exclude anything.
  */
 export const TASTE_TILT = 3;
+
+/** A trip place known to meet a must-have gets this tilt. 1 turns it off. */
+export const FIT_TILT = 3;
 
 /**
  * Equal turns. A place that was suggested rarely in the last 7 days gets up to this much EXTRA
@@ -58,6 +61,8 @@ export type DrawContext = {
   wildCard: boolean;
   /** Set for the omikuji, so asking twice in a day cannot change the day's slip. */
   ignoreExposure?: boolean;
+  /** A trip rule is known to be met for at least one traveller present. */
+  meetsMustHave?: boolean;
 };
 
 /** The place's share of the draw. Always above 0, so nobody who is allowed in is ever shut out. */
@@ -78,5 +83,5 @@ export function drawWeight(candidate: DrawCandidate, context: DrawContext): numb
     weight *= TASTE_TILT;
   }
 
-  return weight;
+  return context.meetsMustHave ? weight * FIT_TILT : weight;
 }

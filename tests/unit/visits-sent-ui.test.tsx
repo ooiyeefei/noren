@@ -86,7 +86,7 @@ describe("a link to a shared post's original", () => {
 });
 
 describe("the visits Noren sent, on the sharer's own page", () => {
-  const home = [...loadRegions().values()][0]!;
+  const home = loadRegions().get("nagasaki")!;
   const post = (fields: Partial<SharedPostLike>): SharedPostLike => ({
     sourceId: "post",
     placeSlug: "mock-cafe",

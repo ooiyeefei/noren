@@ -22,6 +22,8 @@ export const placeTables = {
     /** The canonical identity key from the verified Clerk token. */
     tokenIdentifier: v.string(),
     clerkUserId: v.string(),
+    /** Private trial memberships, at most eight (people.setTrial). */
+    trials: v.optional(v.array(v.string())),
     role: roleValidator,
     displayName: v.string(),
     /** When the person last saw and kept the name shown beside what they share (FR-131). */
@@ -75,6 +77,7 @@ export const placeTables = {
       ),
     ),
     mapPin: v.optional(v.union(v.object({ lat: v.number(), lng: v.number() }), v.null())),
+    mapCell: v.optional(v.string()),
     hasPublishedPage: v.optional(v.boolean()),
     /** Whether anyone may read a story a member wrote or a post a member shared here (FR-033). */
     hasPeopleStories: v.optional(v.boolean()),
@@ -107,6 +110,7 @@ export const placeTables = {
   })
     .index("by_regionId_and_slug", ["regionId", "slug"])
     .index("by_regionId_and_visibility", ["regionId", "visibility"])
+    .index("by_visibility_and_mapCell", ["visibility", "mapCell"])
     .index("by_regionId_and_awaitingSteward_and_sharedAt", [
       "regionId",
       "awaitingSteward",

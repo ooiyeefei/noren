@@ -1,15 +1,20 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { ConvexError } from "convex/values";
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import schema from "./schema";
 import {
+  enabledRegionIds,
+  factsOn,
+  homeRegion,
   isCautionKey,
   isCategoryKey,
+  isFactKey,
   isInsideRegion,
   isRegionLocale,
   regionConfig,
   regionPolicy,
+  tripSwitch,
 } from "./lib/region";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -66,4 +71,27 @@ it("isCategoryKey accepts only a configured category, including regions with no 
   for (const { key } of region.categories ?? []) expect(isCategoryKey(region, key)).toBe(true);
   expect(isCategoryKey(region, "unknown")).toBe(false);
   expect(isCategoryKey({ ...region, categories: undefined }, "cafe")).toBe(false);
+});
+
+afterEach(() => vi.unstubAllEnvs());
+
+it("reads the home region and its trip and fact switches", () => {
+  vi.stubEnv("REGION_ID", undefined);
+  expect(homeRegion()).toBe(regionConfig("nagasaki"));
+  expect(tripSwitch()).toBe("off");
+  expect(factsOn()).toBe(false);
+});
+
+it("lists only enabled or previewed region IDs", () => {
+  vi.stubEnv("REGIONS_PREVIEW", undefined);
+  expect(enabledRegionIds()).toEqual(["nagasaki"]);
+  vi.stubEnv("REGIONS_PREVIEW", "malaysia-west");
+  expect(enabledRegionIds()).toEqual(["nagasaki", "malaysia-west"]);
+});
+
+it("checks a fact key against its own region", () => {
+  const malaysia = regionConfig("malaysia-west");
+  expect(isFactKey(malaysia, "prayer_room")).toBe(true);
+  expect(isFactKey(malaysia, "unknown")).toBe(false);
+  expect(isFactKey(regionConfig("nagasaki"), "prayer_room")).toBe(false);
 });

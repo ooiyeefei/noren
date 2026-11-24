@@ -24,7 +24,7 @@ import {
 import { creatorMessages } from "@/lib/i18n/messages/creator";
 import { loadRegions } from "@/lib/region";
 
-const region = [...loadRegions().values()][0]!;
+const region = loadRegions().get("nagasaki")!;
 const empty: PlaceDraft = { kind: "business", names: [], pin: null };
 const names = fieldsToNames({ japanese: "仮のお店", english: "Mock shop" });
 const valid: PlaceDraft = {

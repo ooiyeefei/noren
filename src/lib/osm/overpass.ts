@@ -1,3 +1,5 @@
+import { homeRegionConfig } from "../region/registry";
+import type { RegionConfig } from "../region/schema";
 import { CATEGORY_KEYS, isChainFromTags, pickTags } from "./tags";
 
 export type ParsedCandidate = {
@@ -10,6 +12,34 @@ export type ParsedCandidate = {
   osmVersion?: number;
   osmTimestamp?: string;
 };
+
+type ImportBox = { id: string; bbox: RegionConfig["bbox"] };
+
+export function importBoxes(region: RegionConfig): ImportBox[] {
+  if (region.id === homeRegionConfig().id) return [{ id: region.id, bbox: region.bbox }];
+  // Road endpoints such as Kuala Lumpur have no town entry.
+  return (region.towns ?? []).map(({ id, center, radiusMetres }) => {
+    const latitude = ((radiusMetres / 6371000) * 180) / Math.PI;
+    const longitude = latitude / Math.cos((center.lat * Math.PI) / 180);
+    const [west, south, east, north] = region.bbox;
+    return {
+      id,
+      bbox: [
+        Math.max(west, center.lng - longitude),
+        Math.max(south, center.lat - latitude),
+        Math.min(east, center.lng + longitude),
+        Math.min(north, center.lat + latitude),
+      ],
+    };
+  });
+}
+
+export function insideImportBox(
+  { lat, lng }: { lat: number; lng: number },
+  [west, south, east, north]: RegionConfig["bbox"],
+) {
+  return lng >= west && lng <= east && lat >= south && lat <= north;
+}
 
 export function buildQuery({
   bbox,
@@ -43,7 +73,11 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 /** Malformed elements are skipped independently; optional stats let CLI callers report omissions. */
-export function parseOverpass(json: unknown, stats?: { skipped: number }): ParsedCandidate[] {
+export function parseOverpass(
+  json: unknown,
+  stats?: { skipped: number },
+  nameLanguages: readonly string[] = ["ja", "en"],
+): ParsedCandidate[] {
   const elements = record(json)?.elements;
   if (!Array.isArray(elements)) return [];
   const candidates: ParsedCandidate[] = [];
@@ -52,7 +86,7 @@ export function parseOverpass(json: unknown, stats?: { skipped: number }): Parse
     const type = row?.type;
     // Derive the flag before the storage allowlist strips brand tags.
     const isChain = isChainFromTags(row?.tags);
-    const tags = pickTags(row?.tags);
+    const tags = pickTags(row?.tags, nameLanguages);
     const point = type === "node" ? row : record(row?.center);
     const lat = point?.lat;
     const lng = point?.lon;

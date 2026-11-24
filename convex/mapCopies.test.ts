@@ -17,7 +17,12 @@ afterEach(() => vi.restoreAllMocks());
 
 async function copies(b: Backend, placeId: Id<"place">) {
   const place = await b.t.run((ctx) => ctx.db.get("place", placeId));
-  return { names: place?.mapNames, pin: place?.mapPin, hasPublishedPage: place?.hasPublishedPage };
+  return {
+    names: place?.mapNames,
+    pin: place?.mapPin,
+    mapCell: place?.mapCell,
+    hasPublishedPage: place?.hasPublishedPage,
+  };
 }
 
 it("the place row's copies follow every write to its names, pin and pages", async () => {
@@ -33,6 +38,7 @@ it("the place row's copies follow every write to its names, pin and pages", asyn
   expect(await copies(b, placeId)).toEqual({
     names: [{ lang: "ja", script: "kanji", value: "祈りの丘絵本美術館", isPrimary: true }],
     pin: { lat: 32.735, lng: 129.87 },
+    mapCell: "wvu65",
     hasPublishedPage: false,
   });
 
@@ -52,6 +58,9 @@ it("the place row's copies follow every write to its names, pin and pages", asyn
     pin: { lat: 32.7352, lng: 129.8697 },
   });
 
+  await creator.mutation(api.places.movePin, { placeId, lat: 32.78, lng: 129.87 });
+  expect((await copies(b, placeId)).mapCell).toBe("wvu67");
+
   await addPage(b, { placeId, status: "held", sentences: [] });
   expect((await copies(b, placeId)).hasPublishedPage).toBe(false);
   await addPage(b, { placeId, sentences: [] });
@@ -64,7 +73,7 @@ it("the place row's copies follow every write to its names, pin and pages", asyn
       .unique();
     await ctx.db.delete("pin", pin!._id);
   });
-  expect((await copies(b, placeId)).pin).toBeNull();
+  expect(await copies(b, placeId)).toMatchObject({ pin: null, mapCell: undefined });
 });
 
 it("a place row without copies shows the same on the map, and the backfill copies it", async () => {

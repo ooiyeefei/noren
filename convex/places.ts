@@ -1,5 +1,7 @@
 import { v, type Infer } from "convex/values";
 import { MAP_PLACE_LIMIT } from "../src/lib/domain/constants";
+import { cellOf } from "../src/lib/geo/geohash";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import {
@@ -18,18 +20,19 @@ import { writeAudit } from "./lib/audit";
 import { currentPerson, requireConfirmedName, requirePerson, requireRole } from "./lib/auth";
 import { transitionClaim } from "./lib/claimEffects";
 import { appError } from "./lib/errors";
-import { mutation } from "./lib/gate";
+import { internalMutation, mutation } from "./lib/gate";
 import { readHasPublishedPage, readMapNames, readMapPin } from "./lib/mapCopies";
 import { withMock } from "./lib/mock";
 import { isNewMember, limitContribution } from "./lib/rateLimit";
 import {
+  enabledRegionIds,
   isCategoryKey,
   isInsideRegion,
-  isRegionLocale,
+  isRegionOn,
   regionConfig,
   regionPolicy,
 } from "./lib/region";
-import { slugBase, uniqueSlug } from "./lib/slug";
+import { requireSlugAvailableOutsideRegion, slugBase, uniqueSlug } from "./lib/slug";
 import { placeKindValidator, scriptValidator, visibilityValidator } from "./lib/validators";
 import { canReadPlace, readablePlaces } from "./lib/visibility";
 
@@ -86,10 +89,9 @@ function checkCategory(regionId: string, category: string) {
 }
 
 function checkedNames(
-  regionId: string,
+  languages: readonly string[],
   names: Infer<typeof nameInput>[],
 ): Infer<typeof nameView>[] {
-  const region = regionConfig(regionId);
   if (names.length < 1 || names.length > 12) {
     throw appError("invalid_input", "provide 1 to 12 names");
   }
@@ -100,8 +102,8 @@ function checkedNames(
     if (!value || value.length > 120) {
       throw appError("invalid_input", "a name must be nonblank and at most 120 characters");
     }
-    if (!isRegionLocale(region, name.lang)) {
-      throw appError("invalid_input", `name language ${name.lang} is not a region locale`);
+    if (!languages.includes(name.lang)) {
+      throw appError("invalid_input", `name language ${name.lang} is not allowed here`);
     }
     const key = JSON.stringify([name.lang, name.script, value]);
     if (seen.has(key)) throw appError("invalid_input", "duplicate name (language, script, value)");
@@ -259,11 +261,160 @@ export const get = query({
     await detail(ctx, await currentPerson(ctx), await ctx.db.get("place", placeId)),
 });
 
+/** Safe to start again with a null cursor after a previous run. */
+export const backfillMapCell = internalMutation({
+  args: { cursor: v.union(v.string(), v.null()) },
+  returns: v.object({ processed: v.number(), isDone: v.boolean() }),
+  handler: async (ctx, { cursor }): Promise<{ processed: number; isDone: boolean }> => {
+    const page = await ctx.db.query("place").paginate({ numItems: 200, cursor });
+    for (const place of page.page) {
+      const pin = place.mapPin === undefined ? await readMapPin(ctx, place._id) : place.mapPin;
+      const mapCell = pin === null ? undefined : cellOf(pin);
+      if (place.mapCell !== mapCell) await ctx.db.patch("place", place._id, { mapCell });
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.places.backfillMapCell, {
+        cursor: page.continueCursor,
+      });
+    }
+    return { processed: page.page.length, isDone: page.isDone };
+  },
+});
+
+export const inCells = query({
+  args: { cells: v.array(v.string()), category: v.optional(v.string()) },
+  returns: v.array(mapPlace),
+  handler: async (ctx, { cells, category }) => {
+    const precision = cells[0]?.length;
+    if (precision === undefined) return [];
+    if (
+      cells.length > 32 ||
+      (precision !== 4 && precision !== 5) ||
+      cells.some(
+        (cell) => cell.length !== precision || !/^[0-9bcdefghjkmnpqrstuvwxyz]+$/.test(cell),
+      )
+    ) {
+      throw appError(
+        "invalid_input",
+        "provide at most 32 geohashes, all four or all five characters",
+      );
+    }
+
+    const regionIds = enabledRegionIds();
+    const regions = new Set(regionIds);
+    const viewer = await currentPerson(ctx);
+    const visibilities: Doc<"place">["visibility"][] = ["public", "demo_public"];
+    if (viewer !== null) visibilities.push("pilot", "draft");
+    const places: Doc<"place">[] = [];
+    for (const visibility of visibilities) {
+      for (const cell of new Set(cells)) {
+        const candidates = ctx.db.query("place").withIndex("by_visibility_and_mapCell", (q) => {
+          const range = q.eq("visibility", visibility);
+          return precision === 5
+            ? range.eq("mapCell", cell)
+            : range.gte("mapCell", cell).lt("mapCell", cell + "~");
+        });
+        for await (const place of candidates) {
+          if (
+            regions.has(place.regionId) &&
+            place.hiddenReason === undefined &&
+            (category === undefined || place.category === category) &&
+            (await canReadPlace(ctx, viewer, place))
+          ) {
+            places.push(place);
+            if (places.length >= MAP_PLACE_LIMIT) break;
+          }
+        }
+        if (places.length >= MAP_PLACE_LIMIT) break;
+      }
+      if (places.length >= MAP_PLACE_LIMIT) break;
+    }
+
+    if (places.length >= MAP_PLACE_LIMIT) {
+      console.warn(
+        `listForMap: ${places.length} places in ${regionIds.join(", ")}, showing ${MAP_PLACE_LIMIT}`,
+      );
+    }
+    const owned =
+      viewer?.role === "business_owner"
+        ? new Set(
+            (
+              await ctx.db
+                .query("placeOwner")
+                .withIndex("by_personId", (q) => q.eq("personId", viewer._id))
+                .take(200)
+            ).map(({ placeId }) => placeId),
+          )
+        : new Set<Id<"place">>();
+    return await Promise.all(
+      places.map(async (place) => {
+        const canManage =
+          viewer !== null &&
+          (viewer.role === "steward" || viewer._id === place.createdBy || owned.has(place._id));
+        return {
+          _id: place._id,
+          regionId: place.regionId,
+          slug: place.slug,
+          kind: placeKind(place),
+          visibility: place.visibility,
+          demoPublicBasis: place.demoPublicBasis,
+          category: place.category,
+          isMock: place.isMock,
+          names: place.mapNames ?? (await readMapNames(ctx, place._id)),
+          pin: place.mapPin !== undefined ? place.mapPin : await readMapPin(ctx, place._id),
+          confirmedAt: place.confirmedAt,
+          hasStory:
+            ((publicStoriesAllowed(place) || canManage) &&
+              (place.hasPublishedPage ?? (await readHasPublishedPage(ctx, place._id)))) ||
+            place.hasPeopleStories === true,
+        };
+      }),
+    );
+  },
+});
+
+export const coverage = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      id: v.string(),
+      names: v.record(v.string(), v.string()),
+      center: pinView,
+      radiusMetres: v.number(),
+    }),
+  ),
+  handler: () =>
+    enabledRegionIds().flatMap((id) =>
+      (regionConfig(id).towns ?? []).map(({ id, names, center, radiusMetres }) => ({
+        id,
+        names,
+        center,
+        radiusMetres,
+      })),
+    ),
+});
+
+export const bySlug = query({
+  args: { slug: v.string() },
+  returns: v.union(placeDetail, v.null()),
+  handler: async (ctx, { slug }) => {
+    for (const regionId of enabledRegionIds()) {
+      const place = await ctx.db
+        .query("place")
+        .withIndex("by_regionId_and_slug", (q) => q.eq("regionId", regionId).eq("slug", slug))
+        .unique();
+      if (place !== null) return await detail(ctx, await currentPerson(ctx), place);
+    }
+    return null;
+  },
+});
+
 export const listMine = query({
   args: { regionId: v.string() },
   returns: v.array(placeSummary),
   handler: async (ctx, { regionId }) => {
     const person = await requirePerson(ctx);
+    if (!isRegionOn(regionId)) return [];
     // Places the person made by hand, newest first. A steward is recorded as the maker of every
     // listing they published from open data; those are not confirmed at creation and carry an
     // open-data reference, so they are left out.
@@ -307,6 +458,7 @@ export const listAll = query({
   returns: v.array(placeSummary.extend({ ownerCount: v.number() })),
   handler: async (ctx, { regionId }) => {
     await requireRole(ctx, ["steward"]);
+    if (!isRegionOn(regionId)) return [];
     const places = await ctx.db
       .query("place")
       .withIndex("by_regionId_and_slug", (q) => q.eq("regionId", regionId))
@@ -332,6 +484,7 @@ export const listWaiting = query({
   returns: v.array(placeSummary.extend({ addedBy: v.string(), sharedAt: v.number() })),
   handler: async (ctx, { regionId }) => {
     const steward = await requireRole(ctx, ["steward"]);
+    if (!isRegionOn(regionId)) return [];
     // These are real members' places, and the steward page must still open for a demo steward.
     if (steward.isMock) return [];
     const places = await ctx.db
@@ -364,7 +517,8 @@ export const declineWaiting = mutation({
     const steward = await requireRole(ctx, ["steward"]);
     if (steward.isMock) throw appError("forbidden", "a demo steward can't decide on real places");
     const place = await ctx.db.get("place", placeId);
-    if (place === null) throw appError("not_found", "place not found");
+    if (place === null || !isRegionOn(place.regionId))
+      throw appError("not_found", "place not found");
     if (!isWaitingPlace(place)) {
       throw appError("conflict", "this place is not waiting for a steward");
     }
@@ -407,7 +561,9 @@ export const create = mutation({
     if (args.kind === "landmark" && person.role !== "steward") {
       throw appError("forbidden", "only a steward may mark a place as a landmark");
     }
-    const names = checkedNames(args.regionId, args.names);
+    const region = regionConfig(args.regionId);
+    if (!isRegionOn(region.id)) throw appError("not_found", "place not found");
+    const names = checkedNames(region.locales, args.names);
     checkPin(args.regionId, args.pin);
     if (args.category !== undefined) checkCategory(args.regionId, args.category);
     if (args.onMap && (args.category === undefined || args.kind === "landmark" || person.isMock)) {
@@ -419,6 +575,7 @@ export const create = mutation({
     await limitContribution(ctx, person, "place", args.regionId);
     const waiting = args.onMap === true && isNewMember(person, args.regionId, Date.now());
     const slug = await uniqueSlug(ctx, args.regionId, slugBase(names));
+    await requireSlugAvailableOutsideRegion(ctx, args.regionId, slug);
     const placeId = await ctx.db.insert(
       "place",
       withMock(person, {
@@ -462,7 +619,8 @@ export const updateNames = mutation({
   returns: v.null(),
   handler: async (ctx, { placeId, names: input }) => {
     const { person, place } = await requireEditablePlace(ctx, placeId);
-    const names = checkedNames(place.regionId, input);
+    const region = regionConfig(place.regionId);
+    const names = checkedNames(region.nameLanguages ?? region.locales, input);
     for (const old of await namesFor(ctx, placeId)) await ctx.db.delete("placeName", old._id);
     for (const name of names) {
       await ctx.db.insert("placeName", { placeId, ...name, confirmedBy: person._id });
@@ -494,7 +652,8 @@ export const setKind = mutation({
   handler: async (ctx, { placeId, kind }) => {
     const person = await requireRole(ctx, ["steward"]);
     const place = await ctx.db.get("place", placeId);
-    if (place === null) throw appError("not_found", "place not found");
+    if (place === null || !isRegionOn(place.regionId))
+      throw appError("not_found", "place not found");
     if (place.kind === kind) return null;
     await ctx.db.patch("place", placeId, { kind });
     await writeAudit(ctx, {
@@ -547,7 +706,8 @@ export const setVisibility = mutation({
   handler: async (ctx, { placeId, visibility, agreementRecorded, confirmFictional }) => {
     const person = await requireRole(ctx, ["steward"]);
     const place = await ctx.db.get("place", placeId);
-    if (place === null) throw appError("not_found", "place not found");
+    if (place === null || !isRegionOn(place.regionId))
+      throw appError("not_found", "place not found");
     if (visibility === "public") {
       if (place.isMock !== false) {
         throw appError("conflict", "a mock place can only be demo_public, with confirmFictional");
@@ -636,7 +796,8 @@ export const attachOwner = mutation({
   returns: v.null(),
   handler: async (ctx, { placeId, personId }) => {
     const steward = await requireRole(ctx, ["steward"]);
-    if ((await ctx.db.get("place", placeId)) === null)
+    const place = await ctx.db.get("place", placeId);
+    if (place === null || !isRegionOn(place.regionId))
       throw appError("not_found", "place not found");
     const person = await ctx.db.get("person", personId);
     if (person === null) throw appError("not_found", "person not found");

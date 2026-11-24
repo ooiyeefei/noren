@@ -153,7 +153,9 @@ export const OVERTURE_DATASET = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}$/;
 /** OSM-style name tags, so the OSM listing helpers (names, chain branches) read an Overture place. */
 export function overtureNameTags(place: Pick<OverturePlace, "names">): Record<string, string> {
   const tags: Record<string, string> = { name: place.names.primary };
-  if (place.names.common.ja) tags["name:ja"] = place.names.common.ja;
-  if (place.names.common.en) tags["name:en"] = place.names.common.en;
+  for (const lang of ["ja", "en", "ms", "zh", "ta"]) {
+    const name = place.names.common[lang];
+    if (name) tags[`name:${lang}`] = name;
+  }
   return tags;
 }

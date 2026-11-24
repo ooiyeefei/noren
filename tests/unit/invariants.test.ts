@@ -51,6 +51,7 @@ const hasMockFlag = [
   "person",
   "place",
   "placeCheck",
+  "placeFact",
   "source",
   "interview",
   "claim",
@@ -59,6 +60,8 @@ const hasMockFlag = [
   "story",
 ];
 const inheritsMockFlag = [
+  // A private link to a trip; it points to its organiser and holds no place of its own.
+  "tripShare",
   "placeOwner",
   "placeName",
   "pin",

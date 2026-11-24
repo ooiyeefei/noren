@@ -29,7 +29,7 @@ Constraint: the Sea x OpenAI Codex Hackathon (Malaysia, 2026-12-05) requires all
 2. **Real data only.** Seeds are real places confirmed by a human. Anything made for demos or video belongs to an explicitly labelled mock user (`user.is_mock = true`), shows a visible "Demo" badge, and is excluded from all stats.
 3. **The human pin is the truth.** Provider coordinates and names are suggestions with provenance, never authoritative.
 4. **Link out, don't copy.** We store URL, platform, author link and a human note. We render live via the platform's own embed with attribution adjacent, and hide the entry when the original disappears.
-5. **AI is an editor on consented text only.** Inputs: owner transcripts with a consent record, text a contributor typed, and openly licensed text (e.g. Wikipedia, attributed). Never platform content. Every sentence on a blended page cites claim IDs; a sentence with no claim ID is rejected; failures go to human review.
+5. **AI is an editor on permitted text only (Principle V).** Inputs: owner transcripts with a consent record, text a contributor typed, and openly licensed text (e.g. Wikipedia, attributed). Never platform content. Every sentence on a blended page cites claim IDs; a sentence with no claim ID is rejected; failures go to human review.
 6. **The original language is canonical.** Japanese stays the source of truth. Translations are labelled "machine translation" until a human confirms them.
 7. **Region is configuration.** Languages, map, adapters, legal fields and keys live in the region config.
 8. **Open source from day one.** No credentials in the repo; every deployment brings its own keys; data under different licences lives in separate tables.
@@ -184,3 +184,44 @@ An AI guide that walks with a visitor through an area and tells them what the pe
 5. The companion's answers are our own speech, so the grounding gate, an "AI-assisted" label and the takedown path apply (research/06 lists chat Q&A as LATER).
 6. Quality depends on the volume of consented transcripts, so the Nagasaki interviews are the corpus.
 7. Interest profiles (historical, cultural, and so on) need their own consent and a deletion path.
+
+## 16. Trip agent, one map and members' reports
+
+Built in code, in `specs/005-trip-agent/` (spec, contracts and tasks). Each part below says which switch holds it off today. Requirements are the FR numbers in that spec.
+
+Switches as they stand on 24 November 2026: `features.trip` is `"off"` in `regions/nagasaki.json` (the home region file); `features.facts` is `false` there; `malaysia-west` has `enabled: false`. With these set, no member sees the trip agent, no member can report a fact, and the Malaysian places are not returned by any query.
+
+### 16.1 The trip agent
+
+A signed-in member (the organiser) gives a start, an end, a number of days, optionally the town for each night, and in their own words what the trip is for. They describe each traveller with a label of their choosing, an age band, hard rules, likes and a daily rhythm. They set the party's driving limit, how full a day is, meal, rest and prayer times. Where they set nothing, the plan uses starting guesses and says so. The plan is one day at a time: drives with estimated minutes and kilometres, stops in order, meals, rests, spare time and the day's driving total. Driving times are estimates for an ordinary day.
+
+- **The plan is made by code.** The engine in `src/lib/trip/` chooses the stops. It draws with a seed, and the seed is kept with the plan, so the same seed gives the same plan. `trips.plan` calls no model.
+- **A model only reads the organiser's words.** `trips.interpret` sends the latest messages and the outline of the plan to a model. It returns suggestions that the code checks against the words said and against a fixed vocabulary. The model never sees the party's description and never writes a sentence that reaches the screen. If the model fails, the page offers plain buttons instead. The action needs `AI_MODEL_PLAN`; without it the action refuses and spends no slot.
+- **The party stays on the organiser's phone.** The trip and the party are kept in the browser's local storage under one key (`noren.trips.v1`), the same store type as What Noren remembers. The server keeps none of the party's description.
+- **Three verdicts for each hard rule.** *Met*: a record says the place has it, and the check names what it rests on (the owner, a member's report, or a visitor's quoted words). *Not met*: a record says the place lacks it, or two fresh records disagree. The place is left out of the draw; a pinned place stays and is listed as not met on the organiser's plan. *Not known*: no record, a record older than the region's limit, or no fact in the region's list covers the rule. A missing record is never read as a pass or a fail.
+- **Turns with no counting.** Each traveller with likes gets stops chosen for them, spread over the trip, and each stop says whose it is. The engine spreads the turns. No count, score or ranking of travellers or turns is computed, stored or shown.
+- **A private link.** `tripShare.create` stores a copy of the days the organiser chooses to share: stops, times, the labels on the turns and the checks with what each rests on. Anyone with the code can read it through `tripShare.read`, while the feature is not off. Each read drops a place that is no longer public and looks quotes up again, so a removed story leaves at once. The owner can delete the link, and the link stops working in the same change. Deleting the account deletes its links. The link is not the party's description: it holds the days, not what the organiser typed about each traveller.
+- **Who may use it.** `features.trip` has three values. `"off"`: every trip function answers not found. `"trial"`: only a person whose `trials` list holds `"trip"` may use it, and the owner adds that with `people:setTrial` from the command line. `"open"`: any signed-in member may use it. The only way a plan leaves the organiser's device is the private link.
+- **Limits.** Plans: 30 a minute and 300 a day a person. Interpretations: 5 a minute and 40 a day. A request may hold 7 days, 8 travellers, 12 pins and 20 changes. Links: 20 a day and 50 kept.
+- **Not built.** Inviting a traveller to answer for themselves (FR-332). Keeping a finished trip as a record, and suggestions drawn from it (User Story 6). Checks that rest on a visitor's public post (see 16.3).
+
+### 16.2 One map, more than one region
+
+Noren is one app with one map. A region is one file in `regions/`. The home region (`regions/nagasaki.json`, or the `REGION_ID` variable) sets everything that is the same across the app: languages, legal fields, feature switches, consent and takedown. A region file that is not home sets only its own area: its bounds, towns, categories, road data, calendar and fact list. The second region is `regions/malaysia-west.json`, the west coast of Peninsular Malaysia between Kuala Lumpur and Alor Setar.
+
+- **On or off.** A region is on when its `enabled` is `true`. The home region is on when the field is absent; any other region is off when it is absent. The `REGIONS_PREVIEW` variable turns named regions on for a developer's machine and the dev deployment. It is never set in production, so a region can be looked at before its notice is live.
+- **Places load by what is in view.** Each place row carries a `mapCell`, a geohash of its pin. `places.backfillMapCell` filled it for places that existed before it. `places.inCells` takes up to 32 cells of one length (4 or 5 characters) and returns the public places in them, up to 5,000 in all, through the index `by_visibility_and_mapCell`. Signed-in members also get what they may read, as before. `places.coverage` returns the towns of every region that is on, for the markers shown when the map is zoomed out. It returns no counts.
+- **Off means off.** A place whose region is off is never returned: not by `inCells`, not by `places.bySlug` (the place page, the sitemap and the takedown form), and not as a trip candidate. `places.listForMap` still takes the region from the caller and does not check the switch itself, so a caller must not ask it for a region that is off.
+- **Current state.** `malaysia-west` is off, so nothing from it is returned. It must not be switched on before a privacy notice and terms that cover it are live (FR-349). Its places are public from the day it is switched on, under the rules Nagasaki already follows.
+
+### 16.3 Members' reports of what they found
+
+A signed-in member who has been to a place ticks what they found, from a fixed list agreed for the region. The list is `factVocabulary` in the region file; `malaysia-west` names 17 items, and every must-have a party can choose is covered by at least one of them. Examples: steps at the door, a ramp, high chairs, a toilet a wheelchair fits, a halal sign shown, a prayer room, shade to sit in.
+
+- **A fact, not a score.** Each report is one fact: the place, the item, yes or no, the day, and the member's name beside it. A member has one live report per item per place, and a new report replaces their earlier one. Reports are never added into a score, a rating or an order of places.
+- **Who may report.** Only a signed-in member with a confirmed name. A real account cannot report at a demo place, and a demo account cannot report at a real place. A member may remove their own report. Stewards may hide a report with a reason; the change is audited, and a takedown with target type `fact` uses the same path.
+- **Limits.** 30 reports a day a person. Each report writes an audit entry.
+- **Age.** A report older than the region's `factMaxAgeDays` (365 for `malaysia-west`) is shown as old and does not count as a check.
+- **Disagreement.** Two live reports about the same item at one place that say different things make the rule not met, and the page shows each with its date (FR-347).
+- **Switch.** With `features.facts` `false`, `facts.report` refuses. Reading the reports that exist (`facts.forPlace`) does not depend on the switch.
+- **Not built.** Facts taken from a visitor's public post. The read side exists: a post fact carries its source and its quoted words, and only quotes from the story finder's sources are shown. Nothing writes one yet, so no check rests on a visitor's post at present (FR-346). Open listing notes such as "wheelchair: yes" never count as a check (FR-348).

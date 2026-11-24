@@ -1,0 +1,1400 @@
+{
+  "id": "malaysia-west",
+  "name": {
+    "en": "West Coast Malaysia",
+    "ja": "マレーシア西海岸"
+  },
+  "bbox": [
+    99.95,
+    2.95,
+    102.0,
+    6.55
+  ],
+  "defaultCenter": {
+    "lat": 4.85,
+    "lng": 100.95,
+    "zoom": 7
+  },
+  "enabled": false,
+  "nameLanguages": [
+    "ms",
+    "en",
+    "zh",
+    "ta"
+  ],
+  "nameFallback": {
+    "en": [
+      "latin",
+      "hanzi",
+      "tamil"
+    ],
+    "ja": [
+      "kanji",
+      "kana",
+      "latin",
+      "hanzi",
+      "tamil"
+    ]
+  },
+  "geo": {
+    "countrycodes": [
+      "my"
+    ],
+    "attribution": [
+      "© OpenStreetMap contributors",
+      "OpenFreeMap © OpenMapTiles",
+      "GeoNames (CC BY 4.0), some town centres"
+    ]
+  },
+  "categories": [
+    {
+      "key": "restaurant",
+      "labels": {
+        "ja": "飲食店",
+        "en": "Restaurant"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "cafe",
+      "labels": {
+        "ja": "カフェ・喫茶店",
+        "en": "Café"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "bar",
+      "labels": {
+        "ja": "バー・居酒屋",
+        "en": "Bar or izakaya"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "shop",
+      "labels": {
+        "ja": "お店・小売店",
+        "en": "Shop"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "music_shop",
+      "labels": {
+        "ja": "楽器店・レコード店",
+        "en": "Music shop"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "gallery",
+      "labels": {
+        "ja": "ギャラリー",
+        "en": "Art gallery"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "stay",
+      "labels": {
+        "ja": "宿・ホテル・旅館",
+        "en": "Place to stay"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "bath",
+      "labels": {
+        "ja": "銭湯・温泉",
+        "en": "Public bath or hot spring"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "museum",
+      "labels": {
+        "ja": "美術館・博物館・資料館",
+        "en": "Museum"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "attraction",
+      "labels": {
+        "ja": "名所・観光スポット",
+        "en": "Sight or landmark"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "market",
+      "labels": {
+        "ja": "市場",
+        "en": "Market"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "worship",
+      "labels": {
+        "ja": "礼拝所",
+        "en": "Place of worship"
+      },
+      "labelsReviewedBy": null,
+      "focus": true
+    },
+    {
+      "key": "other",
+      "labels": {
+        "ja": "その他",
+        "en": "Other"
+      },
+      "labelsReviewedBy": null,
+      "focus": false
+    }
+  ],
+  "cautionVocabulary": [
+    {
+      "key": "closed_days",
+      "labels": {
+        "ja": "定休日・不定休あり",
+        "en": "Closed days or irregular hours"
+      },
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "cash_only",
+      "labels": {
+        "ja": "現金のみ",
+        "en": "Cash only"
+      },
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "reservation_required",
+      "labels": {
+        "ja": "予約制",
+        "en": "Reservation required"
+      },
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "english_support",
+      "labels": {
+        "ja": "英語メニュー・英語対応あり",
+        "en": "English menu or English spoken"
+      },
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "small_space",
+      "labels": {
+        "ja": "席数が少ない・店内が狭い",
+        "en": "Small space or limited seats"
+      },
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "no_photography",
+      "labels": {
+        "ja": "撮影はご遠慮ください",
+        "en": "Owner asks for no photography"
+      },
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "accessibility_steps",
+      "labels": {
+        "ja": "段差あり・バリアフリー情報",
+        "en": "Steps or accessibility"
+      },
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "seasonal",
+      "labels": {
+        "ja": "季節限定の営業・メニュー",
+        "en": "Seasonal availability"
+      },
+      "labelsReviewedBy": null
+    }
+  ],
+  "collection": {
+    "utcOffsetHours": 8
+  },
+  "towns": [
+    {
+      "id": "alor-setar",
+      "names": {
+        "en": "Alor Setar",
+        "ja": "アロースター"
+      },
+      "center": {
+        "lat": 6.12104,
+        "lng": 100.36014
+      },
+      "radiusMetres": 6000,
+      "state": "kedah",
+      "onRoad": "alor-setar"
+    },
+    {
+      "id": "sungai-petani",
+      "names": {
+        "en": "Sungai Petani",
+        "ja": "スンガイプタニ"
+      },
+      "center": {
+        "lat": 5.647,
+        "lng": 100.48772
+      },
+      "radiusMetres": 6000,
+      "state": "kedah",
+      "onRoad": "sungai-petani"
+    },
+    {
+      "id": "george-town",
+      "names": {
+        "en": "George Town",
+        "ja": "ジョージタウン"
+      },
+      "center": {
+        "lat": 5.41123,
+        "lng": 100.33543
+      },
+      "radiusMetres": 3000,
+      "state": "penang",
+      "onRoad": "george-town"
+    },
+    {
+      "id": "penang-island",
+      "names": {
+        "en": "Penang Island",
+        "ja": "ペナン島"
+      },
+      "center": {
+        "lat": 5.37292,
+        "lng": 100.24963
+      },
+      "radiusMetres": 16000,
+      "state": "penang",
+      "onRoad": "george-town"
+    },
+    {
+      "id": "seberang-perai",
+      "names": {
+        "en": "Seberang Perai",
+        "ja": "スブランプライ"
+      },
+      "center": {
+        "lat": 5.3538818,
+        "lng": 100.4572371
+      },
+      "radiusMetres": 16000,
+      "state": "penang",
+      "onRoad": "seberang-perai"
+    },
+    {
+      "id": "taiping",
+      "names": {
+        "en": "Taiping",
+        "ja": "タイピン"
+      },
+      "center": {
+        "lat": 4.85,
+        "lng": 100.73333
+      },
+      "radiusMetres": 5000,
+      "state": "perak",
+      "onRoad": "taiping"
+    },
+    {
+      "id": "kuala-sepetang",
+      "names": {
+        "en": "Kuala Sepetang",
+        "ja": "クアラセペタン"
+      },
+      "center": {
+        "lat": 4.8380794,
+        "lng": 100.6286482
+      },
+      "radiusMetres": 2500,
+      "state": "perak",
+      "onRoad": "kuala-sepetang"
+    },
+    {
+      "id": "kuala-kangsar",
+      "names": {
+        "en": "Kuala Kangsar",
+        "ja": "クアラカンサー"
+      },
+      "center": {
+        "lat": 4.76667,
+        "lng": 100.93333
+      },
+      "radiusMetres": 4000,
+      "state": "perak",
+      "onRoad": "kuala-kangsar"
+    },
+    {
+      "id": "ipoh",
+      "names": {
+        "en": "Ipoh",
+        "ja": "イポー"
+      },
+      "center": {
+        "lat": 4.5841,
+        "lng": 101.0829
+      },
+      "radiusMetres": 7500,
+      "state": "perak",
+      "onRoad": "ipoh"
+    },
+    {
+      "id": "gopeng",
+      "names": {
+        "en": "Gopeng",
+        "ja": "ゴペン"
+      },
+      "center": {
+        "lat": 4.4715,
+        "lng": 101.1663
+      },
+      "radiusMetres": 2500,
+      "state": "perak",
+      "onRoad": "gopeng"
+    },
+    {
+      "id": "kampar",
+      "names": {
+        "en": "Kampar",
+        "ja": "カンパル"
+      },
+      "center": {
+        "lat": 4.3,
+        "lng": 101.15
+      },
+      "radiusMetres": 3500,
+      "state": "perak",
+      "onRoad": "kampar"
+    },
+    {
+      "id": "tanjung-malim",
+      "names": {
+        "en": "Tanjung Malim",
+        "ja": "タンジュンマリム"
+      },
+      "center": {
+        "lat": 3.681,
+        "lng": 101.5198
+      },
+      "radiusMetres": 3500,
+      "state": "perak",
+      "onRoad": "tanjung-malim"
+    }
+  ],
+  "roads": {
+    "points": [
+      {
+        "id": "kuala-lumpur",
+        "names": {
+          "en": "Kuala Lumpur",
+          "ja": "クアラルンプール"
+        },
+        "pin": {
+          "lat": 3.14774,
+          "lng": 101.69501
+        },
+        "offRoadMinutes": 0
+      },
+      {
+        "id": "sungai-buloh",
+        "names": {
+          "en": "Sungai Buloh",
+          "ja": "スンガイ・ブロー"
+        },
+        "pin": {
+          "lat": 3.2067,
+          "lng": 101.58272
+        },
+        "offRoadMinutes": 0
+      },
+      {
+        "id": "rawang",
+        "names": {
+          "en": "Rawang",
+          "ja": "ラワン"
+        },
+        "pin": {
+          "lat": 3.2927,
+          "lng": 101.5481
+        },
+        "offRoadMinutes": 0
+      },
+      {
+        "id": "tanjung-malim",
+        "names": {
+          "en": "Tanjung Malim",
+          "ja": "タンジュンマリム"
+        },
+        "pin": {
+          "lat": 3.64641,
+          "lng": 101.52981
+        },
+        "offRoadMinutes": 8
+      },
+      {
+        "id": "ulu-bernam-rest-area",
+        "names": {
+          "en": "Ulu Bernam rest area",
+          "ja": "ウル・ベルナム休憩所"
+        },
+        "pin": {
+          "lat": 3.66307,
+          "lng": 101.51905
+        },
+        "offRoadMinutes": 2
+      },
+      {
+        "id": "slim-river",
+        "names": {
+          "en": "Slim River",
+          "ja": "スリム・リバー"
+        },
+        "pin": {
+          "lat": 3.84713,
+          "lng": 101.39934
+        },
+        "offRoadMinutes": 0
+      },
+      {
+        "id": "tapah-rest-area",
+        "names": {
+          "en": "Tapah rest area",
+          "ja": "タパー休憩所"
+        },
+        "pin": {
+          "lat": 4.17901,
+          "lng": 101.29029
+        },
+        "offRoadMinutes": 10
+      },
+      {
+        "id": "tapah",
+        "names": {
+          "en": "Tapah",
+          "ja": "タパー"
+        },
+        "pin": {
+          "lat": 4.2161,
+          "lng": 101.27029
+        },
+        "offRoadMinutes": 0
+      },
+      {
+        "id": "kampar",
+        "names": {
+          "en": "Kampar",
+          "ja": "カンパル"
+        },
+        "pin": {
+          "lat": 4.33699,
+          "lng": 101.23517
+        },
+        "offRoadMinutes": 25
+      },
+      {
+        "id": "gopeng",
+        "names": {
+          "en": "Gopeng",
+          "ja": "ゴペン"
+        },
+        "pin": {
+          "lat": 4.45071,
+          "lng": 101.17112
+        },
+        "offRoadMinutes": 5
+      },
+      {
+        "id": "ipoh",
+        "names": {
+          "en": "Ipoh",
+          "ja": "イポー"
+        },
+        "pin": {
+          "lat": 4.66696,
+          "lng": 101.07455
+        },
+        "offRoadMinutes": 13
+      },
+      {
+        "id": "sungai-perak-rest-area",
+        "names": {
+          "en": "Sungai Perak rest area",
+          "ja": "スンガイ・ペラ休憩所"
+        },
+        "pin": {
+          "lat": 4.71407,
+          "lng": 100.94506
+        },
+        "offRoadMinutes": 1
+      },
+      {
+        "id": "kuala-kangsar",
+        "names": {
+          "en": "Kuala Kangsar",
+          "ja": "クアラカンサー"
+        },
+        "pin": {
+          "lat": 4.76439,
+          "lng": 100.90219
+        },
+        "offRoadMinutes": 10
+      },
+      {
+        "id": "taiping",
+        "names": {
+          "en": "Taiping",
+          "ja": "タイピン"
+        },
+        "pin": {
+          "lat": 4.8942,
+          "lng": 100.6658
+        },
+        "offRoadMinutes": 15
+      },
+      {
+        "id": "kuala-sepetang",
+        "names": {
+          "en": "Kuala Sepetang",
+          "ja": "クアラセペタン"
+        },
+        "pin": {
+          "lat": 4.78075,
+          "lng": 100.71648
+        },
+        "offRoadMinutes": 19
+      },
+      {
+        "id": "gunung-semanggol-rest-area",
+        "names": {
+          "en": "Gunung Semanggol rest area",
+          "ja": "グヌン・スマンゴル休憩所"
+        },
+        "pin": {
+          "lat": 4.98304,
+          "lng": 100.66647
+        },
+        "offRoadMinutes": 5
+      },
+      {
+        "id": "bandar-baharu",
+        "names": {
+          "en": "Bandar Baharu",
+          "ja": "バンダル・バハル"
+        },
+        "pin": {
+          "lat": 5.10588,
+          "lng": 100.56078
+        },
+        "offRoadMinutes": 0
+      },
+      {
+        "id": "jawi",
+        "names": {
+          "en": "Jawi",
+          "ja": "ジャウィ"
+        },
+        "pin": {
+          "lat": 5.18509,
+          "lng": 100.49799
+        },
+        "offRoadMinutes": 0
+      },
+      {
+        "id": "sungai-bakap-layby",
+        "names": {
+          "en": "Sungai Bakap lay-by",
+          "ja": "スンガイ・バカップ パーキング"
+        },
+        "pin": {
+          "lat": 5.22311,
+          "lng": 100.48596
+        },
+        "offRoadMinutes": 10
+      },
+      {
+        "id": "juru",
+        "names": {
+          "en": "Juru",
+          "ja": "ジュル"
+        },
+        "pin": {
+          "lat": 5.33559,
+          "lng": 100.43408
+        },
+        "offRoadMinutes": 0
+      },
+      {
+        "id": "seberang-perai",
+        "names": {
+          "en": "Seberang Perai",
+          "ja": "スブランプライ"
+        },
+        "pin": {
+          "lat": 5.3951,
+          "lng": 100.406
+        },
+        "offRoadMinutes": 10
+      },
+      {
+        "id": "george-town",
+        "names": {
+          "en": "George Town",
+          "ja": "ジョージタウン"
+        },
+        "pin": {
+          "lat": 5.41412,
+          "lng": 100.32886
+        },
+        "offRoadMinutes": 0
+      },
+      {
+        "id": "sungai-dua",
+        "names": {
+          "en": "Sungai Dua",
+          "ja": "スンガイ・ドゥア"
+        },
+        "pin": {
+          "lat": 5.4433,
+          "lng": 100.41917
+        },
+        "offRoadMinutes": 0
+      },
+      {
+        "id": "tikam-batu-layby",
+        "names": {
+          "en": "Tikam Batu lay-by",
+          "ja": "ティカム・バトゥ パーキング"
+        },
+        "pin": {
+          "lat": 5.57412,
+          "lng": 100.45326
+        },
+        "offRoadMinutes": 12
+      },
+      {
+        "id": "sungai-petani",
+        "names": {
+          "en": "Sungai Petani",
+          "ja": "スンガイプタニ"
+        },
+        "pin": {
+          "lat": 5.67179,
+          "lng": 100.51474
+        },
+        "offRoadMinutes": 13
+      },
+      {
+        "id": "gurun-rest-area",
+        "names": {
+          "en": "Gurun rest area",
+          "ja": "グルン休憩所"
+        },
+        "pin": {
+          "lat": 5.83301,
+          "lng": 100.48771
+        },
+        "offRoadMinutes": 8
+      },
+      {
+        "id": "alor-setar",
+        "names": {
+          "en": "Alor Setar",
+          "ja": "アロースター"
+        },
+        "pin": {
+          "lat": 6.1328,
+          "lng": 100.39769
+        },
+        "offRoadMinutes": 13
+      }
+    ],
+    "endpoints": [
+      "kuala-lumpur"
+    ],
+    "segments": [
+      {
+        "from": "kuala-lumpur",
+        "to": "sungai-buloh",
+        "minutes": 19,
+        "kilometres": 18.9,
+        "road": "E1"
+      },
+      {
+        "from": "sungai-buloh",
+        "to": "rawang",
+        "minutes": 8,
+        "kilometres": 11.2,
+        "road": "E1"
+      },
+      {
+        "from": "rawang",
+        "to": "tanjung-malim",
+        "minutes": 30,
+        "kilometres": 43.5,
+        "road": "E1"
+      },
+      {
+        "from": "tanjung-malim",
+        "to": "ulu-bernam-rest-area",
+        "minutes": 2,
+        "kilometres": 2.3,
+        "road": "E1"
+      },
+      {
+        "from": "ulu-bernam-rest-area",
+        "to": "slim-river",
+        "minutes": 18,
+        "kilometres": 26,
+        "road": "E1"
+      },
+      {
+        "from": "slim-river",
+        "to": "tapah-rest-area",
+        "minutes": 28,
+        "kilometres": 41.1,
+        "road": "E1"
+      },
+      {
+        "from": "tapah-rest-area",
+        "to": "tapah",
+        "minutes": 3,
+        "kilometres": 4.7,
+        "road": "E1"
+      },
+      {
+        "from": "tapah",
+        "to": "kampar",
+        "minutes": 10,
+        "kilometres": 14.6,
+        "road": "E1"
+      },
+      {
+        "from": "kampar",
+        "to": "gopeng",
+        "minutes": 11,
+        "kilometres": 15.5,
+        "road": "E1"
+      },
+      {
+        "from": "gopeng",
+        "to": "ipoh",
+        "minutes": 22,
+        "kilometres": 29.8,
+        "road": "E1"
+      },
+      {
+        "from": "ipoh",
+        "to": "sungai-perak-rest-area",
+        "minutes": 15,
+        "kilometres": 17.8,
+        "road": "E1"
+      },
+      {
+        "from": "sungai-perak-rest-area",
+        "to": "kuala-kangsar",
+        "minutes": 5,
+        "kilometres": 7.5,
+        "road": "E1"
+      },
+      {
+        "from": "kuala-kangsar",
+        "to": "kuala-sepetang",
+        "minutes": 15,
+        "kilometres": 21.5,
+        "road": "E1"
+      },
+      {
+        "from": "kuala-sepetang",
+        "to": "taiping",
+        "minutes": 10,
+        "kilometres": 14.9,
+        "road": "E1"
+      },
+      {
+        "from": "taiping",
+        "to": "gunung-semanggol-rest-area",
+        "minutes": 7,
+        "kilometres": 10,
+        "road": "E1"
+      },
+      {
+        "from": "gunung-semanggol-rest-area",
+        "to": "bandar-baharu",
+        "minutes": 13,
+        "kilometres": 19.7,
+        "road": "E1"
+      },
+      {
+        "from": "bandar-baharu",
+        "to": "jawi",
+        "minutes": 8,
+        "kilometres": 12.2,
+        "road": "E1"
+      },
+      {
+        "from": "jawi",
+        "to": "sungai-bakap-layby",
+        "minutes": 4,
+        "kilometres": 5.4,
+        "road": "E1"
+      },
+      {
+        "from": "sungai-bakap-layby",
+        "to": "juru",
+        "minutes": 10,
+        "kilometres": 13.9,
+        "road": "E1"
+      },
+      {
+        "from": "juru",
+        "to": "seberang-perai",
+        "minutes": 7,
+        "kilometres": 8.6,
+        "road": "E1"
+      },
+      {
+        "from": "seberang-perai",
+        "to": "sungai-dua",
+        "minutes": 5,
+        "kilometres": 5.7,
+        "road": "E1"
+      },
+      {
+        "from": "sungai-dua",
+        "to": "tikam-batu-layby",
+        "minutes": 11,
+        "kilometres": 16.4,
+        "road": "E1"
+      },
+      {
+        "from": "tikam-batu-layby",
+        "to": "sungai-petani",
+        "minutes": 10,
+        "kilometres": 14,
+        "road": "E1"
+      },
+      {
+        "from": "sungai-petani",
+        "to": "gurun-rest-area",
+        "minutes": 15,
+        "kilometres": 19.8,
+        "road": "E1"
+      },
+      {
+        "from": "gurun-rest-area",
+        "to": "alor-setar",
+        "minutes": 25,
+        "kilometres": 36.6,
+        "road": "E1"
+      },
+      {
+        "from": "juru",
+        "to": "george-town",
+        "minutes": 22,
+        "kilometres": 22.5,
+        "road": "E36"
+      }
+    ],
+    "source": {
+      "text": "Built once from OpenStreetMap road data (Geofabrik extract for Malaysia, Singapore and Brunei, downloaded 24 November 2026) with the open OSRM routing engine, car profile, run on the build machine. Free-flow times: no traffic, no toll prices.",
+      "builtOn": "2026-11-24",
+      "licence": "ODbL-1.0"
+    }
+  },
+  "factVocabulary": [
+    {
+      "key": "steps_at_door",
+      "labels": {
+        "en": "Steps at the door",
+        "ja": "入口に段差"
+      },
+      "fails": [
+        "step-free"
+      ],
+      "noMeets": [
+        "step-free"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "level_entrance",
+      "labels": {
+        "en": "Level way in, no steps",
+        "ja": "段差のない入口"
+      },
+      "meets": [
+        "step-free"
+      ],
+      "noFails": [
+        "step-free"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "ramp",
+      "labels": {
+        "en": "A ramp at the entrance",
+        "ja": "入口にスロープ"
+      },
+      "meets": [
+        "step-free"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "dropoff_at_door",
+      "labels": {
+        "en": "You can be dropped off at the door",
+        "ja": "入口前で車を降りられる"
+      },
+      "meets": [
+        "short-walks"
+      ],
+      "noFails": [
+        "short-walks"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "seats_to_rest",
+      "labels": {
+        "en": "Seats to rest on",
+        "ja": "休憩できる席"
+      },
+      "meets": [
+        "sit-often"
+      ],
+      "noFails": [
+        "sit-often"
+      ],
+      "serves": [
+        "rest"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "shade_to_sit",
+      "labels": {
+        "en": "Shade to sit in",
+        "ja": "日陰に座れる場所"
+      },
+      "serves": [
+        "rest"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "quiet_room",
+      "labels": {
+        "en": "A quiet room or corner",
+        "ja": "静かな部屋や一角"
+      },
+      "meets": [
+        "quiet"
+      ],
+      "serves": [
+        "work"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "table_to_work",
+      "labels": {
+        "en": "A table and Wi-Fi to work at",
+        "ja": "作業用のテーブルとWi-Fi"
+      },
+      "serves": [
+        "work"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "toilet_on_site",
+      "labels": {
+        "en": "A toilet for visitors",
+        "ja": "来訪者用のトイレ"
+      },
+      "meets": [
+        "toilet-near"
+      ],
+      "noFails": [
+        "toilet-near"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "wheelchair_toilet",
+      "labels": {
+        "en": "A toilet a wheelchair fits",
+        "ja": "車いすで入れるトイレ"
+      },
+      "meets": [
+        "toilet-near"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "high_chairs",
+      "labels": {
+        "en": "High chairs",
+        "ja": "子ども用のハイチェア"
+      },
+      "meets": [
+        "high-chair"
+      ],
+      "noFails": [
+        "high-chair"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "halal_sign",
+      "labels": {
+        "en": "Halal sign or certificate shown",
+        "ja": "ハラール表示あり"
+      },
+      "meets": [
+        "halal",
+        "pork-free"
+      ],
+      "noFails": [
+        "halal"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "pork_served",
+      "labels": {
+        "en": "Pork is served",
+        "ja": "豚肉料理を提供"
+      },
+      "fails": [
+        "pork-free",
+        "halal"
+      ],
+      "noMeets": [
+        "pork-free"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "vegetarian_dishes",
+      "labels": {
+        "en": "Vegetarian dishes on the menu",
+        "ja": "ベジタリアン料理がメニューにある"
+      },
+      "meets": [
+        "vegetarian"
+      ],
+      "noFails": [
+        "vegetarian",
+        "vegan"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "vegan_dishes",
+      "labels": {
+        "en": "Vegan dishes on the menu",
+        "ja": "ヴィーガン料理がメニューにある"
+      },
+      "meets": [
+        "vegan",
+        "vegetarian"
+      ],
+      "noFails": [
+        "vegan"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "alcohol_served",
+      "labels": {
+        "en": "Alcohol is served",
+        "ja": "酒類を提供"
+      },
+      "fails": [
+        "no-alcohol"
+      ],
+      "noMeets": [
+        "no-alcohol"
+      ],
+      "labelsReviewedBy": null
+    },
+    {
+      "key": "prayer_room",
+      "labels": {
+        "en": "A prayer room (surau)",
+        "ja": "礼拝室あり"
+      },
+      "serves": [
+        "prayer"
+      ],
+      "labelsReviewedBy": null
+    }
+  ],
+  "factMaxAgeDays": 365,
+  "calendar": {
+    "publicHolidays": [
+      {
+        "date": "2026-12-25",
+        "name": {
+          "en": "Christmas",
+          "ja": "クリスマス"
+        },
+        "states": "all",
+        "source": "Cabinet Division federal and state holiday gazette, HKA-2026.pdf",
+        "verified": true
+      },
+      {
+        "date": "2027-01-01",
+        "name": {
+          "en": "New Year’s Day",
+          "ja": "元日"
+        },
+        "states": [
+          "penang",
+          "perak",
+          "selangor",
+          "kuala-lumpur"
+        ],
+        "source": "Cabinet Division federal and state holiday gazette, HKA_2027.pdf",
+        "verified": true
+      },
+      {
+        "date": "2027-01-06",
+        "name": {
+          "en": "Israk and Mikraj",
+          "ja": "イスラーとミウラージュ"
+        },
+        "states": [
+          "kedah"
+        ],
+        "source": "Cabinet Division federal and state holiday gazette, HKA_2027.pdf",
+        "verified": true
+      },
+      {
+        "date": "2027-01-22",
+        "name": {
+          "en": "Thaipusam",
+          "ja": "タイプーサム"
+        },
+        "states": [
+          "penang",
+          "perak",
+          "selangor",
+          "kuala-lumpur"
+        ],
+        "source": "Cabinet Division federal and state holiday gazette, HKA_2027.pdf",
+        "verified": true
+      },
+      {
+        "date": "2027-02-06",
+        "name": {
+          "en": "Chinese New Year",
+          "ja": "春節"
+        },
+        "states": "all",
+        "source": "Cabinet Division federal and state holiday gazette, HKA_2027.pdf",
+        "verified": true
+      },
+      {
+        "date": "2027-02-07",
+        "name": {
+          "en": "Chinese New Year, second day",
+          "ja": "春節の2日目"
+        },
+        "states": "all",
+        "source": "Cabinet Division federal and state holiday gazette, HKA_2027.pdf",
+        "verified": true
+      },
+      {
+        "date": "2027-02-08",
+        "name": {
+          "en": "Awal Ramadan",
+          "ja": "ラマダン初日"
+        },
+        "states": [
+          "kedah"
+        ],
+        "source": "Cabinet Division federal and state holiday gazette, HKA_2027.pdf, subject to change",
+        "verified": false
+      },
+      {
+        "date": "2027-02-24",
+        "name": {
+          "en": "Nuzul Al-Quran",
+          "ja": "クルアーン啓示の日"
+        },
+        "states": [
+          "penang",
+          "perak",
+          "selangor",
+          "kuala-lumpur"
+        ],
+        "source": "Cabinet Division federal and state holiday gazette, HKA_2027.pdf",
+        "verified": true
+      }
+    ],
+    "schoolHolidays": [
+      {
+        "from": "2026-12-04",
+        "to": "2026-12-31",
+        "states": [
+          "kedah"
+        ],
+        "source": "Ministry of Education 2026 school calendar, annexes A and B",
+        "verified": true
+      },
+      {
+        "from": "2026-12-05",
+        "to": "2026-12-31",
+        "states": [
+          "penang",
+          "perak",
+          "selangor",
+          "kuala-lumpur"
+        ],
+        "source": "Ministry of Education 2026 school calendar, annexes A and B",
+        "verified": true
+      },
+      {
+        "from": "2027-02-05",
+        "to": "2027-02-05",
+        "states": [
+          "penang",
+          "perak",
+          "selangor",
+          "kuala-lumpur"
+        ],
+        "source": "Ministry of Education 2027 school calendar, circular KPM.100-1/3/2 JLD.14(11)",
+        "verified": true
+      },
+      {
+        "from": "2027-02-09",
+        "to": "2027-02-11",
+        "states": [
+          "kedah"
+        ],
+        "source": "Ministry of Education 2027 school calendar, circular KPM.100-1/3/2 JLD.14(11)",
+        "verified": true
+      },
+      {
+        "from": "2027-02-09",
+        "to": "2027-02-12",
+        "states": [
+          "penang",
+          "perak",
+          "selangor",
+          "kuala-lumpur"
+        ],
+        "source": "Ministry of Education 2027 school calendar, circular KPM.100-1/3/2 JLD.14(11)",
+        "verified": true
+      }
+    ],
+    "fasting": [
+      {
+        "from": "2027-02-08",
+        "to": "2027-03-09",
+        "source": "Cabinet Division federal and state holiday gazette, HKA_2027.pdf, inferred from Awal Ramadan and Hari Raya Puasa, subject to change",
+        "verified": false
+      }
+    ],
+    "busyDays": [
+      {
+        "date": "2026-12-24",
+        "why": {
+          "en": "School holidays, the day before Christmas",
+          "ja": "学校の休暇中でクリスマスの前日"
+        },
+        "source": "Ministry of Education 2026 school calendar and Cabinet Division HKA-2026.pdf. Expected busy day.",
+        "verified": false
+      },
+      {
+        "date": "2027-02-05",
+        "why": {
+          "en": "The eve of Chinese New Year: heavy traffic out of the cities",
+          "ja": "旧正月の前日。都市から出る車で道が混みます"
+        },
+        "source": "Cabinet Division HKA-2027.pdf, Chinese New Year on 6 February 2027. Expected busy day.",
+        "verified": false
+      }
+    ],
+    "weeklyRest": [
+      {
+        "states": [
+          "kedah"
+        ],
+        "days": [
+          "fri",
+          "sat"
+        ],
+        "source": "News reports cited in research/12 section 6.2. No official Kedah statement verified.",
+        "verified": false
+      }
+    ]
+  },
+  "trip": {
+    "dayStart": "09:00",
+    "dayEnd": "20:30",
+    "minutesAtStop": {
+      "restaurant": 60,
+      "cafe": 45,
+      "museum": 75,
+      "attraction": 60,
+      "shop": 30,
+      "other": 45
+    },
+    "townSpeedKmh": 30,
+    "detourFactor": 1.4,
+    "walkLimitMetres": 800,
+    "roadPointReachMetres": 3000,
+    "turnsPerDay": {
+      "light": 2,
+      "steady": 3,
+      "full": 4
+    },
+    "foodCategories": [
+      "restaurant",
+      "cafe"
+    ],
+    "indoorCategories": [
+      "museum",
+      "gallery",
+      "cafe",
+      "restaurant",
+      "shop",
+      "music_shop"
+    ],
+    "guesses": {
+      "stretchMinutes": 120,
+      "dayDriveMinutes": 300,
+      "fullness": "steady",
+      "lunch": "12:30",
+      "dinner": "19:00"
+    }
+  }
+}

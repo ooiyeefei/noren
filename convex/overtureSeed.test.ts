@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import malaysiaWest from "../regions/malaysia-west.json";
 import nagasaki from "../regions/nagasaki.json";
 import { addPerson, addPlace, newBackend, type Backend } from "../tests/convex/fixtures";
 import { api, internal } from "./_generated/api";
@@ -7,6 +8,9 @@ import type { Id } from "./_generated/dataModel";
 
 // All names, identifiers and coordinates are synthetic.
 const modules = import.meta.glob("./**/*.ts");
+
+afterEach(() => vi.unstubAllEnvs());
+
 const gers = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const point = { lat: nagasaki.defaultCenter.lat, lng: nagasaki.defaultCenter.lng };
 const north = (metres: number) => ({ lat: point.lat + metres / 111_195, lng: point.lng });
@@ -474,5 +478,31 @@ describe("an Overture listing is an open listing", () => {
     expect(
       await b.as("synthetic-steward").query(api.places.listMine, { regionId: "nagasaki" }),
     ).toEqual([]);
+  });
+});
+
+it("stores Overture names in the region's name languages and rejects them in Nagasaki", async () => {
+  const b = await setup();
+  const localNames = [
+    { lang: "ms", script: "latin", value: "Kafe Ujian", isPrimary: true },
+    { lang: "zh", script: "hanzi", value: "测试咖啡馆", isPrimary: true },
+    { lang: "ta", script: "tamil", value: "சோதனை உணவகம்", isPrimary: true },
+  ] as const;
+  const { lat, lng } = malaysiaWest.defaultCenter;
+  const result = await b.t.mutation(internal.overtureSeed.publishPlaces, {
+    regionId: "malaysia-west",
+    stewardPersonId: b.steward,
+    ...provenance,
+    places: [item(801, { lat, lng, names: [...localNames] })],
+  });
+  expect(result.skipped).toEqual([]);
+  const placeId = result.published[0]!.placeId;
+  vi.stubEnv("REGIONS_PREVIEW", malaysiaWest.id);
+  expect(await b.t.query(api.places.get, { placeId })).toMatchObject({
+    names: expect.arrayContaining([...localNames]),
+  });
+  expect(await b.publish([item(802, { names: [localNames[0]] })])).toEqual({
+    published: [],
+    skipped: [{ gers: gers(802), reason: "invalid or duplicate name" }],
   });
 });

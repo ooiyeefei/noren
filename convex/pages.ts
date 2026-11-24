@@ -14,7 +14,7 @@ import { currentPerson, requireRole } from "./lib/auth";
 import { transitionClaim } from "./lib/claimEffects";
 import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
-import { regionConfig } from "./lib/region";
+import { isRegionOn, regionConfig } from "./lib/region";
 import { isHeld } from "./lib/translationChecks";
 import {
   claimKindValidator,
@@ -115,7 +115,8 @@ export const compose = mutation({
   handler: async (ctx, { placeId }) => {
     const steward = await requireRole(ctx, ["steward"]);
     const place = await ctx.db.get("place", placeId);
-    if (place === null) throw appError("not_found", "place not found");
+    if (place === null || !isRegionOn(place.regionId))
+      throw appError("not_found", "place not found");
     const confirmed = await ctx.db
       .query("claim")
       .withIndex("by_placeId_and_status", (q) =>

@@ -122,7 +122,7 @@ export type TranslationOptions = {
 };
 export type TranslationResult = { ok: true; items: TranslatedItem[] } | Refusal;
 
-/** Translates eligible consented text only; refuses other kinds. The only platform content is a
+/** Translates eligible permitted text only (Principle V); refuses other kinds. The only platform content is a
  * found post's short quote (public_post_quote), which the owner chose to show.
  * Callers verify consent and eligibility; output stays labelled machine until human confirmation.
  */

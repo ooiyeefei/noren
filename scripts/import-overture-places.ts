@@ -10,6 +10,7 @@ import {
   type PlannedLink,
   type PlannedPlace,
 } from "../src/lib/overture/plan";
+import { importBoxes, insideImportBox } from "../src/lib/osm/overpass";
 import { getRegionConfig } from "../src/lib/region/registry";
 import { createCliRunner, type ConvexRunner } from "./lib/convex-run";
 import { readExistingFromExport, readKnownChainsFromExport } from "./lib/overture-export";
@@ -253,12 +254,29 @@ export async function runImport(
       : await readExistingFromDeployment(run!, flags.region);
   const knownChains =
     flags.existingDir !== undefined
-      ? await readKnownChainsFromExport(resolve(options.cwd, flags.existingDir))
+      ? region.id === "nagasaki"
+        ? await readKnownChainsFromExport(resolve(options.cwd, flags.existingDir))
+        : []
       : await readKnownChainsFromDeployment(run!, flags.region);
-  const plan = planImport(snapshot.places, existing, {
+  // Keep one duplicate index and one map budget even where town boxes overlap.
+  // R5 reserves Overture for the five towns with thin OSM coverage.
+  const thinTowns = new Set([
+    "sungai-petani",
+    "kuala-kangsar",
+    "taiping",
+    "kuala-sepetang",
+    "gopeng",
+  ]);
+  const boxes = importBoxes(region).filter(
+    (box) => region.id !== "malaysia-west" || thinTowns.has(box.id),
+  );
+  const townPlaces = snapshot.places.filter((place) =>
+    boxes.some((box) => box.id === region.id || insideImportBox(place, box.bbox)),
+  );
+  const plan = planImport(townPlaces, existing, {
     knownChains,
     focusCategories: region.categories?.filter((item) => item.focus).map((item) => item.key) ?? [],
-    locales: region.locales,
+    locales: region.nameLanguages ?? region.locales,
     bbox: flags.bbox,
     minConfidence: flags.minConfidence,
     mapBudget: flags.mapBudget,
@@ -266,6 +284,7 @@ export async function runImport(
   const nameOf = new Map(snapshot.places.map((item) => [item.id, item.names.primary]));
   options.log({
     release: flags.release,
+    importAreas: boxes.map((box) => box.id),
     bbox: flags.bbox,
     minConfidence: flags.minConfidence,
     existingPlaces: existing.length,

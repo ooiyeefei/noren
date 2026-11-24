@@ -20,6 +20,8 @@ import type { RegionConfig } from "@/lib/region/schema";
 export type PublicRegionProps = {
   categories?: RegionConfig["categories"];
   regionId: string;
+  /** The region's name in the reader's language (its default language when it has none). */
+  regionName?: string;
   defaultLocale: string;
   nameFallback: RegionConfig["nameFallback"];
   center: { lat: number; lng: number; zoom: number };
@@ -30,6 +32,13 @@ export type PublicRegionProps = {
   frameOrigins: string[];
   sourceAdapters: RegionConfig["enabledSourceAdapters"];
   locales: RegionConfig["locales"];
+  facts?: {
+    vocabulary: Pick<
+      NonNullable<RegionConfig["factVocabulary"]>[number],
+      "key" | "labels" | "labelsReviewedBy"
+    >[];
+    maxAgeDays?: number;
+  };
   cautionVocabulary: RegionConfig["cautionVocabulary"];
   /** How near a place's pin "I'm here" passes. The phone works this out and sends only the place. */
   checkIn: Pick<RegionConfig["collection"], "checkInMetres" | "accuracyAllowanceMetres">;
@@ -132,23 +141,25 @@ export type LatestStoryLike = {
   translations?: { lang: string; text: string }[];
   addedAt: number;
 };
-export type StoryFeedEntry = { id: string; addedAt: number } & (
+export type StoryFeedEntry = { id: string; addedAt: number } &
   /** One person's card: their moments here, oldest first. `addedAt` is the newest one's. */
-  | { kind: "written"; authorName: string; moments: readonly WrittenStoryLike[] }
-  | {
-      kind: "post";
-      canRemove: boolean;
-      sharedBy?: string;
-      source: EmbedSourceView;
-      outboundHref?: string;
-    }
-);
+  (
+    | { kind: "written"; authorName: string; moments: readonly WrittenStoryLike[] }
+    | {
+        kind: "post";
+        canRemove: boolean;
+        sharedBy?: string;
+        source: EmbedSourceView;
+        outboundHref?: string;
+      }
+  );
 type NameRegion = Pick<PublicRegionProps, "nameFallback" | "defaultLocale">;
 
 export function publicRegionProps(region: RegionConfig, locale: Locale): PublicRegionProps {
   const style = createOpenFreeMapStyle(region);
   return {
     regionId: region.id,
+    regionName: region.name[locale] ?? region.name[region.defaultLocale] ?? region.id,
     categories: region.categories,
     defaultLocale: region.defaultLocale,
     nameFallback: region.nameFallback,
@@ -161,6 +172,18 @@ export function publicRegionProps(region: RegionConfig, locale: Locale): PublicR
     sourceAdapters: region.enabledSourceAdapters,
     locales: region.locales,
     cautionVocabulary: region.cautionVocabulary,
+    ...(region.features.facts && region.factVocabulary
+      ? {
+          facts: {
+            vocabulary: region.factVocabulary.map(({ key, labels, labelsReviewedBy }) => ({
+              key,
+              labels,
+              labelsReviewedBy,
+            })),
+            maxAgeDays: region.factMaxAgeDays,
+          },
+        }
+      : {}),
     checkIn: {
       checkInMetres: region.collection.checkInMetres,
       accuracyAllowanceMetres: region.collection.accuracyAllowanceMetres,
@@ -188,13 +211,16 @@ export function toHomeModel(
   places: readonly PlaceSummaryLike[],
   locale: Locale,
   region: NameRegion & Pick<PublicRegionProps, "categories">,
+  /** Every region that is on, by id: a place is named by its own region's rules, when it is here. */
+  regions?: Readonly<Record<string, NameRegion & Pick<PublicRegionProps, "categories">>>,
 ) {
   const walkthrough: PlaceListItem[] = [];
   const placesList: PlaceListItem[] = [];
   const markers: MapMarker[] = [];
-  const categories = categoryOptions(region, locale);
   for (const place of places) {
-    const heading = placeHeading(place.names, locale, region);
+    const own = regions?.[place.regionId] ?? region;
+    const categories = categoryOptions(own, locale);
+    const heading = placeHeading(place.names, locale, own);
     const item: PlaceListItem = {
       id: String(place._id),
       href: localePath(locale, `/places/${encodeURIComponent(place.slug)}`),
@@ -207,7 +233,7 @@ export function toHomeModel(
       names: place.names.map((name) => name.value),
       category: place.category,
       pin: place.pin,
-      categoryLabel: place.category ? labelForCategory(region, place.category, locale) : undefined,
+      categoryLabel: place.category ? labelForCategory(own, place.category, locale) : undefined,
       categoryUnreviewed: categories.find((entry) => entry.key === place.category)?.unreviewed,
     };
     (place.isMock ? walkthrough : placesList).push(item);

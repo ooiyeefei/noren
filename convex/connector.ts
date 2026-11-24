@@ -32,7 +32,7 @@ import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { consumeRateLimit } from "./lib/rateLimit";
 import { nameView, publicPool, type Pin, type PoolPlace } from "./lib/publicPool";
-import { regionConfig, regionPolicy } from "./lib/region";
+import { isRegionOn, regionConfig, regionPolicy } from "./lib/region";
 import {
   openQuestionFor,
   placeRef,
@@ -578,7 +578,7 @@ export function drawsEnabled(regionId: string): boolean {
 }
 
 function requireDraws(regionId: string): void {
-  if (!drawsEnabled(regionId)) throw appError("not_found", "Not found");
+  if (!isRegionOn(regionId) || !drawsEnabled(regionId)) throw appError("not_found", "Not found");
 }
 
 export const walk = mutation({

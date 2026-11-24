@@ -9,7 +9,7 @@ import { currentPerson, requireRole } from "./lib/auth";
 import { disputeClaims, transitionClaim } from "./lib/claimEffects";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
-import { isCautionKey, isRegionLocale, regionConfig } from "./lib/region";
+import { isRegionOn, isCautionKey, isRegionLocale, regionConfig } from "./lib/region";
 import { checkFor, dropCheck, queueCheck } from "./lib/translationChecks";
 import {
   claimKindValidator,
@@ -81,6 +81,8 @@ function checkedText(text: string | undefined): string {
 async function getClaim(ctx: QueryCtx, claimId: Id<"claim">): Promise<Doc<"claim">> {
   const claim = await ctx.db.get("claim", claimId);
   if (claim === null) throw appError("not_found", "claim not found");
+  const place = await ctx.db.get("place", claim.placeId);
+  if (place !== null && !isRegionOn(place.regionId)) throw appError("not_found", "claim not found");
   return claim;
 }
 
@@ -411,6 +413,7 @@ export const markDisputed = mutation({
   returns: v.null(),
   handler: async (ctx, { claimIdA, claimIdB }) => {
     const steward = await requireRole(ctx, ["steward"]);
+    await Promise.all([getClaim(ctx, claimIdA), getClaim(ctx, claimIdB)]);
     await disputeClaims(ctx, claimIdA, claimIdB, { by: steward._id, now: Date.now() });
     return null;
   },

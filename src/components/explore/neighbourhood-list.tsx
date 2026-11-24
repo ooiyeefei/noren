@@ -32,23 +32,24 @@ export function NeighbourhoodList({
       <ul className="grid grid-cols-2 gap-x-3">
         {shown.map((neighbourhood) => {
           const name = neighbourhoodName(neighbourhood.names, locale);
+          const status =
+            neighbourhood.left === 0
+              ? m.regionDone
+              : format(m.regionLeft, { n: neighbourhood.left });
           return (
             <li key={neighbourhood.id} className="min-w-0">
               <button
                 type="button"
                 data-neighbourhood={neighbourhood.id}
                 data-neighbourhood-left={neighbourhood.left}
-                aria-label={format(m.showOnMap, { name })}
+                // The name includes the words shown on the button, so a voice command that says them works.
+                aria-label={`${name} ${status}. ${format(m.showOnMap, { name })}`}
                 onClick={() => onChoose?.(neighbourhood)}
                 className="flex min-h-11 w-full min-w-0 flex-col justify-center gap-1 rounded-[6px] py-1 text-left hover:bg-kamenozoki"
               >
                 <span className="flex min-w-0 items-baseline justify-between gap-2 text-[13px]">
                   <span className="min-w-0 font-bold [overflow-wrap:anywhere]">{name}</span>
-                  <span className="shrink-0 text-[12px] text-muted-foreground">
-                    {neighbourhood.left === 0
-                      ? m.regionDone
-                      : format(m.regionLeft, { n: neighbourhood.left })}
-                  </span>
+                  <span className="shrink-0 text-[12px] text-muted-foreground">{status}</span>
                 </span>
                 <MissionBar
                   checked={neighbourhood.checked}

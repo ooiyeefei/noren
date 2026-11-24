@@ -65,7 +65,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function world() {
+async function world(regionId = "nagasaki") {
   const b = newBackend(modules);
   const steward = await addPerson(b, "steward", "steward");
   const mockSteward = await addPerson(b, "mocksteward", "steward", { isMock: true });
@@ -75,6 +75,8 @@ async function world() {
     visibility: "public",
     category: "cafe",
     slug: "test-shop",
+    regionId,
+    withPin: regionId === "nagasaki",
   });
   const mockPlaceId = await addPlace(b, {
     createdBy: mockSteward,
@@ -283,7 +285,12 @@ describe("claimForCheck", () => {
     const claim = (at: number) =>
       w.b.t.mutation(internal.storyFinder.claimForCheck, { limit: 5, now: at });
     const [taken] = await claim(now);
-    expect(taken).toMatchObject({ platform: "instagram", text: TEXT, category: "cafe" });
+    expect(taken).toMatchObject({
+      platform: "instagram",
+      text: TEXT,
+      category: "cafe",
+      regionId: "nagasaki",
+    });
     expect(taken!.placeNames).toEqual(expect.arrayContaining([{ lang: "ja", value: "テスト店" }]));
     expect(await claim(now + 60_000)).toEqual([]);
     expect(await claim(now + 13 * 60_000)).toHaveLength(1);
@@ -1763,11 +1770,11 @@ describe("requeue", () => {
 });
 
 describe("checkBatch", () => {
-  it("checks each post with one forced tool call, then records and links it", async () => {
+  it("checks a Malaysian place with one forced tool call, then records and links it", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "mock-key");
     vi.stubEnv("AI_MODEL_CHECK_MENTION", "mock/checker");
     vi.stubEnv("AI_MODEL_TRANSLATE", "mock/translator");
-    const w = await world();
+    const w = await world("malaysia-west");
     await w.ingest([w.candidate(posts.google)]);
     const model = new MockLanguageModelV4({
       doGenerate: async () => ({
@@ -1808,7 +1815,10 @@ describe("checkBatch", () => {
       type: "tool",
       toolName: "report_mention",
     });
-    expect(JSON.stringify(model.doGenerateCalls[0]!.prompt)).toContain(MARKER);
+    const prompt = JSON.stringify(model.doGenerateCalls[0]!.prompt);
+    expect(prompt).toContain(MARKER);
+    expect(prompt).toContain("West Coast Malaysia");
+    expect(prompt).not.toContain("Nagasaki");
     expect((await w.rows())[0]).toMatchObject({
       status: "attached",
       modelSetting: "mock/checker",

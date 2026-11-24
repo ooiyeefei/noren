@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { categoryForTaxonomy } from "../../src/lib/overture/categories";
 import { categoryForTags, isForVisitors } from "../../src/lib/osm/categories";
 import {
   branchOf,
@@ -152,4 +153,19 @@ describe("OSM categories and tags", () => {
     expect(namesFromTags({ name: "架空 Cafe" }).en).toBeUndefined();
     expect(namesFromTags({})).toEqual({});
   });
+});
+
+it("uses the configured market and worship categories while keeping tagged landmarks", () => {
+  const focus = ["market", "worship"];
+  expect(categoryForTags({ amenity: "marketplace" }, focus)).toBe("market");
+  expect(categoryForTags({ amenity: "place_of_worship" }, focus)).toBe("worship");
+  expect(categoryForTags({ amenity: "place_of_worship", tourism: "attraction" }, focus)).toBe(
+    "attraction",
+  );
+  expect(categoryForTags({ amenity: "marketplace" })).toBe("other");
+  expect(categoryForTags({ amenity: "place_of_worship" })).toBe("other");
+  expect(categoryForTaxonomy(["cultural_and_historic", "place_of_worship"], undefined, focus)).toBe(
+    "worship",
+  );
+  expect(categoryForTaxonomy(["farmers_market"], undefined, focus)).toBe("market");
 });

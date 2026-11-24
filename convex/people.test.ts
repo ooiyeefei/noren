@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { anyApi, type ApiFromModules } from "convex/server";
 import { convexTest } from "convex-test";
 import { v, type GenericValidator } from "convex/values";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,6 +15,7 @@ import {
 import { internal, api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
+import * as region from "./lib/region";
 
 // The sign-in and role functions, called through the real `mutation` exports so the write gate in
 // convex/lib/gate.ts runs too. The mock backend does not prove the gate on a deployment: that
@@ -131,6 +133,7 @@ describe("people.current", () => {
       nameConfirmed: false,
       joinedAt: expect.any(Number),
       filmSeen: false,
+      trip: false,
     });
   });
   it("current reports a mock person as mock", async () => {
@@ -144,6 +147,7 @@ describe("people.current", () => {
       nameConfirmed: true,
       joinedAt: expect.any(Number),
       filmSeen: false,
+      trip: false,
     });
   });
 
@@ -540,7 +544,9 @@ const DELETION_DECISIONS = {
   "story.authorPersonId": "deleted",
   "storyPhoto.uploaderPersonId": "deleted",
   "postcard.senderPersonId": "deleted",
+  "tripShare.ownerPersonId": "deleted",
   "placeCheck.personId": "deleted",
+  "placeFact.personId": "deleted",
   "note.authorPersonId": "deleted",
   "source.addedBy": "hidden",
   "place.createdBy": "kept",
@@ -712,6 +718,28 @@ describe("people.deleteMine", () => {
       expect(await row(member)).toBeNull();
       expect(await row(other)).not.toBeNull();
     });
+  });
+
+  it("withdraws only the departing member's trip links in the deletion transaction", async () => {
+    const { b, leaving, member, other } = await world();
+    const [owned, unrelated] = await b.run(async (ctx) =>
+      Promise.all(
+        [member, other].map((ownerPersonId, index) =>
+          ctx.db.insert("tripShare", {
+            code: String(index + 2).repeat(24),
+            ownerPersonId,
+            regionId: "nagasaki",
+            deviceTripId: "same-local-id",
+            title: "Weekend",
+            days: [],
+          }),
+        ),
+      ),
+    );
+    await leaving.mutation(api.people.deleteMine, {});
+    expect(await b.run((ctx) => ctx.db.get("tripShare", owned!))).toBeNull();
+    expect(await b.run((ctx) => ctx.db.get("tripShare", unrelated!))).not.toBeNull();
+    await finish(b);
   });
 
   it("deletes their stories and leaves other people's", async () => {
@@ -1149,6 +1177,32 @@ describe("people.deleteMine", () => {
   });
 
   describe("people.deletePerson, which an operator runs for someone else", () => {
+    it("deletes all of their practical facts across batches and keeps other members' reports", async () => {
+      const { b, member, other, placeId } = await world();
+      const otherFactId = await b.run(async (ctx) => {
+        const fact = {
+          placeId,
+          regionId: "nagasaki",
+          key: "steps_at_door",
+          value: "yes",
+          basis: "member",
+          day: "2026-11-24",
+          isMock: false,
+        } as const;
+        for (let i = 0; i < 43; i++) {
+          const status = (["live", "hidden", "removed"] as const)[i % 3]!;
+          await ctx.db.insert("placeFact", { ...fact, status, personId: member });
+        }
+        return ctx.db.insert("placeFact", { ...fact, status: "live", personId: other });
+      });
+
+      await b.t.mutation(internal.people.deletePerson, { personId: member });
+      await finish(b);
+      expect(await b.run((ctx) => ctx.db.query("placeFact").take(50))).toEqual([
+        expect.objectContaining({ _id: otherFactId, personId: other, status: "live" }),
+      ]);
+    });
+
     it("deletes an account its owner can't, keeps what depends on them, and leaves a record", async () => {
       const { b, leaving, member, placeId } = await world();
       await leaving.mutation(api.stories.add, { placeId, body: "A fictional story.", lang: "en" });
@@ -1246,5 +1300,47 @@ describe("people.deleteMine", () => {
 
       expect(await b.t.query(api.stories.listForPlace, { placeId })).toHaveLength(1);
     });
+  });
+});
+
+const trialApi = anyApi as unknown as ApiFromModules<{ people: typeof import("./people") }>;
+
+describe("people.setTrial", () => {
+  it("audits changes, is idempotent and caps the list at eight", async () => {
+    const { t, signUp, auditFor } = backend();
+    const id = await signUp("aiko");
+    const set = (trial: string, on: boolean) =>
+      t.mutation(trialApi.people.setTrial, { clerkUserId: "aiko", trial, on });
+    await set("trip", true);
+    await set("trip", true);
+    for (let i = 1; i < 8; i++) await set(`trial-${i}`, true);
+    await expect(set("extra", true)).rejects.toMatchObject({ data: { code: "conflict" } });
+    expect((await t.run((ctx) => ctx.db.get("person", id)))?.trials).toHaveLength(8);
+    await set("trip", false);
+    await set("trip", false);
+    expect((await t.run((ctx) => ctx.db.get("person", id)))?.trials).not.toContain("trip");
+    const audit = await auditFor("person.set_trial");
+    expect(audit).toHaveLength(9);
+    expect(audit).toContainEqual(expect.objectContaining({
+      actorKind: "system", targetId: id, diff: { trial: "trip", on: false },
+    }));
+  });
+
+  it("shows trip access only to the callers allowed by the switch", async () => {
+    const { t, as, signUp } = backend();
+    await signUp("aiko");
+    await signUp("ben");
+    const trip = vi.spyOn(region, "tripSwitch");
+    try {
+      await t.mutation(trialApi.people.setTrial, { clerkUserId: "aiko", trial: "trip", on: true });
+      for (const mode of ["off", "trial", "open"] as const) {
+        trip.mockReturnValue(mode);
+        expect(await t.query(api.people.current, {})).toBeNull();
+        expect((await as("aiko").query(api.people.current, {}))?.trip).toBe(mode !== "off");
+        expect((await as("ben").query(api.people.current, {}))?.trip).toBe(mode === "open");
+      }
+    } finally {
+      trip.mockRestore();
+    }
   });
 });

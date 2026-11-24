@@ -9,6 +9,7 @@ export const placeUiMessages = defineMessages({
     zoomIn: "拡大",
     zoomOut: "縮小",
     openPlace: "開く",
+    zoomForPlaces: "拡大すると場所が表示されます。町を選ぶこともできます。",
     yourLocation: "現在地",
 
     mapLabel: "場所の地図",
@@ -42,6 +43,7 @@ export const placeUiMessages = defineMessages({
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     openPlace: "Open",
+    zoomForPlaces: "Zoom in to see places, or choose a town.",
     yourLocation: "Your location",
 
     mapLabel: "Map of places",

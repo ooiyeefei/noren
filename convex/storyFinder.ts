@@ -31,7 +31,7 @@ import { eraseCandidate, eraseFoundPost } from "./lib/foundPosts";
 import { queueExcerptCheck } from "./lib/translationChecks";
 import { readMapNames, readMapPin } from "./lib/mapCopies";
 import { withMock } from "./lib/mock";
-import { regionConfig } from "./lib/region";
+import { isRegionOn, regionConfig } from "./lib/region";
 import { literals, scriptValidator, sourceStatusValidator } from "./lib/validators";
 import {
   mentionPlatformValidator,
@@ -373,6 +373,7 @@ export const requestCheck = mutation({
 const claimed = v.object({
   candidateId: v.id("mentionCandidate"),
   placeId: v.id("place"),
+  regionId: v.string(),
   platform: mentionPlatformValidator,
   text: v.string(),
   title: v.optional(v.string()),
@@ -418,6 +419,7 @@ export const claimForCheck = internalMutation({
       taken.push({
         candidateId: row._id,
         placeId: row.placeId,
+        regionId: place?.regionId ?? row.regionId,
         platform: row.platform,
         text: row.text,
         title: row.title,
@@ -741,7 +743,12 @@ export function attachOrder(a: Doc<"mentionCandidate">, b: Doc<"mentionCandidate
   return rank(a) - rank(b) || (b.postedAt ?? 0) - (a.postedAt ?? 0);
 }
 
-async function attachAccepted(ctx: MutationCtx, steward: Doc<"person">, limit: number) {
+async function attachAccepted(
+  ctx: MutationCtx,
+  steward: Doc<"person">,
+  limit: number,
+  regionIsAvailable: (regionId: string) => boolean = () => true,
+) {
   // Posts stuck on a full place or an author's limit are passed over, so they cannot hold the
   // batch up; at most `limit` are tried.
   const accepted = (
@@ -758,6 +765,7 @@ async function attachAccepted(ctx: MutationCtx, steward: Doc<"person">, limit: n
   const shownCache = new Map<string, ShownQuotes>();
   for (const candidate of accepted) {
     if (considered >= max) break;
+    if (!regionIsAvailable(candidate.regionId)) continue;
     if (candidate.attachError !== undefined && STUCK.has(candidate.attachError)) continue;
     considered++;
     const result = await attachCandidate(ctx, candidate, steward, Date.now(), shownCache);
@@ -799,7 +807,7 @@ export const attachAcceptedNow = mutation({
   handler: async (ctx) => {
     const steward = await requireRole(ctx, ["steward"]);
     if (steward.isMock) throw appError("forbidden", "a demo account may not run the story finder");
-    return await attachAccepted(ctx, steward, 100);
+    return await attachAccepted(ctx, steward, 100, isRegionOn);
   },
 });
 
@@ -989,7 +997,7 @@ export const stewardOverview = query({
         if (!places.has(candidate.placeId))
           places.set(candidate.placeId, await ctx.db.get("place", candidate.placeId));
         const place = places.get(candidate.placeId);
-        if (!place) continue;
+        if (!place || !isRegionOn(place.regionId) || !isRegionOn(candidate.regionId)) continue;
         const source = candidate.sourceId ? await ctx.db.get("source", candidate.sourceId) : null;
         result.push({
           candidateId: candidate._id,
@@ -1287,6 +1295,9 @@ export const hide = mutation({
   handler: async (ctx, { candidateId }) => {
     const steward = await requireRole(ctx, ["steward"]);
     if (steward.isMock) throw appError("forbidden", "a demo account may not change found posts");
+    const candidate = await ctx.db.get("mentionCandidate", candidateId);
+    if (candidate === null || !isRegionOn(candidate.regionId))
+      throw appError("not_found", "candidate not found");
     await hideCandidate(ctx, steward, candidateId);
     return null;
   },

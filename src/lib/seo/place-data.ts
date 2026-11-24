@@ -1,9 +1,12 @@
+import { fetchQuery } from "convex/nextjs";
 import { connection } from "next/server";
 import { cache } from "react";
+import { api } from "../../../convex/_generated/api";
 import { convexConnectorData } from "../connector/convex-data";
+import { guarded } from "../connector/guarded";
 import { buildPlace } from "../connector/place";
 import { CONNECTOR_DEFAULTS } from "../connector/policy";
-import { getActiveRegion } from "../region";
+import { getRegion } from "../region";
 import { placeSeo, type PlaceSeo, type SeoLocale } from "./place";
 import { SITE_ORIGIN } from "./site";
 
@@ -15,12 +18,16 @@ import { SITE_ORIGIN } from "./site";
  */
 export const loadPlaceSeo = cache(
   async (slug: string, locale: string): Promise<PlaceSeo | null> => {
-    const region = getActiveRegion();
     const language: SeoLocale = locale === "ja" ? "ja" : "en";
     // Always read at request time: the Convex client may not run while a page is prerendered.
     // Outside the try, so the prerender's own stop signal reaches React instead of being logged.
     await connection();
     try {
+      // The place is found by its slug alone; its own region then gives the area's settings.
+      const place = await guarded(fetchQuery(api.places.bySlug, { slug }));
+      if (place === null) return null;
+      const region = getRegion(place.regionId);
+      if (region === undefined) return null;
       const data = convexConnectorData(region.id);
       const bundle = await data.placeBundle(slug);
       if (bundle === null) return null;

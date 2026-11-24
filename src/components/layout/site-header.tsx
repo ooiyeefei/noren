@@ -6,6 +6,7 @@ import { shellMessages } from "@/lib/i18n/messages/shell";
 import { AccountMenu } from "./account-menu";
 import { LanguageSwitcher, LanguageSwitcherView } from "./language-switcher";
 import { NorenMark } from "./noren-mark";
+import { RegionName } from "./region-name";
 
 export function SiteHeader({
   locale,
@@ -35,7 +36,7 @@ export function SiteHeader({
             <span className="max-[379px]:sr-only">{m.productName}</span>
           </Link>
           <span className="hidden truncate text-sm text-muted-foreground sm:block">
-            {regionName}
+            <RegionName fallback={regionName} />
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">

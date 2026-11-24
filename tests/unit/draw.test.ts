@@ -3,6 +3,7 @@ import nagasaki from "../../regions/nagasaki.json";
 import {
   drawStops,
   drawWeight,
+  FIT_TILT,
   hashString,
   interestsFor,
   isoWeekKey,
@@ -82,6 +83,15 @@ describe("seeded randomness", () => {
 });
 
 describe("drawWeight", () => {
+  it("tilts a draw only when a must-have is known to be met", () => {
+    const place = quiet("a", { matchesInterest: true, hasStory: false });
+    for (const wildCard of [false, true]) {
+      const base = drawWeight(place, { wildCard });
+      expect(drawWeight(place, { wildCard, meetsMustHave: true })).toBe(base * FIT_TILT);
+      expect(drawWeight(place, { wildCard, meetsMustHave: false })).toBe(base);
+    }
+  });
+
   it("is 3x for a place nobody was sent to, against a place suggested very often", () => {
     const fresh = drawWeight(quiet("a"), { wildCard: false });
     const worn = drawWeight(quiet("b", { recentSuggestions: 10_000 }), { wildCard: false });

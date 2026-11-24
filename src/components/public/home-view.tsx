@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 import { categoryOptions } from "./category";
 import { PlaceList } from "@/components/places/place-list";
 import { PlaceMap } from "@/components/map/place-map";
+import type { TownMarker } from "@/components/map/map-helpers";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { ExploreGuide } from "@/components/explore/guide";
 import { NorenTab } from "@/components/explore/noren-tab";
@@ -26,6 +27,17 @@ import { publicMessages } from "@/lib/i18n/messages/public";
 import { placeUiMessages } from "@/lib/i18n/messages/place-ui";
 import { LatestStories } from "./latest-stories";
 import type { LatestStoryLike, PublicRegionProps, toHomeModel } from "./mapping";
+
+/**
+ * The page's heading: the name of the region the map is looking at, or no place name when it looks at
+ * none that is on. Nagasaki reads exactly as `exploreTitle` does.
+ */
+export function exploreHeading(locale: Locale, regionName: string | null): string {
+  const m = messagesFor(publicMessages, locale);
+  return regionName === null
+    ? m.exploreTitlePlain
+    : format(m.exploreTitleIn, { region: regionName });
+}
 
 export function PublicLoading({ locale }: { locale: Locale }) {
   const m = messagesFor(publicMessages, locale);
@@ -62,6 +74,9 @@ export function HomeView({
   onSearchChange,
   onViewChange,
   fitTo,
+  zoomedOut,
+  towns,
+  heading,
   onShowMore,
   onSelect,
   onLocate,
@@ -93,6 +108,11 @@ export function HomeView({
   onSearchChange?(search: string): void;
   onViewChange?(view: MapView): void;
   fitTo?: MapFit | null;
+  /** The map is zoomed out too far to load places: it shows `towns` instead. */
+  zoomedOut?: boolean;
+  towns?: readonly TownMarker[];
+  /** The page heading; the home region's while the map has not said where it looks. */
+  heading?: string;
   onShowMore?(): void;
   onSelect?(id: string): void;
   onLocate?(): void;
@@ -129,8 +149,10 @@ export function HomeView({
       : model.items.length === 1
         ? m.countOne
         : m.count;
-  const emptyText =
-    category === STORIES_FILTER && hasStories === false
+  const zoomedFarOut = Boolean(zoomedOut) && !searching;
+  const emptyText = zoomedFarOut
+    ? m.zoomedOutEmpty
+    : category === STORIES_FILTER && hasStories === false
       ? m.noStoriesYet
       : followingView
         ? m.noPlacesInArea
@@ -205,7 +227,7 @@ export function HomeView({
       >
         <div ref={topOverlay} className="pointer-events-auto absolute inset-x-3 top-3 lg:contents">
           <h1 className="sr-only font-display text-[28px] leading-tight lg:not-sr-only lg:mx-5 lg:mt-5 lg:mb-2">
-            {m.exploreTitle}
+            {heading ?? m.exploreTitle}
           </h1>
           {searchAndChips}
         </div>
@@ -268,9 +290,13 @@ export function HomeView({
               />
             )}
             <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 px-4">
-              <p role="status" className="text-[15px] font-bold">
-                {format(countText, { n: model.items.length })}
-              </p>
+              {zoomedFarOut ? (
+                <span />
+              ) : (
+                <p role="status" className="text-[15px] font-bold">
+                  {format(countText, { n: model.items.length })}
+                </p>
+              )}
               <p className="text-[13px]">{position ? m.nearest : m.storiesFirst}</p>
             </div>
             {locationOff && (
@@ -333,6 +359,8 @@ export function HomeView({
             topOverlay,
             onViewChange,
             fitTo,
+            zoomedOut,
+            towns,
           }}
         />
       </div>

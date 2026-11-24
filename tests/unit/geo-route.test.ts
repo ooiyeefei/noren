@@ -6,7 +6,7 @@ import {
 } from "@/lib/geo/search-route";
 import { jsonError } from "@/lib/http/handler";
 import type { GeoCandidate } from "@/lib/ports";
-import { activeRegionConfig } from "@/lib/region/registry";
+import { activeRegionConfig, enabledRegionConfigs } from "@/lib/region/registry";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/convex/server", () => ({ requirePersonOnServer: vi.fn() }));
@@ -166,6 +166,32 @@ describe("geo search route", () => {
     // The real policy and adapter both refuse typeahead before reaching fetch.
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it.each([false, true])(
+    "keeps hits inside the enabled boxes (Malaysia preview %s)",
+    async (preview) => {
+      vi.stubEnv("REGIONS_PREVIEW", preview ? "malaysia-west" : "");
+      try {
+        const { get, fetch } = setup({ regions: enabledRegionConfigs() });
+        fetch.mockImplementation(async () =>
+          Response.json([
+            { ...item, lat: "11", lon: "120" },
+            item,
+            { ...item, lat: "4.58", lon: "101.08" },
+          ]),
+        );
+        const { suggestions } = await (await get()).json();
+        expect(suggestions.map((p: { lat: number }) => p.lat)).toEqual(
+          preview ? [32.75, 4.58] : [32.75],
+        );
+        expect(new URL(String(fetch.mock.calls[0]![0])).searchParams.get("countrycodes")).toBe(
+          preview ? "jp,my" : "jp",
+        );
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
 
   it("a second different query within one second is 429; the same query comes from cache", async () => {
     const { get, fetch, advance } = setup();

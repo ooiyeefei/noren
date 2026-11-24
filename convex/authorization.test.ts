@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { currentPerson, requireRole } from "./lib/auth";
@@ -15,6 +15,9 @@ import type { Role } from "../src/lib/domain/constants";
 
 const modules = import.meta.glob("./**/*.ts");
 const ISSUER = "https://clerk.test.invalid";
+const otherRegion = "malaysia-west";
+
+afterEach(() => vi.unstubAllEnvs());
 
 const VIEWERS = [
   "signedOut",
@@ -96,7 +99,7 @@ async function world() {
         isMock: true,
       }),
     ),
-    elsewhere: await place(ids.steward, "demo_public", "kuala-lumpur"),
+    elsewhere: await place(ids.steward, "demo_public", otherRegion),
   };
   for (const [placeId, personId] of [
     [places.draftA, ids.ownerA],
@@ -132,6 +135,7 @@ async function outcome(work: Promise<{ role: Role }>): Promise<string> {
 describe("canReadPlace", () => {
   for (const [name, expected] of Object.entries(CAN_READ) as [PlaceName, string][]) {
     it(`gives each viewer the right answer for ${name}`, async () => {
+      if (name === "elsewhere") vi.stubEnv("REGIONS_PREVIEW", otherRegion);
       const { as, doc } = await world();
       const place = await doc(name);
       const actual = await Promise.all(
@@ -194,19 +198,21 @@ describe("readablePlaces", () => {
   });
 
   it("stays inside the region it was asked about", async () => {
+    vi.stubEnv("REGIONS_PREVIEW", otherRegion);
     const { places, as } = await world();
     const listed = await as("steward").run(async (ctx) =>
-      readablePlaces(ctx, await currentPerson(ctx), { regionId: "kuala-lumpur" }),
+      readablePlaces(ctx, await currentPerson(ctx), { regionId: otherRegion }),
     );
     expect(listed.map((place) => place._id)).toEqual([places.elsewhere]);
   });
 
   it("caps each visibility at the limit", async () => {
+    vi.stubEnv("REGIONS_PREVIEW", otherRegion);
     const { run, ids, as } = await world();
     for (let i = 0; i < 3; i++) {
       await run((ctx) =>
         ctx.db.insert("place", {
-          regionId: "kuala-lumpur",
+          regionId: otherRegion,
           slug: `extra-${i}`,
           visibility: "demo_public",
           kind: "landmark",
@@ -217,7 +223,7 @@ describe("readablePlaces", () => {
       );
     }
     const listed = await as("signedOut").run(async (ctx) =>
-      readablePlaces(ctx, null, { regionId: "kuala-lumpur", limit: 2 }),
+      readablePlaces(ctx, null, { regionId: otherRegion, limit: 2 }),
     );
     expect(listed).toHaveLength(2);
   });

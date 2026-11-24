@@ -8,7 +8,7 @@ import { appError } from "./lib/errors";
 import { mutation } from "./lib/gate";
 import { readMapNames, readMapPin } from "./lib/mapCopies";
 import { cancelPendingPosts } from "./lib/instagramCancel";
-import { regionConfig } from "./lib/region";
+import { isRegionOn, regionConfig } from "./lib/region";
 import { townOf } from "../src/lib/region/neighbourhoods";
 import { placeLabel } from "../src/lib/share/caption";
 
@@ -37,7 +37,13 @@ export async function shareable(
 ): Promise<{ story: Doc<"story">; place: Doc<"place"> } | null> {
   if (story === null) return null;
   const place = await ctx.db.get("place", story.placeId);
-  if (place === null || place.isMock || !isPubliclyReadablePlace(place)) return null;
+  if (
+    place === null ||
+    !isRegionOn(place.regionId) ||
+    place.isMock ||
+    !isPubliclyReadablePlace(place)
+  )
+    return null;
   if (story.isMock || !isStoryShown(place, story)) return null;
   return { story, place };
 }
@@ -86,7 +92,12 @@ export const consentOf = query({
     const viewer = await currentPerson(ctx);
     const story = await ctx.db.get("story", storyId);
     if (viewer === null || story === null || story.authorPersonId !== viewer._id) return false;
-    return story.status === "live" && story.shareConsentAt !== undefined;
+    const place = await ctx.db.get("place", story.placeId);
+    return (
+      (place === null || isRegionOn(place.regionId)) &&
+      story.status === "live" &&
+      story.shareConsentAt !== undefined
+    );
   },
 });
 
@@ -104,11 +115,12 @@ async function changeConsent(
 ): Promise<void> {
   const story = await ctx.db.get("story", storyId);
   if (story === null) throw appError("not_found", "story not found");
+  const place = await ctx.db.get("place", story.placeId);
+  if (place !== null && !isRegionOn(place.regionId)) throw appError("not_found", "story not found");
   if (story.authorPersonId !== person._id)
     throw appError("forbidden", "only the writer may change this");
   if (on === (story.shareConsentAt !== undefined)) return;
   if (on) {
-    const place = await ctx.db.get("place", story.placeId);
     if (story.status !== "live" || place === null)
       throw appError("conflict", "only a story that is showing can be offered for sharing");
     if (!regionConfig(place.regionId).sharing.norenAccount)
@@ -226,6 +238,7 @@ export const queue = query({
   returns: v.array(queueEntry),
   handler: async (ctx, { regionId }) => {
     await requireRole(ctx, ["steward"]);
+    if (!isRegionOn(regionId)) return [];
     const consented = await ctx.db
       .query("story")
       .withIndex("by_status_and_shareConsentAt", (q) =>
@@ -263,6 +276,9 @@ export const markPosted = mutation({
     const steward = await requireRole(ctx, ["steward"]);
     const story = await ctx.db.get("story", storyId);
     if (story === null) throw appError("not_found", "story not found");
+    const place = await ctx.db.get("place", story.placeId);
+    if (place !== null && !isRegionOn(place.regionId))
+      throw appError("not_found", "story not found");
     if (story.status !== "live" || story.shareConsentAt === undefined)
       throw appError("conflict", "this story is not offered for sharing");
     if (story.sharePostedAt !== undefined) return null;

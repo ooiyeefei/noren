@@ -17,6 +17,7 @@ export function createNominatimSearch(options: {
   userAgent: string;
   endpoint?: string;
   timeoutMs?: number;
+  boxes?: ReadonlyArray<readonly [number, number, number, number]>;
 }): Search {
   const userAgent = options.userAgent.trim();
   if (!userAgent || userAgent.includes("@")) throw new Error("Invalid geo User-Agent");
@@ -38,7 +39,7 @@ export function createNominatimSearch(options: {
         const params = {
           q: query.trim(),
           format: "jsonv2",
-          limit: "5",
+          limit: (options.boxes?.length ?? 0) > 1 ? "40" : "5",
           countrycodes: searchOptions.countrycodes.join(","),
           viewbox: [west, north, east, south].join(","),
           bounded: "1",
@@ -59,6 +60,12 @@ export function createNominatimSearch(options: {
           const lat = Number.parseFloat(item.lat);
           const lng = Number.parseFloat(item.lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+          if (
+            !(options.boxes ?? [searchOptions.bbox]).some(
+              ([w, s, e, n]) => lng >= w && lng <= e && lat >= s && lat <= n,
+            )
+          )
+            continue;
           const names: Record<string, string> = {};
           if (item.namedetails) {
             if (item.namedetails.name) names.default = item.namedetails.name;

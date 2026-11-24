@@ -21,6 +21,7 @@ export const PRIVATE_SECTIONS = [
   "sign-in",
   "sign-up",
   "remembers",
+  "trip",
   "plan",
   "walk",
   // A postcard's address is its key (features.postcard): never listed, never indexed. "postcards" is

@@ -107,7 +107,7 @@ vi.mock("convex/react", () => ({ useQuery: vi.fn(), useMutation: vi.fn() }));
 vi.mock("maplibre-gl", () => {
   throw new Error("No map runtime during SSR");
 });
-const region = [...loadRegions().values()][0]!;
+const region = loadRegions().get("nagasaki")!;
 const newProps: NewPlaceViewProps = {
   locale: "ja",
   region,

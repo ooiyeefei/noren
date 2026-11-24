@@ -148,7 +148,11 @@ export function planImport(
     if (place.operatingStatus !== null && place.operatingStatus !== "open")
       skip("closed or closing");
     else {
-      const category = categoryForTaxonomy(place.hierarchy, place.names.primary);
+      const category = categoryForTaxonomy(
+        place.hierarchy,
+        place.names.primary,
+        options.focusCategories,
+      );
       const names = listingNames(overtureNameTags(place), options.locales);
       const source = baseSource(place);
       if (category === null) skip("not a place to visit (category)");

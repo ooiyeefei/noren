@@ -8,7 +8,7 @@ import { appError } from "./lib/errors";
 import { excerptTranslations, hasNoCard } from "./lib/foundPosts";
 import { liveStory } from "./lib/liveStory";
 import { nameView, publicPool } from "./lib/publicPool";
-import { regionConfig } from "./lib/region";
+import { isRegionOn, regionConfig } from "./lib/region";
 
 // Walk mode's one download. A phone must not tell Noren where it is, so it cannot ask for "the
 // places near me" or "the story at this place": it asks once for the whole region and works out
@@ -159,6 +159,7 @@ export const forRegion = query({
   args: { regionId: v.string() },
   returns: v.array(walkPlace),
   handler: async (ctx, { regionId }) => {
+    if (!isRegionOn(regionId)) return [];
     if (!regionConfig(regionId).features.walk) throw appError("not_found", "Not found");
     const pool = await publicPool(ctx, regionId);
     const withStory = pool.filter((place) => place.hasStory).length;

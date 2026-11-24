@@ -355,7 +355,13 @@ it("the footer has the three ordered destinations and review notice in both loca
         `/${locale}/report`,
       ]);
       expect(html).not.toMatch(/OpenStreetMap/);
-      for (const key of ["whatIsNoren", "aboutData", "askRemoval", "reportProblem", "japaneseReview"] as const)
+      for (const key of [
+        "whatIsNoren",
+        "aboutData",
+        "askRemoval",
+        "reportProblem",
+        "japaneseReview",
+      ] as const)
         expect(html).toContain(shellMessages[locale][key]);
       expect(html.includes("mt-8")).toBe(!compact);
       expect(html).toContain("border-line");
@@ -530,5 +536,37 @@ describe("the link to walk mode", () => {
 
   it("is not in the page without a provider, which is how every other page renders", () => {
     expect(render(<SiteFooter locale="en" />)).not.toContain("/walk");
+  });
+});
+
+describe("the link to plan a trip", () => {
+  const menu = (trip: boolean | undefined, locale: Locale = "en") =>
+    render(
+      <FeatureLinksProvider trip={trip}>
+        <AccountMenuView locale={locale} state={signedIn("user")} signOut={<button>Out</button>} />
+      </FeatureLinksProvider>,
+    );
+
+  it("shows in the account menu only to people who can open trips", () => {
+    expect(menu(true)).toContain('href="/en/trip"');
+    expect(menu(true)).toContain("Plan a trip");
+    expect(menu(true, "ja")).toContain('href="/ja/trip"');
+    expect(menu(false)).not.toContain("/trip");
+    expect(menu(undefined)).not.toContain("/trip");
+  });
+
+  it("is not in the page without a provider, and not in the footer", () => {
+    expect(
+      render(
+        <AccountMenuView locale="en" state={signedIn("user")} signOut={<button>Out</button>} />,
+      ),
+    ).not.toContain("/trip");
+    expect(
+      render(
+        <FeatureLinksProvider trip>
+          <SiteFooter locale="en" />
+        </FeatureLinksProvider>,
+      ),
+    ).not.toContain("/trip");
   });
 });

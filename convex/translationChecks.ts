@@ -3,6 +3,7 @@ import { translationFits } from "../src/lib/story-finder/mention";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type MutationCtx } from "./_generated/server";
 import { writeAudit } from "./lib/audit";
+import { isRegionOn } from "./lib/region";
 import { requireRole } from "./lib/auth";
 import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
@@ -381,6 +382,10 @@ export const finishRun = internalMutation({
 });
 
 async function requireCheck(ctx: MutationCtx, claimId: Id<"claim">, lang: string) {
+  const claim = await ctx.db.get("claim", claimId);
+  const place = claim === null ? null : await ctx.db.get("place", claim.placeId);
+  if (place !== null && !isRegionOn(place.regionId))
+    throw appError("not_found", "no translation check for this statement and language");
   const translation = await ctx.db
     .query("claimTranslation")
     .withIndex("by_claimId_and_lang", (q) => q.eq("claimId", claimId).eq("lang", lang))
@@ -452,7 +457,7 @@ export const heldExcerpts = query({
       const source = await ctx.db.get("source", check.sourceId);
       if (source?.status !== "live" || !source.excerpt) continue;
       const place = await ctx.db.get("place", source.placeId);
-      if (place === null) continue;
+      if (place === null || !isRegionOn(place.regionId)) continue;
       rows.push({
         checkId: check._id,
         placeSlug: place.slug,
@@ -478,6 +483,10 @@ export const releaseExcerpt = mutation({
     if (steward.isMock) throw appError("forbidden", "a demo account may not change found posts");
     const check = await ctx.db.get("translationCheck", checkId);
     if (check?.subject !== "excerpt")
+      throw appError("not_found", "no translation check for this quote");
+    const source = await ctx.db.get("source", check.sourceId);
+    const place = source === null ? null : await ctx.db.get("place", source.placeId);
+    if (place !== null && !isRegionOn(place.regionId))
       throw appError("not_found", "no translation check for this quote");
     if (check.status !== "held") throw appError("conflict", "only a held translation is released");
     await ctx.db.patch("translationCheck", check._id, {

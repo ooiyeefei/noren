@@ -18,7 +18,7 @@ import { appError } from "./lib/errors";
 import { internalMutation, mutation } from "./lib/gate";
 import { readCredentials } from "./lib/instagramApi";
 import { readMapNames } from "./lib/mapCopies";
-import { regionConfig } from "./lib/region";
+import { isRegionOn, regionConfig } from "./lib/region";
 import { describe, shareable, townOfPlace } from "./storyShare";
 
 const STALE_MS = 15 * 60 * 1000;
@@ -98,6 +98,14 @@ export const overview = query({
   }),
   handler: async (ctx, { regionId }) => {
     await requireRole(ctx, ["steward"]);
+    if (!isRegionOn(regionId))
+      return {
+        autoPost: false,
+        configured: false,
+        schedule: null,
+        tokenFirstSeenAt: null,
+        posts: [],
+      };
     const sharing = regionConfig(regionId).sharing;
     const creds = readCredentials(process.env);
     let tokenFirstSeenAt: number | null = null;
@@ -118,6 +126,7 @@ export const overview = query({
     for (const post of rows.toSorted((a, b) => b.approvedAt - a.approvedAt)) {
       const story = await ctx.db.get("story", post.storyId);
       const place = await ctx.db.get("place", post.placeId);
+      if (place !== null && !isRegionOn(place.regionId)) continue;
       const label =
         place === null
           ? { english: "", japanese: null }
@@ -166,6 +175,9 @@ export const approve = mutation({
     const steward = await requireRole(ctx, ["steward"]);
     const story = await ctx.db.get("story", storyId);
     if (story === null) throw appError("not_found", "story not found");
+    const place = await ctx.db.get("place", story.placeId);
+    if (place !== null && !isRegionOn(place.regionId))
+      throw appError("not_found", "story not found");
     const found = await shareable(ctx, story);
     if (found === null || story.shareConsentAt === undefined)
       throw appError("conflict", "this story is not offered for sharing");
@@ -215,7 +227,7 @@ export const cancel = mutation({
   handler: async (ctx, { postId }) => {
     await requireRole(ctx, ["steward"]);
     const post = await ctx.db.get("instagramPost", postId);
-    if (post === null) throw appError("not_found", "post not found");
+    if (post === null || !isRegionOn(post.regionId)) throw appError("not_found", "post not found");
     if (post.status !== "queued" && post.status !== "failed")
       throw appError("conflict", "this post cannot be stopped now");
     await ctx.db.patch("instagramPost", postId, { status: "cancelled", reason: "steward" });
@@ -229,7 +241,7 @@ export const retry = mutation({
   handler: async (ctx, { postId }) => {
     await requireRole(ctx, ["steward"]);
     const post = await ctx.db.get("instagramPost", postId);
-    if (post === null) throw appError("not_found", "post not found");
+    if (post === null || !isRegionOn(post.regionId)) throw appError("not_found", "post not found");
     if (post.status !== "failed") throw appError("conflict", "only a failed post can be retried");
     if (readCredentials(process.env) === null)
       throw appError("conflict", "Instagram is not connected");
@@ -251,7 +263,7 @@ export const markRemoved = mutation({
   handler: async (ctx, { postId }) => {
     const steward = await requireRole(ctx, ["steward"]);
     const post = await ctx.db.get("instagramPost", postId);
-    if (post === null) throw appError("not_found", "post not found");
+    if (post === null || !isRegionOn(post.regionId)) throw appError("not_found", "post not found");
     if (post.status !== "posted") throw appError("conflict", "this post is not on Instagram");
     if (post.removedByHandAt !== undefined) return null;
     await ctx.db.patch("instagramPost", postId, { removedByHandAt: Date.now() });
@@ -286,7 +298,13 @@ export const cardForPost = query({
   ),
   handler: async (ctx, { postId, token }) => {
     const post = await ctx.db.get("instagramPost", postId);
-    if (post === null || post.status === "posted" || post.status === "failed") return null;
+    if (
+      post === null ||
+      !isRegionOn(post.regionId) ||
+      post.status === "posted" ||
+      post.status === "failed"
+    )
+      return null;
     if (post.status === "cancelled") return null;
     if (token.length !== post.imageToken.length) return null;
     let diff = 0;

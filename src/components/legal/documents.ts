@@ -25,10 +25,15 @@ function embedPlatforms(region: RegionConfig, locale: Locale): string[] {
  * What the terms and the privacy notice state from the region file, or null until they are published.
  * Without an operator or a contact there is nothing honest to show, so the pages stay closed then too.
  */
-export function documentValues(region: RegionConfig, locale: Locale): DocumentValues | null {
+export function documentValues(
+  region: RegionConfig,
+  locale: Locale,
+  enabledRegionIds: Iterable<string> = [],
+): DocumentValues | null {
   const { documentsVersion, operatorName } = region.legal;
   const { contact, acknowledgeHours, decideDays } = region.takedown;
   if (documentsVersion === null || operatorName === null || contact === null) return null;
+  const enabled = new Set(enabledRegionIds);
   return {
     version: documentsVersion,
     contact,
@@ -38,6 +43,11 @@ export function documentValues(region: RegionConfig, locale: Locale): DocumentVa
     walk: onOff(region.features.walk),
     // The writer's "Let AI read this story" tick shows while either feature that reads it is on.
     aiReading: onOff(region.features.connector || region.features.planner),
+    // The Malaysian coverage is on, so the notice speaks of Malaysia (T037).
+    malaysia: onOff(enabled.has("malaysia-west")),
+    facts: onOff(region.features.facts),
+    // A trial member is told on the trip pages, so the public notice describes trips only when open.
+    trip: onOff(region.features.trip === "open"),
     operator: operatorName,
     region: region.name[locale] ?? region.id,
     minimumAge: String(region.minimumAge),

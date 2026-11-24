@@ -17,8 +17,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Role } from "@/lib/domain/constants";
 import { localePath, messagesFor, type Locale } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
+import { tripMessages } from "@/lib/i18n/messages/trip";
 import { api } from "../../../convex/_generated/api";
-import { useFeatureLinks } from "./features";
+import { FeatureLinksProvider, useFeatureLinks } from "./features";
 
 export type AccountState =
   | { kind: "loading" }
@@ -120,6 +121,13 @@ export function AccountMenuView({
             </DropdownMenuItem>
           </>
         )}
+        {features.trip && (
+          <DropdownMenuItem asChild>
+            <Link href={localePath(locale, "/trip")}>
+              {messagesFor(tripMessages, locale).planATrip}
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <Link href={localePath(locale, "/creator")}>{m.creatorPages}</Link>
         </DropdownMenuItem>
@@ -171,6 +179,10 @@ export function AccountMenu({ locale }: { locale: Locale }): React.JSX.Element {
       console.error(`people.ensureCurrent failed (${detail})`);
     });
   }, [isAuthenticated, ensureCurrent]);
+  const features = useFeatureLinks();
+  // Only people who can open the trip pages see the link. `trip` comes from people.current; until
+  // that field exists it reads as missing, so the link stays hidden.
+  const canPlanTrips = (person as { trip?: boolean } | null | undefined)?.trip === true;
   const state: AccountState = isLoading
     ? { kind: "loading" }
     : !isAuthenticated
@@ -179,15 +191,17 @@ export function AccountMenu({ locale }: { locale: Locale }): React.JSX.Element {
         ? { kind: "settingUp" }
         : { kind: "signedIn", ...person };
   return (
-    <AccountMenuView
-      locale={locale}
-      state={state}
-      pathname={pathname}
-      signOut={
-        <SignOutButton>
-          <button type="button">{messagesFor(shellMessages, locale).signOut}</button>
-        </SignOutButton>
-      }
-    />
+    <FeatureLinksProvider {...features} trip={canPlanTrips}>
+      <AccountMenuView
+        locale={locale}
+        state={state}
+        pathname={pathname}
+        signOut={
+          <SignOutButton>
+            <button type="button">{messagesFor(shellMessages, locale).signOut}</button>
+          </SignOutButton>
+        }
+      />
+    </FeatureLinksProvider>
   );
 }

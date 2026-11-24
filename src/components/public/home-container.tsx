@@ -8,11 +8,12 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { useQuery } from "convex/react";
+import { useQueries, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { ErrorMessage } from "@/components/layout/error-message";
 import { ErrorPage } from "@/components/layout/error-page";
 import {
+  normaliseSearch,
   dismissGuide,
   distanceLabel,
   locateInBrowser,
@@ -25,11 +26,29 @@ import {
   type Position,
   type SheetHeight,
 } from "@/components/explore/helpers";
+import { cellsForView } from "@/lib/geo/geohash";
 import { messagesFor, type Locale } from "@/lib/i18n";
 import { shellMessages } from "@/lib/i18n/messages/shell";
-import { HomeView, PublicLoading } from "./home-view";
-import { toHomeModel, type PublicRegionProps } from "./mapping";
+import {
+  mergeLoaded,
+  openingBounds,
+  regionAtCentre,
+  townMarkers,
+} from "@/components/map/map-helpers";
+import { useReportRegionName } from "@/components/layout/region-name";
+import { HomeView, PublicLoading, exploreHeading } from "./home-view";
+import { toHomeModel, type PlaceSummaryLike, type PublicRegionProps } from "./mapping";
 import { useToday } from "./use-today";
+
+/**
+ * The same object for as long as the value is deeply equal. Convex may hand back an equal query
+ * result as a new object on a render; anything keyed on its identity would then run again.
+ */
+function useStable<T>(value: T): T {
+  const key = JSON.stringify(value) ?? "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the key is the value's content
+  return useMemo(() => value, [key]);
+}
 
 function subscribeGuide(onChange: () => void) {
   window.addEventListener("storage", onChange);
@@ -63,7 +82,14 @@ export class PublicQueryBoundary extends Component<
   }
 }
 
-export function HomeContainer(props: { locale: Locale; region: PublicRegionProps }) {
+export function HomeContainer(props: {
+  locale: Locale;
+  region: PublicRegionProps;
+  /** Every region that is on, by id; each place is named by its own region's rules. */
+  regions?: Readonly<Record<string, PublicRegionProps>>;
+  /** What the search box holds when the page opens. */
+  initialSearch?: string;
+}) {
   return (
     <PublicQueryBoundary locale={props.locale} insideMain>
       <HomeQuery {...props} />
@@ -71,9 +97,19 @@ export function HomeContainer(props: { locale: Locale; region: PublicRegionProps
   );
 }
 
-function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionProps }) {
+function HomeQuery({
+  locale,
+  region,
+  regions,
+  initialSearch = "",
+}: {
+  locale: Locale;
+  region: PublicRegionProps;
+  regions?: Readonly<Record<string, PublicRegionProps>>;
+  initialSearch?: string;
+}) {
   const [category, setCategory] = useState("");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [view, setView] = useState<MapView | null>(null);
   const [fitTo, setFitTo] = useState<MapFit | null>(null);
   const [rowLimit, setRowLimit] = useState(50);
@@ -90,14 +126,76 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
     () => guideIsVisible(() => window.localStorage),
     () => true,
   );
-  const places = useQuery(api.places.listForMap, { regionId: region.regionId });
+  // The map loads what is in view: the cells of the view, asked for after each move. Places already
+  // loaded stay while the next answer arrives (mergeLoaded), so dragging never empties the map.
+  const opening = useMemo(() => openingBounds(region.center), [region.center]);
+  const bounds = view ?? opening;
+  const cells = useMemo(() => (bounds ? cellsForView(bounds) : null), [bounds]);
+  const searching = normaliseSearch(search) !== "";
+  // While the box holds text, search covers every place of every region that is on, not only what is
+  // in view. The queries are not made at all while it is empty.
+  const regionIds = useMemo(
+    () => Object.keys(regions ?? { [region.regionId]: region }),
+    [regions, region],
+  );
+  // useQueries resubscribes, and sets state while rendering, whenever the object it is given is a new
+  // one: a fresh object on every render is an endless loop. Keep it the same until its content changes.
+  const searchQueries = useMemo(
+    () =>
+      searching
+        ? Object.fromEntries(
+            regionIds.map((id) => [id, { query: api.places.listForMap, args: { regionId: id } }]),
+          )
+        : {},
+    [searching, regionIds],
+  );
+  const searched = useStable(useQueries(searchQueries));
+  const zoomedOut = view !== null && cells === null && !searching;
+  const categoryKey = region.categories?.some((entry) => entry.key === category) ? category : "";
+  const answer = useStable(
+    useQuery(
+      api.places.inCells,
+      cells ? { cells: cells.cells, ...(categoryKey ? { category: categoryKey } : {}) } : "skip",
+    ),
+  );
+  const coverage = useQuery(api.places.coverage, {});
+  const [held, setHeld] = useState<ReadonlyMap<string, PlaceSummaryLike> | null>(null);
+  // An answer is taken in once: `answer` is the same object until its content changes (useStable),
+  // and the guard compares it with the last one taken in, so this settles after one extra render.
+  const [absorbed, setAbsorbed] = useState<typeof answer>(undefined);
+  if (answer !== undefined && answer !== absorbed && cells && bounds) {
+    setAbsorbed(answer);
+    setHeld(mergeLoaded(held, answer, cells, bounds));
+  }
+  // Zoomed out, there are towns and no places; before the first answer the page is still loading.
+  const places = useMemo(() => {
+    if (held === null && !searching) return zoomedOut ? [] : undefined;
+    const rows = new Map(zoomedOut ? [] : (held ?? []));
+    if (searching)
+      for (const result of Object.values(searched))
+        if (Array.isArray(result)) for (const row of result) rows.set(row._id, row);
+    return [...rows.values()];
+  }, [zoomedOut, held, searching, searched]);
+  const towns = useMemo(
+    () => (zoomedOut && coverage ? townMarkers(coverage, locale, region.defaultLocale) : []),
+    [zoomedOut, coverage, locale, region.defaultLocale],
+  );
+  // The heading and the header follow the map: the region its centre is inside, or no place name.
+  // Until the map reports a view it is looking at the home region.
+  const looking =
+    view === null ? region : regionAtCentre(view.center, regions ?? { [region.regionId]: region });
+  const lookingName = looking === null ? null : looking.regionName;
+  useReportRegionName(lookingName);
   const latest = useQuery(api.stories.latest, { regionId: region.regionId });
   const today = useToday();
   const neighbourhoods = useQuery(
     api.missions.forRegion,
     today === null ? "skip" : { regionId: region.regionId, now: today },
   );
-  const all = useMemo(() => toHomeModel(places ?? [], locale, region), [places, locale, region]);
+  const all = useMemo(
+    () => toHomeModel(places ?? [], locale, region, regions),
+    [places, locale, region, regions],
+  );
   const items = useMemo(
     () => exploreItems(all.items, { category, search, locale, position, view }),
     [all.items, category, search, locale, position, view],
@@ -122,7 +220,7 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
         }),
     };
   }, [all, items, mapItems]);
-  if (places === undefined) return <PublicLoading locale={locale} />;
+  if (places === undefined && cells !== null) return <PublicLoading locale={locale} />;
   const select = (id: string) => {
     setSelectedId(id);
     document
@@ -156,6 +254,9 @@ function HomeQuery({ locale, region }: { locale: Locale; region: PublicRegionPro
       }}
       view={view}
       onViewChange={onViewChange}
+      zoomedOut={zoomedOut}
+      towns={towns}
+      heading={lookingName === undefined ? undefined : exploreHeading(locale, lookingName)}
       fitTo={fitTo}
       rowLimit={rowLimit}
       onShowMore={() => setRowLimit((limit) => limit + 50)}

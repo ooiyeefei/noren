@@ -6,7 +6,7 @@ import { query, type QueryCtx } from "./_generated/server";
 import { isPubliclyReadablePlace } from "./lib/access";
 import { internalMutation } from "./lib/gate";
 import { readMapNames, readMapPin, readNeighbourhood, writeMapCopies } from "./lib/mapCopies";
-import { regionConfig } from "./lib/region";
+import { isRegionOn, regionConfig } from "./lib/region";
 import { scriptValidator } from "./lib/validators";
 import { distanceMetres } from "../src/lib/overture/dedupe";
 
@@ -76,7 +76,12 @@ export const forPlace = query({
   ),
   handler: async (ctx, { placeId, now }) => {
     const place = await ctx.db.get("place", placeId);
-    if (place === null || !isPubliclyReadablePlace(place) || place.visibility !== "public") {
+    if (
+      place === null ||
+      !isRegionOn(place.regionId) ||
+      !isPubliclyReadablePlace(place) ||
+      place.visibility !== "public"
+    ) {
       return null;
     }
     const neighbourhood = regionConfig(place.regionId).neighbourhoods?.find(
@@ -120,6 +125,7 @@ export const forRegion = query({
     }),
   ),
   handler: async (ctx, { regionId, now }) => {
+    if (!isRegionOn(regionId)) return [];
     const views = [];
     for (const neighbourhood of regionConfig(regionId).neighbourhoods ?? []) {
       views.push({

@@ -651,3 +651,85 @@ describe("takedown rate limits", () => {
     await b.t.mutation(api.takedown.appeal, { code: result.code, note });
   });
 });
+
+it("queues a fact request without hiding the place and uses the steward's fact hide path", async () => {
+  const { b, steward, placeId, args } = await setup();
+  const reporter = await addPerson(b, "reporter", "user");
+  const factId = await b.run((ctx) =>
+    ctx.db.insert("placeFact", {
+      placeId,
+      regionId: "nagasaki",
+      key: "steps_at_door",
+      value: "no",
+      basis: "member",
+      personId: reporter,
+      day: "2026-11-24",
+      status: "live",
+      isMock: false,
+    }),
+  );
+  expect(await errorCode(b.t.mutation(api.takedown.submit, { ...input, factId }))).toBe(
+    "not_found",
+  );
+  const received = await b.t.mutation(api.takedown.submit, {
+    ...args,
+    factId,
+    privacyOrMinor: true,
+  });
+  expect(received).toMatchObject({ hidden: false, matchedPlace: true });
+  const request = await requestByCode(b, received.code);
+  expect(request).toMatchObject({ targetType: "fact", targetId: factId, status: "received" });
+  expect(await b.run((ctx) => ctx.db.get("placeFact", factId))).toMatchObject({ status: "live" });
+  const opts = { paginationOpts: { cursor: null, numItems: 10 } };
+  expect((await b.as("steward").query(api.takedown.list, opts)).page).toContainEqual(
+    expect.objectContaining({
+      _id: request._id,
+      placeId,
+      placeName: "Test Shop",
+      fact: {
+        id: factId,
+        value: "no",
+        status: "live",
+        wording: { en: "steps_at_door", ja: "steps_at_door" },
+        reporterName: "Test Person (reporter)",
+      },
+    }),
+  );
+  const decide = { requestId: request._id, status: "decided" as const, outcome };
+  expect(await errorCode(b.as("reporter").mutation(api.takedown.decide, decide))).toBe("forbidden");
+  await b.as("steward").mutation(api.takedown.decide, decide);
+  expect(await b.run((ctx) => ctx.db.get("placeFact", factId))).toMatchObject({ status: "hidden" });
+  expect(await b.run((ctx) => ctx.db.get("place", placeId))).toMatchObject({
+    visibility: "public",
+  });
+  expect(await b.run((ctx) => ctx.db.query("auditLog").take(10))).toContainEqual(
+    expect.objectContaining({ action: "fact.hide", targetId: factId, actorPersonId: steward }),
+  );
+});
+
+it("matches the URL across enabled regions and leaves a disabled region unmatched", async () => {
+  const { b, steward } = await setup();
+  const slug = "other-region-shop";
+  const placeId = await addPlace(b, {
+    createdBy: steward,
+    regionId: "malaysia-west",
+    slug,
+    visibility: "public",
+  });
+  const args = { ...input, pageUrl: `/en/places/${slug}`, privacyOrMinor: true };
+  try {
+    vi.stubEnv("REGIONS_PREVIEW", "");
+    const disabled = await b.t.mutation(api.takedown.submit, args);
+    expect(disabled).toMatchObject({ matchedPlace: false, hidden: false });
+    expect(await b.run((ctx) => ctx.db.get("place", placeId))).toMatchObject({
+      visibility: "public",
+    });
+
+    vi.stubEnv("REGIONS_PREVIEW", "malaysia-west");
+    const enabled = await b.t.mutation(api.takedown.submit, args);
+    expect(enabled).toMatchObject({ matchedPlace: true, hidden: true });
+    expect(await requestByCode(b, enabled.code)).toMatchObject({ hiddenPlaceId: placeId });
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});

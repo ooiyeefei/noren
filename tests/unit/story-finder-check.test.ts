@@ -693,6 +693,15 @@ function refused(field: string) {
 }
 
 describe("createMentionChecker", () => {
+  it.each([
+    ["nagasaki", "Nagasaki"],
+    ["malaysia-west", "West Coast Malaysia"],
+  ])("names the place's region %s", async (regionId, name) => {
+    const model = new MockLanguageModelV4({ doGenerate: async () => toolCall(report()) });
+    await createMentionChecker({ model }).check({ ...input, place: { ...input.place, regionId } });
+    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain(`local places in ${name}`);
+  });
+
   it("forces the report_mention tool, sends the post as fenced data and returns what it reported", async () => {
     const model = new MockLanguageModelV4({ doGenerate: async () => toolCall(report()) });
     expect(await createMentionChecker({ model }).check(input)).toEqual(report());
